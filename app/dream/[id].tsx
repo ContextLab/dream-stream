@@ -1,10 +1,9 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
-import { View, ScrollView, StyleSheet, ActivityIndicator, Pressable, Alert } from 'react-native';
+import { useEffect, useState, useCallback } from 'react';
+import { View, ScrollView, StyleSheet, ActivityIndicator, Pressable, Alert, Image } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Text, Heading } from '@/components/ui/Text';
-import { DreamPlayer } from '@/components/DreamPlayer';
 import { PlaybackControls } from '@/components/PlaybackControls';
 import { DreamRecommendations } from '@/components/DreamRecommendations';
 import { FavoriteButton } from '@/components/FavoriteButton';
@@ -13,9 +12,10 @@ import { getDreamById, incrementViewCount } from '@/services/dreams';
 import { usePlaybackProgress } from '@/hooks/usePlaybackProgress';
 import { useAuth } from '@/hooks/useAuth';
 import { useLaunchQueue, useQueueStatus } from '@/hooks/useLaunchQueue';
-import { colors, spacing } from '@/theme/tokens';
+import { colors, spacing, borderRadius } from '@/theme/tokens';
 import type { Dream } from '@/types/database';
-import type { VideoPlayerStatus } from 'expo-video';
+
+type PlayerStatus = 'idle' | 'loading' | 'ready' | 'playing' | 'paused' | 'error';
 
 export default function DreamDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -28,10 +28,8 @@ export default function DreamDetailScreen() {
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
-  const [playerStatus, setPlayerStatus] = useState<VideoPlayerStatus>('idle');
+  const [playerStatus, setPlayerStatus] = useState<PlayerStatus>('idle');
 
-  const playerRef = useRef<{ seekTo: (time: number) => void } | null>(null);
-  
   const { add: addToQueue } = useLaunchQueue();
   const { inQueue } = useQueueStatus(id || '');
 
@@ -43,7 +41,7 @@ export default function DreamDetailScreen() {
     markCompleted,
   } = usePlaybackProgress({
     dreamId: id || '',
-    durationSeconds: dream?.duration_seconds || 0,
+    durationSeconds: dream?.full_duration_seconds || 0,
     userId: null,
   });
 
@@ -91,13 +89,6 @@ export default function DreamDetailScreen() {
     },
     [saveProgress]
   );
-
-  const handleStatusChange = useCallback((status: VideoPlayerStatus) => {
-    setPlayerStatus(status);
-    if (status === 'readyToPlay') {
-      setIsPlaying(true);
-    }
-  }, []);
 
   const handleComplete = useCallback(() => {
     markCompleted();
@@ -192,19 +183,27 @@ export default function DreamDetailScreen() {
       </SafeAreaView>
 
       <ScrollView style={styles.scrollContent} bounces={false}>
-        <DreamPlayer
-          playbackId={dream.mux_playback_id}
-          initialPosition={shouldResume ? initialPosition : 0}
-          autoPlay
-          onProgress={handleProgress}
-          onStatusChange={handleStatusChange}
-          onComplete={handleComplete}
-        />
+        <View style={styles.artworkContainer}>
+          <Image
+            source={{ uri: dream.artwork_url }}
+            style={styles.artwork}
+            resizeMode="cover"
+          />
+          <View style={styles.artworkOverlay}>
+            <Pressable style={styles.playButton} onPress={handlePlayPause}>
+              <Ionicons
+                name={isPlaying ? 'pause' : 'play'}
+                size={48}
+                color="#ffffff"
+              />
+            </Pressable>
+          </View>
+        </View>
 
         <PlaybackControls
           isPlaying={isPlaying}
           currentTime={currentTime}
-          duration={dream.duration_seconds}
+          duration={dream.full_duration_seconds}
           onPlayPause={handlePlayPause}
           onSeek={handleSeek}
           onSeekRelative={handleSeekRelative}
@@ -226,9 +225,9 @@ export default function DreamDetailScreen() {
             </View>
           )}
 
-          {dream.description && (
+          {dream.summary && (
             <Text variant="body" color="secondary" style={styles.description}>
-              {dream.description}
+              {dream.summary}
             </Text>
           )}
 
@@ -256,19 +255,19 @@ export default function DreamDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f0f1a',
+    backgroundColor: '#09090b',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0f0f1a',
+    backgroundColor: '#09090b',
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0f0f1a',
+    backgroundColor: '#09090b',
     padding: spacing.xl,
   },
   backButton: {
@@ -306,10 +305,35 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   headerButtonActive: {
-    backgroundColor: 'rgba(99, 102, 241, 0.3)',
+    backgroundColor: 'rgba(34, 197, 94, 0.3)',
   },
   scrollContent: {
     flex: 1,
+  },
+  artworkContainer: {
+    width: '100%',
+    aspectRatio: 1,
+    position: 'relative',
+    backgroundColor: '#18181b',
+  },
+  artwork: {
+    width: '100%',
+    height: '100%',
+  },
+  artworkOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  },
+  playButton: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingLeft: 6,
   },
   details: {
     padding: spacing.md,
@@ -335,10 +359,10 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   tag: {
-    backgroundColor: '#252542',
+    backgroundColor: '#27272a',
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
-    borderRadius: 4,
+    borderRadius: borderRadius.sm,
   },
   bottomPadding: {
     height: spacing['3xl'],

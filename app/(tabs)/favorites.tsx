@@ -109,7 +109,7 @@ export default function FavoritesScreen() {
           <Text variant="body" color="secondary" align="center" style={styles.emptySubtitle}>
             Tap the heart icon on any dream to save it here
           </Text>
-          <Link href="/(tabs)/" asChild>
+          <Link href="/(tabs)" asChild>
             <Button variant="primary" style={styles.signInButton}>
               Explore Dreams
             </Button>
