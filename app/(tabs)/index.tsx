@@ -1,11 +1,12 @@
 import { useState, useMemo } from 'react';
-import { View } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, Heading } from '@/components/ui/Text';
+import { Text, MonoText } from '@/components/ui/Text';
 import { DreamFeed } from '@/components/DreamFeed';
 import { CategoryFilter } from '@/components/CategoryFilter';
 import { useDreams, useFeaturedDreams } from '@/hooks/useDreams';
 import { useCategories } from '@/hooks/useCategories';
+import { colors, spacing } from '@/theme/tokens';
 import type { DreamListOptions } from '@/services/dreams';
 
 export default function HomeScreen() {
@@ -32,11 +33,11 @@ export default function HomeScreen() {
 
   const headerComponent = (
     <View>
-      <View className="px-4 pt-4 pb-2">
-        <Heading variant="h2" color="primary">Dream Stream</Heading>
-        <Text variant="bodySmall" color="secondary" style={{ marginTop: 4 }}>
-          Discover your next dream experience
-        </Text>
+      <View style={styles.header}>
+        <Text variant="h2" weight="bold">dream_stream</Text>
+        <MonoText color="muted" style={styles.subtitle}>
+          // explore your subconscious
+        </MonoText>
       </View>
       <CategoryFilter
         categories={categories}
@@ -45,9 +46,9 @@ export default function HomeScreen() {
         isLoading={categoriesLoading}
       />
       {selectedCategoryId === null && featuredDreams.length > 0 && (
-        <View className="px-4 pt-4">
-          <Text variant="label" color="secondary" style={{ marginBottom: 8 }}>
-            Featured Dreams
+        <View style={styles.sectionHeader}>
+          <Text variant="label" color="accent">
+            FEATURED
           </Text>
         </View>
       )}
@@ -55,7 +56,7 @@ export default function HomeScreen() {
   );
 
   return (
-    <SafeAreaView className="flex-1 bg-background-dark" edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <DreamFeed
         dreams={dreams}
         isLoading={isLoading}
@@ -74,3 +75,23 @@ export default function HomeScreen() {
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.gray[950],
+  },
+  header: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  subtitle: {
+    marginTop: 4,
+  },
+  sectionHeader: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+});

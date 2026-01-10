@@ -1,38 +1,36 @@
-import { useEffect, useRef } from 'react';
-import { View, StyleSheet, Animated } from 'react-native';
-import { spacing, borderRadius, shadows } from '@/theme/tokens';
+import { useEffect } from 'react';
+import { View, StyleSheet } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  withSequence,
+  Easing,
+} from 'react-native-reanimated';
+import { colors, spacing, borderRadius } from '@/theme/tokens';
 
 interface DreamCardSkeletonProps {
   variant?: 'default' | 'compact' | 'featured';
 }
 
 export function DreamCardSkeleton({ variant = 'default' }: DreamCardSkeletonProps) {
-  const animatedValue = useRef(new Animated.Value(0)).current;
+  const shimmerPosition = useSharedValue(-1);
 
   useEffect(() => {
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(animatedValue, {
-          toValue: 1,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(animatedValue, {
-          toValue: 0,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-      ])
+    shimmerPosition.value = withRepeat(
+      withSequence(
+        withTiming(-1, { duration: 0 }),
+        withTiming(1, { duration: 1500, easing: Easing.inOut(Easing.ease) })
+      ),
+      -1,
+      false
     );
-    animation.start();
+  }, [shimmerPosition]);
 
-    return () => animation.stop();
-  }, [animatedValue]);
-
-  const opacity = animatedValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.3, 0.6],
-  });
+  const shimmerStyle = useAnimatedStyle(() => ({
+    opacity: 0.3 + (shimmerPosition.value + 1) * 0.2,
+  }));
 
   const isFeatured = variant === 'featured';
   const isCompact = variant === 'compact';
@@ -50,7 +48,7 @@ export function DreamCardSkeleton({ variant = 'default' }: DreamCardSkeletonProp
           styles.imagePlaceholder,
           isFeatured && styles.featuredImagePlaceholder,
           isCompact && styles.compactImagePlaceholder,
-          { opacity },
+          shimmerStyle,
         ]}
       />
       <View style={[styles.content, isCompact && styles.compactContent]}>
@@ -58,10 +56,10 @@ export function DreamCardSkeleton({ variant = 'default' }: DreamCardSkeletonProp
           style={[
             styles.titlePlaceholder,
             isFeatured && styles.featuredTitlePlaceholder,
-            { opacity },
+            shimmerStyle,
           ]}
         />
-        <Animated.View style={[styles.categoryPlaceholder, { opacity }]} />
+        <Animated.View style={[styles.categoryPlaceholder, shimmerStyle]} />
       </View>
     </View>
   );
@@ -87,10 +85,11 @@ export function DreamCardSkeletonList({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#1a1a2e',
-    borderRadius: borderRadius.xl,
+    backgroundColor: colors.gray[900],
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.gray[800],
     overflow: 'hidden',
-    ...shadows.md,
   },
   featuredContainer: {
     width: 280,
@@ -102,7 +101,7 @@ const styles = StyleSheet.create({
   },
   imagePlaceholder: {
     aspectRatio: 16 / 9,
-    backgroundColor: '#252542',
+    backgroundColor: colors.gray[800],
   },
   featuredImagePlaceholder: {
     aspectRatio: 4 / 3,
@@ -120,21 +119,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   titlePlaceholder: {
-    height: 20,
-    backgroundColor: '#252542',
+    height: 16,
+    backgroundColor: colors.gray[800],
     borderRadius: borderRadius.sm,
-    width: '80%',
+    width: '75%',
     marginBottom: spacing.xs,
   },
   featuredTitlePlaceholder: {
-    height: 24,
-    width: '90%',
+    height: 20,
+    width: '85%',
   },
   categoryPlaceholder: {
-    height: 14,
-    backgroundColor: '#252542',
+    height: 12,
+    backgroundColor: colors.gray[800],
     borderRadius: borderRadius.sm,
-    width: '40%',
+    width: '35%',
   },
   listContainer: {
     padding: spacing.md,
