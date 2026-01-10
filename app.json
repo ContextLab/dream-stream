@@ -56,7 +56,8 @@
       ]
     ],
     "experiments": {
-      "typedRoutes": true
+      "typedRoutes": true,
+      "baseUrl": "/dream-stream"
     },
     "extra": {
       "router": {
