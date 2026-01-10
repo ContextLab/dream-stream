@@ -1,3 +1,53 @@
+# ============================================
+# Expo / React Native
+# ============================================
+
+# Dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native builds
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.ipa
+*.apk
+*.aab
+
+# iOS
+ios/Pods/
+ios/build/
+ios/*.xcworkspace
+ios/*.xcodeproj
+ios/DerivedData/
+
+# Android
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+
+# Metro
+.metro-health-check*
+
+# TypeScript
+*.tsbuildinfo
+
+# Testing (JS)
+coverage/
+
+# ============================================
+# Python
+# ============================================
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

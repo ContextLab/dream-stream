@@ -1,0 +1,61 @@
+{
+  "expo": {
+    "name": "Dream Stream",
+    "slug": "dream-stream",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "scheme": "dreamstream",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0f0f23"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.dreamstream.app",
+      "infoPlist": {
+        "NSHealthShareUsageDescription": "Dream Stream uses sleep data to optimize dream launching during sleep.",
+        "NSHealthUpdateUsageDescription": "Dream Stream records dream launch events to your health data."
+      }
+    },
+    "android": {
+      "package": "com.dreamstream.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0f0f23"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.VIBRATE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0f0f23",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      }
+    }
+  }
+}
