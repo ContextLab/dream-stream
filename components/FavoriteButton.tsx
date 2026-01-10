@@ -1,0 +1,98 @@
+import { useCallback } from 'react';
+import { Pressable, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import Animated, {
+  useAnimatedStyle,
+  withSpring,
+  useSharedValue,
+} from 'react-native-reanimated';
+import { useAuth } from '@/hooks/useAuth';
+import { useFavoriteStatus } from '@/hooks/useFavorites';
+import { colors, touchTargetMinSize } from '@/theme/tokens';
+
+interface FavoriteButtonProps {
+  dreamId: string;
+  size?: number;
+  showBackground?: boolean;
+}
+
+export function FavoriteButton({
+  dreamId,
+  size = 24,
+  showBackground = false,
+}: FavoriteButtonProps) {
+  const router = useRouter();
+  const { isAuthenticated } = useAuth();
+  const { isFavorited, isLoading, toggle } = useFavoriteStatus(dreamId);
+  const scale = useSharedValue(1);
+
+  const handlePress = useCallback(async () => {
+    if (!isAuthenticated) {
+      Alert.alert(
+        'Sign In Required',
+        'Create an account to save your favorite dreams.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Sign In', onPress: () => router.push('/auth/login') },
+        ]
+      );
+      return;
+    }
+
+    scale.value = withSpring(1.3, { damping: 10 }, () => {
+      scale.value = withSpring(1, { damping: 10 });
+    });
+
+    try {
+      await toggle();
+    } catch {
+      Alert.alert('Error', 'Failed to update favorite. Please try again.');
+    }
+  }, [isAuthenticated, router, toggle, scale]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  if (isLoading) {
+    return (
+      <Pressable
+        style={[styles.button, showBackground && styles.buttonWithBackground]}
+        disabled
+      >
+        <ActivityIndicator size="small" color={colors.primary[500]} />
+      </Pressable>
+    );
+  }
+
+  return (
+    <Pressable
+      style={[styles.button, showBackground && styles.buttonWithBackground]}
+      onPress={handlePress}
+      hitSlop={8}
+      accessibilityLabel={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+    >
+      <Animated.View style={animatedStyle}>
+        <Ionicons
+          name={isFavorited ? 'heart' : 'heart-outline'}
+          size={size}
+          color={isFavorited ? colors.error : '#ffffff'}
+        />
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  button: {
+    minWidth: touchTargetMinSize,
+    minHeight: touchTargetMinSize,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  buttonWithBackground: {
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: touchTargetMinSize / 2,
+  },
+});

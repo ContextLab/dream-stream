@@ -1,0 +1,228 @@
+import { useState, useEffect, useCallback } from 'react';
+import {
+  getQueuedDreams,
+  getActiveQueueItem,
+  addToQueue,
+  removeFromQueue,
+  markAsReady,
+  markAsLaunched,
+  markAsCompleted,
+  cancelQueueItem,
+  clearQueue,
+  isInQueue,
+  type QueuedDream,
+} from '@/services/launchQueue';
+import { useAuth } from './useAuth';
+import type { TriggerMode, SleepStage, LaunchStatus } from '@/types/database';
+
+interface UseLaunchQueueReturn {
+  queue: QueuedDream[];
+  activeItem: QueuedDream | null;
+  isLoading: boolean;
+  error: Error | null;
+  refresh: () => Promise<void>;
+  add: (dreamId: string, triggerMode?: TriggerMode, targetStage?: SleepStage) => Promise<void>;
+  remove: (queueId: string) => Promise<void>;
+  setReady: (queueId: string) => Promise<void>;
+  launch: (queueId: string) => Promise<void>;
+  complete: (queueId: string) => Promise<void>;
+  cancel: (queueId: string) => Promise<void>;
+  clear: () => Promise<void>;
+  checkInQueue: (dreamId: string) => Promise<boolean>;
+}
+
+export function useLaunchQueue(): UseLaunchQueueReturn {
+  const { user } = useAuth();
+  const [queue, setQueue] = useState<QueuedDream[]>([]);
+  const [activeItem, setActiveItem] = useState<QueuedDream | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  const fetchQueue = useCallback(async () => {
+    if (!user) {
+      setQueue([]);
+      setActiveItem(null);
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const [queueItems, active] = await Promise.all([
+        getQueuedDreams(user.id),
+        getActiveQueueItem(user.id),
+      ]);
+      setQueue(queueItems);
+      setActiveItem(active);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Failed to load queue'));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    fetchQueue();
+  }, [fetchQueue]);
+
+  const handleAdd = useCallback(
+    async (dreamId: string, triggerMode: TriggerMode = 'auto', targetStage: SleepStage = 'rem') => {
+      if (!user) {
+        throw new Error('Must be logged in to queue dreams');
+      }
+
+      try {
+        await addToQueue(user.id, dreamId, triggerMode, targetStage);
+        await fetchQueue();
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error('Failed to add to queue');
+        setError(error);
+        throw error;
+      }
+    },
+    [user, fetchQueue]
+  );
+
+  const handleRemove = useCallback(
+    async (queueId: string) => {
+      try {
+        await removeFromQueue(queueId);
+        setQueue((prev) => prev.filter((item) => item.id !== queueId));
+        if (activeItem?.id === queueId) {
+          setActiveItem(null);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('Failed to remove from queue'));
+        throw err;
+      }
+    },
+    [activeItem]
+  );
+
+  const handleSetReady = useCallback(
+    async (queueId: string) => {
+      try {
+        await markAsReady(queueId);
+        await fetchQueue();
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('Failed to set ready'));
+        throw err;
+      }
+    },
+    [fetchQueue]
+  );
+
+  const handleLaunch = useCallback(
+    async (queueId: string) => {
+      try {
+        await markAsLaunched(queueId);
+        await fetchQueue();
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('Failed to launch'));
+        throw err;
+      }
+    },
+    [fetchQueue]
+  );
+
+  const handleComplete = useCallback(
+    async (queueId: string) => {
+      try {
+        await markAsCompleted(queueId);
+        await fetchQueue();
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('Failed to complete'));
+        throw err;
+      }
+    },
+    [fetchQueue]
+  );
+
+  const handleCancel = useCallback(
+    async (queueId: string) => {
+      try {
+        await cancelQueueItem(queueId);
+        await fetchQueue();
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('Failed to cancel'));
+        throw err;
+      }
+    },
+    [fetchQueue]
+  );
+
+  const handleClear = useCallback(async () => {
+    if (!user) return;
+
+    try {
+      await clearQueue(user.id);
+      setQueue([]);
+      setActiveItem(null);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Failed to clear queue'));
+      throw err;
+    }
+  }, [user]);
+
+  const handleCheckInQueue = useCallback(
+    async (dreamId: string): Promise<boolean> => {
+      if (!user) return false;
+      return isInQueue(user.id, dreamId);
+    },
+    [user]
+  );
+
+  return {
+    queue,
+    activeItem,
+    isLoading,
+    error,
+    refresh: fetchQueue,
+    add: handleAdd,
+    remove: handleRemove,
+    setReady: handleSetReady,
+    launch: handleLaunch,
+    complete: handleComplete,
+    cancel: handleCancel,
+    clear: handleClear,
+    checkInQueue: handleCheckInQueue,
+  };
+}
+
+export function useQueueStatus(dreamId: string) {
+  const { user } = useAuth();
+  const [inQueue, setInQueue] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (!user || !dreamId) {
+      setInQueue(false);
+      return;
+    }
+
+    let mounted = true;
+    
+    async function check() {
+      setIsLoading(true);
+      try {
+        const result = await isInQueue(user!.id, dreamId);
+        if (mounted) {
+          setInQueue(result);
+        }
+      } catch {}
+      if (mounted) {
+        setIsLoading(false);
+      }
+    }
+
+    check();
+
+    return () => {
+      mounted = false;
+    };
+  }, [user, dreamId]);
+
+  return { inQueue, isLoading };
+}
