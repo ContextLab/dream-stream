@@ -1,8 +1,16 @@
 import { storage } from '@/lib/storage';
-import type { DreamLaunchQueue, LaunchStatus, TriggerMode, SleepStage, Dream } from '@/types/database';
+import type {
+  DreamLaunchQueue,
+  LaunchStatus,
+  TriggerMode,
+  SleepStage,
+  Dream,
+  RepeatMode,
+} from '@/types/database';
 import { getDreamById } from './dreams';
 
 const STORAGE_KEY_QUEUE = 'dream_launch_queue';
+const STORAGE_KEY_SETTINGS = 'dream_queue_settings';
 
 export interface QueuedDream extends DreamLaunchQueue {
   dream: Dream;
@@ -12,6 +20,11 @@ interface LocalQueue {
   items: DreamLaunchQueue[];
 }
 
+interface QueueSettings {
+  repeatMode: RepeatMode;
+  shuffleEnabled: boolean;
+}
+
 async function getLocalQueue(): Promise<LocalQueue> {
   const data = await storage.get<LocalQueue>(STORAGE_KEY_QUEUE);
   return data || { items: [] };
@@ -19,6 +32,55 @@ async function getLocalQueue(): Promise<LocalQueue> {
 
 async function setLocalQueue(queue: LocalQueue): Promise<void> {
   await storage.set(STORAGE_KEY_QUEUE, queue);
+}
+
+async function getQueueSettings(): Promise<QueueSettings> {
+  const data = await storage.get<QueueSettings>(STORAGE_KEY_SETTINGS);
+  return data || { repeatMode: 'off', shuffleEnabled: false };
+}
+
+async function setQueueSettings(settings: QueueSettings): Promise<void> {
+  await storage.set(STORAGE_KEY_SETTINGS, settings);
+}
+
+export async function getRepeatMode(): Promise<RepeatMode> {
+  const settings = await getQueueSettings();
+  return settings.repeatMode;
+}
+
+export async function setRepeatMode(mode: RepeatMode): Promise<void> {
+  const settings = await getQueueSettings();
+  settings.repeatMode = mode;
+  await setQueueSettings(settings);
+}
+
+export async function getShuffleEnabled(): Promise<boolean> {
+  const settings = await getQueueSettings();
+  return settings.shuffleEnabled;
+}
+
+export async function setShuffleEnabled(enabled: boolean): Promise<void> {
+  const settings = await getQueueSettings();
+  settings.shuffleEnabled = enabled;
+  await setQueueSettings(settings);
+}
+
+export async function shuffleQueue(userId: string): Promise<void> {
+  const queue = await getLocalQueue();
+  const activeItems = queue.items.filter(
+    (item) => item.user_id === userId && ['pending', 'ready'].includes(item.status)
+  );
+  const inactiveItems = queue.items.filter(
+    (item) => item.user_id !== userId || !['pending', 'ready'].includes(item.status)
+  );
+
+  for (let i = activeItems.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [activeItems[i], activeItems[j]] = [activeItems[j], activeItems[i]];
+  }
+
+  queue.items = [...activeItems, ...inactiveItems];
+  await setLocalQueue(queue);
 }
 
 export async function getQueuedDreams(userId: string): Promise<QueuedDream[]> {
@@ -39,9 +101,7 @@ export async function getQueuedDreams(userId: string): Promise<QueuedDream[]> {
 
 export async function getActiveQueueItem(userId: string): Promise<QueuedDream | null> {
   const queue = await getLocalQueue();
-  const readyItem = queue.items.find(
-    (item) => item.user_id === userId && item.status === 'ready'
-  );
+  const readyItem = queue.items.find((item) => item.user_id === userId && item.status === 'ready');
 
   if (!readyItem) return null;
 
@@ -58,9 +118,12 @@ export async function addToQueue(
   targetSleepStage: SleepStage = 'rem'
 ): Promise<DreamLaunchQueue> {
   const queue = await getLocalQueue();
-  
+
   const existing = queue.items.find(
-    (item) => item.user_id === userId && item.dream_id === dreamId && ['pending', 'ready'].includes(item.status)
+    (item) =>
+      item.user_id === userId &&
+      item.dream_id === dreamId &&
+      ['pending', 'ready'].includes(item.status)
   );
 
   if (existing) {
@@ -137,14 +200,14 @@ export async function clearQueue(userId: string): Promise<void> {
 export async function isInQueue(userId: string, dreamId: string): Promise<boolean> {
   const queue = await getLocalQueue();
   return queue.items.some(
-    (item) => item.user_id === userId && item.dream_id === dreamId && ['pending', 'ready'].includes(item.status)
+    (item) =>
+      item.user_id === userId &&
+      item.dream_id === dreamId &&
+      ['pending', 'ready'].includes(item.status)
   );
 }
 
-export async function getQueueHistory(
-  userId: string,
-  limit: number = 10
-): Promise<QueuedDream[]> {
+export async function getQueueHistory(userId: string, limit: number = 10): Promise<QueuedDream[]> {
   const queue = await getLocalQueue();
   const historyItems = queue.items
     .filter((item) => item.user_id === userId && ['completed', 'cancelled'].includes(item.status))

@@ -1,11 +1,11 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
-    "./App.{js,jsx,ts,tsx}",
-    "./app/**/*.{js,jsx,ts,tsx}",
-    "./components/**/*.{js,jsx,ts,tsx}",
+    './App.{js,jsx,ts,tsx}',
+    './app/**/*.{js,jsx,ts,tsx}',
+    './components/**/*.{js,jsx,ts,tsx}',
   ],
-  presets: [require("nativewind/preset")],
+  presets: [require('nativewind/preset')],
   theme: {
     extend: {
       colors: {
@@ -45,12 +45,12 @@ module.exports = {
         },
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
-        display: ['Poppins', 'system-ui', 'sans-serif'],
+        sans: ['CourierPrime_400Regular', 'Courier', 'monospace'],
+        mono: ['CourierPrime_400Regular', 'Courier', 'monospace'],
       },
       spacing: {
-        '18': '4.5rem',
-        '22': '5.5rem',
+        18: '4.5rem',
+        22: '5.5rem',
       },
       borderRadius: {
         '4xl': '2rem',

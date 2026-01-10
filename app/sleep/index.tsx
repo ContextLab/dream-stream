@@ -9,12 +9,12 @@ import { WearableStatus } from '@/components/WearableStatus';
 import { LaunchQueueCard } from '@/components/LaunchQueueCard';
 import { VolumeSetup } from '@/components/VolumeSetup';
 import { MusicSettings } from '@/components/MusicSettings';
-import { useAuth } from '@/hooks/useAuth';
 import { useSleepTracking } from '@/hooks/useSleepTracking';
 import { useLaunchQueue } from '@/hooks/useLaunchQueue';
 import { useWearable } from '@/hooks/useWearable';
 import { getSleepStageDisplayName, getSleepStageColor } from '@/services/sleep';
-import { colors, spacing, borderRadius } from '@/theme/tokens';
+import { colors, spacing, borderRadius, fontFamily } from '@/theme/tokens';
+import type { RepeatMode } from '@/types/database';
 
 function formatQueueDuration(totalSeconds: number): string {
   const hours = Math.floor(totalSeconds / 3600);
@@ -27,21 +27,35 @@ function formatQueueDuration(totalSeconds: number): string {
 
 export default function SleepScreen() {
   const router = useRouter();
-  const { isAuthenticated } = useAuth();
   const { connectedDevice } = useWearable();
-  const { session, currentStage, isTracking, start, stop } = useSleepTracking();
-  const { queue, activeItem, setReady, launch, remove, moveUp, moveDown, isLoading } = useLaunchQueue();
+  const { currentStage, isTracking, start, stop } = useSleepTracking();
+  const {
+    queue,
+    activeItem,
+    setReady,
+    launch,
+    remove,
+    moveUp,
+    moveDown,
+    clear,
+    shuffle,
+    repeatMode,
+    setRepeatMode,
+  } = useLaunchQueue();
   const [showVolumeSetup, setShowVolumeSetup] = useState(false);
   const [setupTab, setSetupTab] = useState<'volume' | 'music'>('volume');
 
-  const handleVolumeComplete = useCallback(async (volume: number) => {
-    setShowVolumeSetup(false);
-    try {
-      await start(connectedDevice ? 'wearable' : 'manual');
-    } catch {
-      Alert.alert('Error', 'Failed to start sleep tracking');
-    }
-  }, [start, connectedDevice]);
+  const handleVolumeComplete = useCallback(
+    async (volume: number) => {
+      setShowVolumeSetup(false);
+      try {
+        await start(connectedDevice ? 'wearable' : 'manual');
+      } catch {
+        Alert.alert('Error', 'Failed to start sleep tracking');
+      }
+    },
+    [start, connectedDevice]
+  );
 
   const handleStartTracking = useCallback(() => {
     setSetupTab('volume');
@@ -49,100 +63,130 @@ export default function SleepScreen() {
   }, []);
 
   const handleStopTracking = useCallback(async () => {
-    Alert.alert(
-      'Stop Sleep Tracking',
-      'Are you sure you want to stop tracking your sleep?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Stop',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const summary = await stop();
-              if (summary) {
-                Alert.alert(
-                  'Sleep Summary',
-                  `Total: ${summary.totalDurationMinutes} mins\nREM: ${summary.remMinutes} mins (${summary.remPercentage}%)`
-                );
-              }
-            } catch {
-              Alert.alert('Error', 'Failed to stop sleep tracking');
+    Alert.alert('Stop Sleep Tracking', 'Are you sure you want to stop tracking your sleep?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Stop',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            const summary = await stop();
+            if (summary) {
+              Alert.alert(
+                'Sleep Summary',
+                `Total: ${summary.totalDurationMinutes} mins\nREM: ${summary.remMinutes} mins (${summary.remPercentage}%)`
+              );
             }
-          },
+          } catch {
+            Alert.alert('Error', 'Failed to stop sleep tracking');
+          }
         },
-      ]
-    );
+      },
+    ]);
   }, [stop]);
 
-  const handleSetReady = useCallback(async (queueId: string) => {
-    try {
-      await setReady(queueId);
-    } catch {
-      Alert.alert('Error', 'Failed to update queue item');
-    }
-  }, [setReady]);
+  const handleSetReady = useCallback(
+    async (queueId: string) => {
+      try {
+        await setReady(queueId);
+      } catch {
+        Alert.alert('Error', 'Failed to update queue item');
+      }
+    },
+    [setReady]
+  );
 
-  const handleLaunch = useCallback(async (queueId: string) => {
-    try {
-      await launch(queueId);
-      router.push('/dream/launch');
-    } catch {
-      Alert.alert('Error', 'Failed to launch dream');
-    }
-  }, [launch, router]);
+  const handleLaunch = useCallback(
+    async (queueId: string) => {
+      try {
+        await launch(queueId);
+        router.push('/dream/launch');
+      } catch {
+        Alert.alert('Error', 'Failed to launch dream');
+      }
+    },
+    [launch, router]
+  );
 
-  const handleRemove = useCallback(async (queueId: string) => {
-    try {
-      await remove(queueId);
-    } catch {
-      Alert.alert('Error', 'Failed to remove from queue');
-    }
-  }, [remove]);
+  const handleRemove = useCallback(
+    async (queueId: string) => {
+      try {
+        await remove(queueId);
+      } catch {
+        Alert.alert('Error', 'Failed to remove from queue');
+      }
+    },
+    [remove]
+  );
 
-  const handleMoveUp = useCallback(async (queueId: string) => {
-    try {
-      await moveUp(queueId);
-    } catch {
-      Alert.alert('Error', 'Failed to reorder queue');
-    }
-  }, [moveUp]);
+  const handleMoveUp = useCallback(
+    async (queueId: string) => {
+      try {
+        await moveUp(queueId);
+      } catch {
+        Alert.alert('Error', 'Failed to reorder queue');
+      }
+    },
+    [moveUp]
+  );
 
-  const handleMoveDown = useCallback(async (queueId: string) => {
-    try {
-      await moveDown(queueId);
-    } catch {
-      Alert.alert('Error', 'Failed to reorder queue');
-    }
-  }, [moveDown]);
+  const handleMoveDown = useCallback(
+    async (queueId: string) => {
+      try {
+        await moveDown(queueId);
+      } catch {
+        Alert.alert('Error', 'Failed to reorder queue');
+      }
+    },
+    [moveDown]
+  );
 
-  if (!isAuthenticated) {
-    return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.header}>
-          <Text variant="h2" weight="bold" color="primary">
-            Sleep Mode
-          </Text>
-        </View>
-        <View style={styles.centeredContent}>
-          <Ionicons name="moon-outline" size={64} color={colors.gray[500]} />
-          <Text variant="h4" color="primary" align="center" style={styles.guestTitle}>
-            Sign in to use Sleep Mode
-          </Text>
-          <Text variant="body" color="secondary" align="center">
-            Track your sleep and launch dreams at the perfect moment
-          </Text>
-          <Button
-            variant="primary"
-            style={styles.authButton}
-            onPress={() => router.push('/auth/login')}
-          >
-            Sign In
-          </Button>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  const handleClear = useCallback(async () => {
+    Alert.alert('Clear Queue', 'Remove all dreams from the queue?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Clear All',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await clear();
+          } catch {
+            Alert.alert('Error', 'Failed to clear queue');
+          }
+        },
+      },
+    ]);
+  }, [clear]);
+
+  const handleShuffle = useCallback(async () => {
+    try {
+      await shuffle();
+    } catch {
+      Alert.alert('Error', 'Failed to shuffle queue');
+    }
+  }, [shuffle]);
+
+  const handleToggleRepeat = useCallback(async () => {
+    const modes: RepeatMode[] = ['off', 'all', 'one'];
+    const currentIndex = modes.indexOf(repeatMode);
+    const nextMode = modes[(currentIndex + 1) % modes.length];
+    try {
+      await setRepeatMode(nextMode);
+    } catch {
+      Alert.alert('Error', 'Failed to change repeat mode');
+    }
+  }, [repeatMode, setRepeatMode]);
+
+  const getRepeatIcon = (): keyof typeof Ionicons.glyphMap => {
+    switch (repeatMode) {
+      case 'one':
+        return 'repeat';
+      case 'all':
+        return 'repeat';
+      default:
+        return 'repeat-outline';
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -154,7 +198,11 @@ export default function SleepScreen() {
         </View>
 
         <View style={styles.statusSection}>
-          <WearableStatus onPressConnect={() => Alert.alert('Coming Soon', 'Device pairing will be available soon.')} />
+          <WearableStatus
+            onPressConnect={() =>
+              Alert.alert('Coming Soon', 'Device pairing will be available soon.')
+            }
+          />
         </View>
 
         <View style={styles.trackingSection}>
@@ -178,9 +226,23 @@ export default function SleepScreen() {
                   <Text variant="caption" color="secondary">
                     Current Stage
                   </Text>
-                  <View style={[styles.stageBadge, { backgroundColor: `${getSleepStageColor(currentStage)}20` }]}>
-                    <View style={[styles.stageDot, { backgroundColor: getSleepStageColor(currentStage) }]} />
-                    <Text variant="body" weight="semibold" style={{ color: getSleepStageColor(currentStage) }}>
+                  <View
+                    style={[
+                      styles.stageBadge,
+                      { backgroundColor: `${getSleepStageColor(currentStage)}20` },
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.stageDot,
+                        { backgroundColor: getSleepStageColor(currentStage) },
+                      ]}
+                    />
+                    <Text
+                      variant="body"
+                      weight="semibold"
+                      style={{ color: getSleepStageColor(currentStage) }}
+                    >
                       {getSleepStageDisplayName(currentStage)}
                     </Text>
                   </View>
@@ -212,7 +274,9 @@ export default function SleepScreen() {
               </Text>
               {queue.length > 0 && (
                 <Text variant="caption" color="muted" style={styles.queueDuration}>
-                  {formatQueueDuration(queue.reduce((acc, item) => acc + item.dream.full_duration_seconds, 0))}
+                  {formatQueueDuration(
+                    queue.reduce((acc, item) => acc + item.dream.full_duration_seconds, 0)
+                  )}
                 </Text>
               )}
             </View>
@@ -223,6 +287,29 @@ export default function SleepScreen() {
             </Pressable>
           </View>
 
+          {queue.length > 0 && (
+            <View style={styles.queueControls}>
+              <Pressable style={styles.queueControlButton} onPress={handleShuffle}>
+                <Ionicons name="shuffle-outline" size={20} color={colors.gray[400]} />
+              </Pressable>
+              <Pressable style={styles.queueControlButton} onPress={handleToggleRepeat}>
+                <Ionicons
+                  name={getRepeatIcon()}
+                  size={20}
+                  color={repeatMode === 'off' ? colors.gray[400] : colors.primary[400]}
+                />
+                {repeatMode === 'one' && (
+                  <Text variant="caption" color="primary" style={styles.repeatOneLabel}>
+                    1
+                  </Text>
+                )}
+              </Pressable>
+              <Pressable style={styles.queueControlButton} onPress={handleClear}>
+                <Ionicons name="trash-outline" size={20} color={colors.gray[400]} />
+              </Pressable>
+            </View>
+          )}
+
           {queue.length === 0 ? (
             <View style={styles.emptyQueue}>
               <Ionicons name="list-outline" size={40} color={colors.gray[600]} />
@@ -230,7 +317,7 @@ export default function SleepScreen() {
                 No dreams queued
               </Text>
               <Text variant="caption" color="muted" align="center">
-                Add dreams from the detail screen to queue them for launch
+                Tap the moon icon on any dream to add it to your queue
               </Text>
             </View>
           ) : (
@@ -313,10 +400,7 @@ export default function SleepScreen() {
               }}
             />
           ) : (
-            <MusicSettings
-              onComplete={() => setSetupTab('volume')}
-              showHeader={true}
-            />
+            <MusicSettings onComplete={() => setSetupTab('volume')} showHeader={true} />
           )}
         </SafeAreaView>
       </Modal>
@@ -426,6 +510,23 @@ const styles = StyleSheet.create({
   queueList: {
     gap: spacing.md,
   },
+  queueControls: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: spacing.lg,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  queueControlButton: {
+    padding: spacing.sm,
+    position: 'relative',
+  },
+  repeatOneLabel: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    fontSize: 10,
+  },
   modalContainer: {
     flex: 1,
     backgroundColor: '#0f0f1a',
@@ -445,7 +546,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   queueDuration: {
-    fontFamily: 'CourierPrime_400Regular',
+    fontFamily: fontFamily.regular,
   },
   tabRow: {
     flexDirection: 'row',

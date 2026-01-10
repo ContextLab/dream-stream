@@ -6,6 +6,7 @@ import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
 import { colors, spacing, borderRadius } from '@/theme/tokens';
 import { storage } from '@/lib/storage';
+import { getVolumeWarningMessage, configureAudioSession } from '@/services/volume';
 
 interface VolumeSetupProps {
   onComplete: (volume: number) => void;
@@ -15,9 +16,9 @@ interface VolumeSetupProps {
 }
 
 const TEST_PHRASES = [
-  "You are dreaming. You are aware.",
-  "This is a test of your dream volume.",
-  "Adjust until you can hear clearly but softly.",
+  'You are dreaming. You are aware.',
+  'This is a test of your dream volume.',
+  'Adjust until you can hear clearly but softly.',
 ];
 
 // Simple custom slider component (no external dependencies)
@@ -49,29 +50,17 @@ function VolumeSlider({
   const fillPercentage = ((value - minimumValue) / (maximumValue - minimumValue)) * 100;
 
   return (
-    <Pressable
-      onPress={handlePress}
-      onLayout={handleLayout}
-      style={styles.sliderTrack}
-    >
-      <View
-        style={[
-          styles.sliderFill,
-          { width: `${fillPercentage}%` },
-        ]}
-      />
-      <View
-        style={[
-          styles.sliderThumb,
-          { left: `${fillPercentage}%` },
-        ]}
-      />
+    <Pressable onPress={handlePress} onLayout={handleLayout} style={styles.sliderTrack}>
+      <View style={[styles.sliderFill, { width: `${fillPercentage}%` }]} />
+      <View style={[styles.sliderThumb, { left: `${fillPercentage}%` }]} />
     </Pressable>
   );
 }
 
 // Base URL for audio files (GitHub Pages in production, local in dev)
-const AUDIO_BASE_URL = process.env.EXPO_PUBLIC_AUDIO_BASE_URL || 'https://context-lab.github.io/dream-stream/audio/dreams';
+const AUDIO_BASE_URL =
+  process.env.EXPO_PUBLIC_AUDIO_BASE_URL ||
+  'https://context-lab.github.io/dream-stream/audio/dreams';
 
 export function VolumeSetup({ onComplete, onSkip, testAudioUrl }: VolumeSetupProps) {
   const [volume, setVolume] = useState(0.3);
@@ -79,6 +68,7 @@ export function VolumeSetup({ onComplete, onSkip, testAudioUrl }: VolumeSetupPro
   const [isLoading, setIsLoading] = useState(false);
   const [currentPhrase, setCurrentPhrase] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [volumeWarning, setVolumeWarning] = useState<string | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
 
   // Use a short preview from the first dream as test audio
@@ -116,11 +106,7 @@ export function VolumeSetup({ onComplete, onSkip, testAudioUrl }: VolumeSetupPro
     setIsLoading(true);
 
     try {
-      await Audio.setAudioModeAsync({
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: true,
-        shouldDuckAndroid: true,
-      });
+      await configureAudioSession();
 
       if (soundRef.current) {
         await soundRef.current.unloadAsync();
@@ -128,8 +114,8 @@ export function VolumeSetup({ onComplete, onSkip, testAudioUrl }: VolumeSetupPro
 
       const { sound } = await Audio.Sound.createAsync(
         { uri: effectiveTestUrl },
-        { 
-          volume, 
+        {
+          volume,
           shouldPlay: true,
           positionMillis: 0,
         },
@@ -179,6 +165,7 @@ export function VolumeSetup({ onComplete, onSkip, testAudioUrl }: VolumeSetupPro
 
   const handleVolumeChange = async (value: number) => {
     setVolume(value);
+    setVolumeWarning(getVolumeWarningMessage(value));
     if (soundRef.current) {
       try {
         await soundRef.current.setVolumeAsync(value);
@@ -211,7 +198,8 @@ export function VolumeSetup({ onComplete, onSkip, testAudioUrl }: VolumeSetupPro
           Set Your Dream Volume
         </Text>
         <Text variant="body" color="secondary" align="center" style={styles.description}>
-          Adjust the volume so it's audible but won't wake you. This volume will be locked during playback.
+          Adjust the volume so it's audible but won't wake you. This volume will be locked during
+          playback.
         </Text>
       </View>
 
@@ -219,7 +207,7 @@ export function VolumeSetup({ onComplete, onSkip, testAudioUrl }: VolumeSetupPro
         <Text variant="bodySmall" color="muted" align="center" style={styles.phrase}>
           "{TEST_PHRASES[currentPhrase]}"
         </Text>
-        
+
         <Pressable
           style={[
             styles.playButton,
@@ -235,9 +223,13 @@ export function VolumeSetup({ onComplete, onSkip, testAudioUrl }: VolumeSetupPro
             color="#ffffff"
           />
         </Pressable>
-        
+
         <Text variant="caption" color="muted">
-          {isLoading ? 'Loading audio...' : isPlaying ? 'Playing test audio...' : 'Tap to test volume'}
+          {isLoading
+            ? 'Loading audio...'
+            : isPlaying
+              ? 'Playing test audio...'
+              : 'Tap to test volume'}
         </Text>
 
         {error && (
@@ -263,6 +255,14 @@ export function VolumeSetup({ onComplete, onSkip, testAudioUrl }: VolumeSetupPro
         <Text variant="bodySmall" color="secondary" align="center">
           Volume: {Math.round(volume * 100)}%
         </Text>
+        {volumeWarning && (
+          <View style={styles.warningBanner}>
+            <Ionicons name="warning" size={16} color={colors.warning} />
+            <Text variant="caption" style={{ color: colors.warning }}>
+              {volumeWarning}
+            </Text>
+          </View>
+        )}
       </View>
 
       <View style={styles.tips}>
@@ -348,6 +348,16 @@ const styles = StyleSheet.create({
   },
   sliderSection: {
     marginBottom: spacing.xl,
+  },
+  warningBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+    padding: spacing.sm,
+    backgroundColor: 'rgba(251, 191, 36, 0.1)',
+    borderRadius: borderRadius.md,
   },
   sliderRow: {
     flexDirection: 'row',

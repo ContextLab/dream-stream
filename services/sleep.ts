@@ -37,6 +37,9 @@ export interface BreathingAnalysis {
   breathsPerMinute: number;
   regularity: number;
   amplitude: number;
+  respiratoryRateVariability: number;
+  movementIntensity: number;
+  confidenceScore: number;
 }
 
 interface MeydaAnalyzerInstance {
@@ -54,6 +57,9 @@ const ANALYSIS_WINDOW_MS = 60000;
 const RMS_THRESHOLD_BREATHING = 0.02;
 const DROWSY_BREATHING_REGULARITY = 0.7;
 const SLEEP_BREATHING_REGULARITY = 0.85;
+const REM_RRV_THRESHOLD = 0.25;
+const DEEP_SLEEP_RRV_THRESHOLD = 0.1;
+const MOVEMENT_THRESHOLD = 0.15;
 
 let currentSession: SleepSession | null = null;
 let audioContext: AudioContext | null = null;
@@ -63,12 +69,18 @@ let isAudioRunning = false;
 const stageCallbacks: Set<SleepStageCallback> = new Set();
 let rmsHistory: { value: number; timestamp: number }[] = [];
 let peakTimestamps: number[] = [];
+let breathIntervals: number[] = [];
+let stageHistory: { stage: SleepStage; timestamp: number }[] = [];
+let remCallbacks: Set<() => void> = new Set();
+let remEndCallbacks: Set<() => void> = new Set();
 
 function generateId(): string {
   return `sleep_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
-export async function startSleepSession(source: SleepTrackingSource = 'manual'): Promise<SleepSession> {
+export async function startSleepSession(
+  source: SleepTrackingSource = 'manual'
+): Promise<SleepSession> {
   if (currentSession?.isActive) {
     return currentSession;
   }
@@ -79,12 +91,14 @@ export async function startSleepSession(source: SleepTrackingSource = 'manual'):
     endTime: null,
     currentStage: 'awake',
     source,
-    stages: [{
-      stage: 'awake',
-      startTime: new Date().toISOString(),
-      endTime: null,
-      durationMinutes: 0,
-    }],
+    stages: [
+      {
+        stage: 'awake',
+        startTime: new Date().toISOString(),
+        endTime: null,
+        durationMinutes: 0,
+      },
+    ],
     isActive: true,
   };
 
@@ -104,7 +118,7 @@ export async function endSleepSession(): Promise<SleepSession | null> {
   stopAudioDetection();
 
   const endTime = new Date().toISOString();
-  
+
   if (currentSession.stages.length > 0) {
     const lastStage = currentSession.stages[currentSession.stages.length - 1];
     lastStage.endTime = endTime;
@@ -127,7 +141,7 @@ export async function endSleepSession(): Promise<SleepSession | null> {
 
 export async function getCurrentSession(): Promise<SleepSession | null> {
   if (currentSession) return currentSession;
-  
+
   const stored = await storage.get<SleepSession>(STORAGE_KEY_SESSION);
   if (stored?.isActive) {
     currentSession = stored;
@@ -140,11 +154,11 @@ export function updateSleepStage(stage: SleepStage): void {
   if (!currentSession || !currentSession.isActive) return;
 
   const now = new Date().toISOString();
-  
+
   if (currentSession.stages.length > 0) {
     const lastStage = currentSession.stages[currentSession.stages.length - 1];
     if (lastStage.stage === stage) return;
-    
+
     lastStage.endTime = now;
     lastStage.durationMinutes = calculateDuration(lastStage.startTime, now);
   }
@@ -158,8 +172,8 @@ export function updateSleepStage(stage: SleepStage): void {
 
   currentSession.currentStage = stage;
   storage.set(STORAGE_KEY_SESSION, currentSession);
-  
-  stageCallbacks.forEach(cb => cb(stage));
+
+  stageCallbacks.forEach((cb) => cb(stage));
 }
 
 export function getCurrentStage(): SleepStage | null {
@@ -177,6 +191,16 @@ export function onSleepStageChange(callback: SleepStageCallback): () => void {
   return () => stageCallbacks.delete(callback);
 }
 
+export function onRemStart(callback: () => void): () => void {
+  remCallbacks.add(callback);
+  return () => remCallbacks.delete(callback);
+}
+
+export function onRemEnd(callback: () => void): () => void {
+  remEndCallbacks.add(callback);
+  return () => remEndCallbacks.delete(callback);
+}
+
 export async function getSleepHistory(): Promise<SleepSession[]> {
   const history = await storage.get<SleepSession[]>(STORAGE_KEY_HISTORY);
   return history ?? [];
@@ -191,24 +215,34 @@ export function calculateSleepSummary(session: SleepSession): SleepSummary {
   for (const record of session.stages) {
     const duration = record.durationMinutes || 0;
     switch (record.stage) {
-      case 'rem': remMinutes += duration; break;
-      case 'light': lightMinutes += duration; break;
-      case 'deep': deepMinutes += duration; break;
-      case 'awake': awakeMinutes += duration; break;
+      case 'rem':
+        remMinutes += duration;
+        break;
+      case 'light':
+        lightMinutes += duration;
+        break;
+      case 'deep':
+        deepMinutes += duration;
+        break;
+      case 'awake':
+        awakeMinutes += duration;
+        break;
     }
   }
 
   const totalDurationMinutes = remMinutes + lightMinutes + deepMinutes + awakeMinutes;
   const sleepMinutes = totalDurationMinutes - awakeMinutes;
-  
+
   return {
     totalDurationMinutes,
     remMinutes,
     lightMinutes,
     deepMinutes,
     awakeMinutes,
-    remPercentage: totalDurationMinutes > 0 ? Math.round((remMinutes / totalDurationMinutes) * 100) : 0,
-    sleepEfficiency: totalDurationMinutes > 0 ? Math.round((sleepMinutes / totalDurationMinutes) * 100) : 0,
+    remPercentage:
+      totalDurationMinutes > 0 ? Math.round((remMinutes / totalDurationMinutes) * 100) : 0,
+    sleepEfficiency:
+      totalDurationMinutes > 0 ? Math.round((sleepMinutes / totalDurationMinutes) * 100) : 0,
   };
 }
 
@@ -242,7 +276,7 @@ function calculateDuration(start: string, end: string): number {
 
 async function startAudioDetection(): Promise<boolean> {
   if (isAudioRunning) return true;
-  
+
   if (typeof window === 'undefined' || !navigator.mediaDevices) {
     console.warn('Audio capture not available');
     return false;
@@ -270,7 +304,7 @@ async function startAudioDetection(): Promise<boolean> {
 
     analyzer.start();
     isAudioRunning = true;
-    
+
     return true;
   } catch (error) {
     console.error('Failed to start audio detection:', error);
@@ -285,7 +319,7 @@ function stopAudioDetection(): void {
   }
 
   if (mediaStream) {
-    mediaStream.getTracks().forEach(track => track.stop());
+    mediaStream.getTracks().forEach((track) => track.stop());
     mediaStream = null;
   }
 
@@ -297,6 +331,8 @@ function stopAudioDetection(): void {
   isAudioRunning = false;
   rmsHistory = [];
   peakTimestamps = [];
+  breathIntervals = [];
+  stageHistory = [];
 }
 
 function processAudioFeatures(features: Partial<MeydaFeaturesObject>): void {
@@ -304,7 +340,7 @@ function processAudioFeatures(features: Partial<MeydaFeaturesObject>): void {
   const rms = features.rms ?? 0;
 
   rmsHistory.push({ value: rms, timestamp: now });
-  rmsHistory = rmsHistory.filter(entry => now - entry.timestamp < ANALYSIS_WINDOW_MS);
+  rmsHistory = rmsHistory.filter((entry) => now - entry.timestamp < ANALYSIS_WINDOW_MS);
 
   if (rms > RMS_THRESHOLD_BREATHING) {
     const lastPeak = peakTimestamps[peakTimestamps.length - 1];
@@ -313,16 +349,47 @@ function processAudioFeatures(features: Partial<MeydaFeaturesObject>): void {
     }
   }
 
-  peakTimestamps = peakTimestamps.filter(ts => now - ts < ANALYSIS_WINDOW_MS);
+  peakTimestamps = peakTimestamps.filter((ts) => now - ts < ANALYSIS_WINDOW_MS);
 
   if (rmsHistory.length > 20) {
     const analysis = analyzeBreathing();
     const stage = inferSleepStage(analysis);
-    
+
     if (currentSession && stage !== currentSession.currentStage) {
+      const previousStage = currentSession.currentStage;
       updateSleepStage(stage);
+      handleStageTransition(previousStage, stage);
     }
   }
+}
+
+function calculateRRV(intervals: number[]): number {
+  if (intervals.length < 3) return 0;
+
+  const differences: number[] = [];
+  for (let i = 1; i < intervals.length; i++) {
+    differences.push(Math.abs(intervals[i] - intervals[i - 1]));
+  }
+
+  const avgDiff = differences.reduce((a, b) => a + b, 0) / differences.length;
+  const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+
+  return avgInterval > 0 ? avgDiff / avgInterval : 0;
+}
+
+function detectMovement(rmsValues: number[]): number {
+  if (rmsValues.length < 5) return 0;
+
+  let spikeCount = 0;
+  const avgRms = rmsValues.reduce((a, b) => a + b, 0) / rmsValues.length;
+
+  for (const rms of rmsValues) {
+    if (rms > avgRms * 3) {
+      spikeCount++;
+    }
+  }
+
+  return spikeCount / rmsValues.length;
 }
 
 function analyzeBreathing(): BreathingAnalysis {
@@ -332,6 +399,9 @@ function analyzeBreathing(): BreathingAnalysis {
       breathsPerMinute: 0,
       regularity: 0,
       amplitude: 0,
+      respiratoryRateVariability: 0,
+      movementIntensity: 0,
+      confidenceScore: 0,
     };
   }
 
@@ -340,29 +410,40 @@ function analyzeBreathing(): BreathingAnalysis {
     intervals.push(peakTimestamps[i] - peakTimestamps[i - 1]);
   }
 
+  breathIntervals = [...breathIntervals.slice(-20), ...intervals].slice(-30);
+
   const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
   const breathsPerMinute = 60000 / avgInterval;
 
-  const variance = intervals.reduce(
-    (sum, interval) => sum + Math.pow(interval - avgInterval, 2),
-    0
-  ) / intervals.length;
+  const variance =
+    intervals.reduce((sum, interval) => sum + Math.pow(interval - avgInterval, 2), 0) /
+    intervals.length;
   const stdDev = Math.sqrt(variance);
   const regularity = Math.max(0, 1 - stdDev / avgInterval);
 
   const recentRms = rmsHistory.slice(-20);
-  const amplitude = Math.max(...recentRms.map(r => r.value));
+  const amplitude = Math.max(...recentRms.map((r) => r.value));
+
+  const rrv = calculateRRV(breathIntervals);
+  const movementIntensity = detectMovement(recentRms.map((r) => r.value));
 
   const isBreathingDetected =
     breathsPerMinute >= BREATHING_RATE_MIN &&
     breathsPerMinute <= BREATHING_RATE_MAX &&
     regularity > 0.3;
 
+  const confidenceScore = isBreathingDetected
+    ? Math.min(1, (peakTimestamps.length / 10) * regularity)
+    : 0;
+
   return {
     isBreathingDetected,
     breathsPerMinute: isBreathingDetected ? breathsPerMinute : 0,
     regularity,
     amplitude,
+    respiratoryRateVariability: rrv,
+    movementIntensity,
+    confidenceScore,
   };
 }
 
@@ -370,24 +451,50 @@ function inferSleepStage(analysis: BreathingAnalysis): SleepStage {
   if (!analysis.isBreathingDetected) {
     return 'awake';
   }
-  
+
+  if (analysis.movementIntensity > MOVEMENT_THRESHOLD) {
+    return 'awake';
+  }
+
   if (analysis.regularity < DROWSY_BREATHING_REGULARITY) {
     return 'awake';
   }
-  
+
+  if (
+    analysis.respiratoryRateVariability > REM_RRV_THRESHOLD &&
+    analysis.breathsPerMinute > 16 &&
+    analysis.movementIntensity < MOVEMENT_THRESHOLD * 0.5
+  ) {
+    return 'rem';
+  }
+
+  if (
+    analysis.respiratoryRateVariability < DEEP_SLEEP_RRV_THRESHOLD &&
+    analysis.breathsPerMinute < 12 &&
+    analysis.regularity > SLEEP_BREATHING_REGULARITY
+  ) {
+    return 'deep';
+  }
+
   if (analysis.regularity < SLEEP_BREATHING_REGULARITY) {
     return 'light';
   }
-  
-  if (analysis.breathsPerMinute < 12) {
-    return 'deep';
-  }
-  
-  if (analysis.breathsPerMinute > 18) {
-    return 'rem';
-  }
-  
+
   return 'light';
+}
+
+function handleStageTransition(previousStage: SleepStage, newStage: SleepStage): void {
+  const now = Date.now();
+  stageHistory.push({ stage: newStage, timestamp: now });
+  stageHistory = stageHistory.filter((s) => now - s.timestamp < 3600000);
+
+  if (newStage === 'rem' && previousStage !== 'rem') {
+    remCallbacks.forEach((cb) => cb());
+  }
+
+  if (previousStage === 'rem' && newStage !== 'rem') {
+    remEndCallbacks.forEach((cb) => cb());
+  }
 }
 
 export function shouldTriggerDream(stage: SleepStage): boolean {
@@ -402,6 +509,8 @@ export const sleepService = {
   getCurrentStage,
   isInTargetStage,
   onStageChange: onSleepStageChange,
+  onRemStart,
+  onRemEnd,
   getHistory: getSleepHistory,
   calculateSummary: calculateSleepSummary,
   getSleepStageDisplayName,

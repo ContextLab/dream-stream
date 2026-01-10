@@ -1,11 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import {
-  View,
-  TextInput,
-  Pressable,
-  StyleSheet,
-  Keyboard,
-} from 'react-native';
+import { View, TextInput, Pressable, StyleSheet, Keyboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, touchTargetMinSize, borderRadius } from '@/theme/tokens';
 
@@ -28,18 +22,27 @@ export function SearchBar({
   autoFocus = false,
   debounceMs = 300,
 }: SearchBarProps) {
-  const [internalValue, setInternalValue] = useState('');
+  // Always use internal value for immediate display feedback
+  const [displayValue, setDisplayValue] = useState(controlledValue ?? '');
   const inputRef = useRef<TextInput>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const value = controlledValue ?? internalValue;
-  const hasValue = value.length > 0;
+  // Sync internal state when controlled value changes externally (e.g., clear from parent)
+  useEffect(() => {
+    if (controlledValue !== undefined && controlledValue !== displayValue) {
+      // Only sync if parent explicitly set a different value (like clearing)
+      setDisplayValue(controlledValue);
+    }
+  }, [controlledValue]);
+
+  const hasValue = displayValue.length > 0;
 
   const handleChangeText = useCallback(
     (text: string) => {
-      // Always update internal value for immediate UI feedback
-      setInternalValue(text);
+      // Immediately update display for instant visual feedback
+      setDisplayValue(text);
 
+      // Debounce the callback to parent (for search API calls)
       if (debounceRef.current) {
         clearTimeout(debounceRef.current);
       }
@@ -52,7 +55,10 @@ export function SearchBar({
   );
 
   const handleClear = useCallback(() => {
-    setInternalValue('');
+    setDisplayValue('');
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
     onClear?.();
     onChangeText?.('');
     inputRef.current?.focus();
@@ -60,8 +66,8 @@ export function SearchBar({
 
   const handleSubmit = useCallback(() => {
     Keyboard.dismiss();
-    onSubmit?.(value);
-  }, [value, onSubmit]);
+    onSubmit?.(displayValue);
+  }, [displayValue, onSubmit]);
 
   useEffect(() => {
     return () => {
@@ -79,7 +85,7 @@ export function SearchBar({
         style={styles.input}
         placeholder={placeholder}
         placeholderTextColor={colors.gray[500]}
-        value={value}
+        value={displayValue}
         onChangeText={handleChangeText}
         onSubmitEditing={handleSubmit}
         autoFocus={autoFocus}

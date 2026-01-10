@@ -6,13 +6,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { Text, Heading } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
 import { DreamCard } from '@/components/DreamCard';
-import { useAuth } from '@/hooks/useAuth';
 import { useFavorites } from '@/hooks/useFavorites';
 import { colors, spacing } from '@/theme/tokens';
 import type { DreamListItem } from '@/types/database';
 
 export default function FavoritesScreen() {
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { favorites, isLoading, error, refresh } = useFavorites();
 
   const renderItem = useCallback(
@@ -26,48 +24,13 @@ export default function FavoritesScreen() {
 
   const keyExtractor = useCallback((item: DreamListItem) => item.id, []);
 
-  if (authLoading) {
-    return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.header}>
-          <Heading variant="h2" color="primary">Favorites</Heading>
-        </View>
-        <View style={styles.centerContent}>
-          <ActivityIndicator size="large" color={colors.primary[500]} />
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.header}>
-          <Heading variant="h2" color="primary">Favorites</Heading>
-        </View>
-        <View style={styles.centerContent}>
-          <Ionicons name="heart-outline" size={64} color={colors.gray[500]} />
-          <Text variant="h4" color="primary" style={styles.emptyTitle}>
-            Save Your Favorites
-          </Text>
-          <Text variant="body" color="secondary" align="center" style={styles.emptySubtitle}>
-            Sign in to save dreams and access them anytime
-          </Text>
-          <Link href="/auth/login" asChild>
-            <Button variant="primary" style={styles.signInButton}>
-              Sign In
-            </Button>
-          </Link>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
   if (isLoading && favorites.length === 0) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
-          <Heading variant="h2" color="primary">Favorites</Heading>
+          <Heading variant="h2" color="primary">
+            Favorites
+          </Heading>
         </View>
         <View style={styles.centerContent}>
           <ActivityIndicator size="large" color={colors.primary[500]} />
@@ -80,7 +43,9 @@ export default function FavoritesScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
-          <Heading variant="h2" color="primary">Favorites</Heading>
+          <Heading variant="h2" color="primary">
+            Favorites
+          </Heading>
         </View>
         <View style={styles.centerContent}>
           <Ionicons name="alert-circle" size={64} color={colors.error} />
@@ -99,7 +64,9 @@ export default function FavoritesScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
-          <Heading variant="h2" color="primary">Favorites</Heading>
+          <Heading variant="h2" color="primary">
+            Favorites
+          </Heading>
         </View>
         <View style={styles.centerContent}>
           <Ionicons name="heart-outline" size={64} color={colors.gray[500]} />
@@ -128,7 +95,9 @@ export default function FavoritesScreen() {
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
           <View style={styles.header}>
-            <Heading variant="h2" color="primary">Favorites</Heading>
+            <Heading variant="h2" color="primary">
+              Favorites
+            </Heading>
             <Text variant="bodySmall" color="secondary" style={styles.countText}>
               {favorites.length} {favorites.length === 1 ? 'dream' : 'dreams'}
             </Text>

@@ -9,13 +9,7 @@ export interface User {
 
 export type PlaybackMode = 'preview' | 'full' | 'dream';
 
-export type MusicStyle = 
-  | 'ambient'
-  | 'nature'
-  | 'cosmic'
-  | 'piano'
-  | 'binaural'
-  | 'silence';
+export type MusicStyle = 'ambient' | 'nature' | 'cosmic' | 'piano' | 'binaural' | 'silence';
 
 export interface MusicSettings {
   style: MusicStyle;
@@ -75,6 +69,7 @@ export type DeviceType = 'apple_watch' | 'fitbit' | 'oura' | 'garmin' | 'generic
 export type SleepStage = 'rem' | 'light' | 'deep' | 'awake' | 'any';
 export type LaunchStatus = 'pending' | 'ready' | 'launched' | 'completed' | 'cancelled';
 export type TriggerMode = 'auto' | 'manual';
+export type RepeatMode = 'off' | 'one' | 'all';
 
 export interface WearableDevice {
   id: string;

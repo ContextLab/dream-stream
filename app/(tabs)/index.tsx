@@ -33,19 +33,13 @@ export default function HomeScreen() {
   }, []);
 
   const dreamsOptions = useMemo<DreamListOptions>(
-    () => (selectedCategories.size > 0 ? { filters: { categorySlugs: [...selectedCategories] } } : {}),
+    () =>
+      selectedCategories.size > 0 ? { filters: { categorySlugs: [...selectedCategories] } } : {},
     [selectedCategories]
   );
 
-  const {
-    dreams,
-    isLoading,
-    isLoadingMore,
-    hasMore,
-    error,
-    refresh,
-    loadMore,
-  } = useDreams(dreamsOptions);
+  const { dreams, isLoading, isLoadingMore, hasMore, error, refresh, loadMore } =
+    useDreams(dreamsOptions);
 
   const { dreams: featuredDreams } = useFeaturedDreams(3);
 
@@ -53,21 +47,23 @@ export default function HomeScreen() {
     <View>
       <View style={styles.header}>
         <View style={styles.titleRow}>
-          <Text variant="h2" weight="bold">dream_stream</Text>
-          <Link href={"/about" as any} asChild>
+          <Text variant="h2" weight="bold">
+            dream_stream
+          </Text>
+          <Link href={'/about' as any} asChild>
             <Pressable style={styles.aboutButton} hitSlop={8}>
               <Ionicons name="information-circle-outline" size={24} color={colors.gray[400]} />
             </Pressable>
           </Link>
         </View>
         <MonoText color="muted" style={styles.subtitle}>
-          // lucid dream audio experiences
+          // guided lucid dreaming
         </MonoText>
       </View>
       <View style={styles.instructionsCard}>
         <Text variant="bodySmall" color="secondary" style={styles.instructionsText}>
-          Browse dreams below, tap to preview, then play the full experience as you fall asleep. 
-          Each dream includes guided narration with pauses for lucid exploration.
+          Drift into vivid, conscious dreams. Each journey guides you gently through immersive
+          dreamscapes with moments of quiet for your imagination to take flight.
         </Text>
       </View>
       <CategoryFilter

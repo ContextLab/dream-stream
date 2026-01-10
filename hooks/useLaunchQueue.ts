@@ -12,16 +12,20 @@ import {
   isInQueue,
   reorderQueue,
   getNextQueueItem,
+  shuffleQueue,
+  getRepeatMode,
+  setRepeatMode as setRepeatModeService,
   type QueuedDream,
 } from '@/services/launchQueue';
 import { useAuth } from './useAuth';
-import type { TriggerMode, SleepStage, LaunchStatus } from '@/types/database';
+import type { TriggerMode, SleepStage, RepeatMode } from '@/types/database';
 
 interface UseLaunchQueueReturn {
   queue: QueuedDream[];
   activeItem: QueuedDream | null;
   isLoading: boolean;
   error: Error | null;
+  repeatMode: RepeatMode;
   refresh: () => Promise<void>;
   add: (dreamId: string, triggerMode?: TriggerMode, targetStage?: SleepStage) => Promise<void>;
   remove: (queueId: string) => Promise<void>;
@@ -34,6 +38,8 @@ interface UseLaunchQueueReturn {
   moveUp: (queueId: string) => Promise<void>;
   moveDown: (queueId: string) => Promise<void>;
   getNext: () => Promise<QueuedDream | null>;
+  shuffle: () => Promise<void>;
+  setRepeatMode: (mode: RepeatMode) => Promise<void>;
 }
 
 export function useLaunchQueue(): UseLaunchQueueReturn {
@@ -42,6 +48,7 @@ export function useLaunchQueue(): UseLaunchQueueReturn {
   const [activeItem, setActiveItem] = useState<QueuedDream | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [repeatMode, setRepeatModeState] = useState<RepeatMode>('off');
 
   const fetchQueue = useCallback(async () => {
     if (!user) {
@@ -55,12 +62,14 @@ export function useLaunchQueue(): UseLaunchQueueReturn {
     setError(null);
 
     try {
-      const [queueItems, active] = await Promise.all([
+      const [queueItems, active, currentRepeatMode] = await Promise.all([
         getQueuedDreams(user.id),
         getActiveQueueItem(user.id),
+        getRepeatMode(),
       ]);
       setQueue(queueItems);
       setActiveItem(active);
+      setRepeatModeState(currentRepeatMode);
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Failed to load queue'));
     } finally {
@@ -212,11 +221,33 @@ export function useLaunchQueue(): UseLaunchQueueReturn {
     return getNextQueueItem(user.id);
   }, [user]);
 
+  const handleShuffle = useCallback(async () => {
+    if (!user) return;
+    try {
+      await shuffleQueue(user.id);
+      await fetchQueue();
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Failed to shuffle'));
+      throw err;
+    }
+  }, [user, fetchQueue]);
+
+  const handleSetRepeatMode = useCallback(async (mode: RepeatMode) => {
+    try {
+      await setRepeatModeService(mode);
+      setRepeatModeState(mode);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Failed to set repeat mode'));
+      throw err;
+    }
+  }, []);
+
   return {
     queue,
     activeItem,
     isLoading,
     error,
+    repeatMode,
     refresh: fetchQueue,
     add: handleAdd,
     remove: handleRemove,
@@ -229,6 +260,8 @@ export function useLaunchQueue(): UseLaunchQueueReturn {
     moveUp: handleMoveUp,
     moveDown: handleMoveDown,
     getNext: handleGetNext,
+    shuffle: handleShuffle,
+    setRepeatMode: handleSetRepeatMode,
   };
 }
 
@@ -244,7 +277,7 @@ export function useQueueStatus(dreamId: string) {
     }
 
     let mounted = true;
-    
+
     async function check() {
       setIsLoading(true);
       try {

@@ -3,7 +3,9 @@ import { View, Pressable, StyleSheet } from 'react-native';
 import { Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
-import { colors, touchTargetMinSize, borderRadius } from '@/theme/tokens';
+import { FavoriteButton } from '@/components/FavoriteButton';
+import { QueueButton } from '@/components/QueueButton';
+import { colors, touchTargetMinSize, borderRadius, fontFamily } from '@/theme/tokens';
 import type { DreamListItem } from '@/types/database';
 
 interface DreamCardProps {
@@ -14,35 +16,42 @@ interface DreamCardProps {
 function formatDuration(seconds: number): string {
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
-  return mins > 0 ? `${mins}:${secs.toString().padStart(2, '0')}` : `0:${secs.toString().padStart(2, '0')}`;
+  return mins > 0
+    ? `${mins}:${secs.toString().padStart(2, '0')}`
+    : `0:${secs.toString().padStart(2, '0')}`;
 }
 
 export const DreamCard = memo(function DreamCard({ dream, variant = 'default' }: DreamCardProps) {
   const isFeatured = variant === 'featured';
   const isCompact = variant === 'compact';
 
-  const containerStyle = useMemo(() => ({
-    ...styles.container,
-    ...(isFeatured ? styles.featuredContainer : {}),
-    ...(isCompact ? styles.compactContainer : {}),
-  }), [isFeatured, isCompact]);
+  const containerStyle = useMemo(
+    () => ({
+      ...styles.container,
+      ...(isFeatured ? styles.featuredContainer : {}),
+      ...(isCompact ? styles.compactContainer : {}),
+    }),
+    [isFeatured, isCompact]
+  );
 
   return (
     <Link href={`/dream/${dream.id}`} asChild>
       <Pressable style={containerStyle}>
-        <View style={isFeatured ? {...styles.iconSection, ...styles.featuredIconSection} : styles.iconSection}>
-          <Ionicons 
-            name="moon-outline" 
-            size={isFeatured ? 32 : 24} 
-            color={colors.primary[500]} 
-          />
+        <View
+          style={
+            isFeatured
+              ? { ...styles.iconSection, ...styles.featuredIconSection }
+              : styles.iconSection
+          }
+        >
+          <Ionicons name="moon-outline" size={isFeatured ? 32 : 24} color={colors.primary[500]} />
           {dream.is_featured && !isFeatured && (
             <View style={styles.featuredBadge}>
               <Ionicons name="star" size={10} color={colors.gray[950]} />
             </View>
           )}
         </View>
-        <View style={isCompact ? {...styles.content, ...styles.compactContent} : styles.content}>
+        <View style={isCompact ? { ...styles.content, ...styles.compactContent } : styles.content}>
           <Text
             variant={isFeatured ? 'h4' : 'body'}
             weight="semibold"
@@ -66,6 +75,10 @@ export const DreamCard = memo(function DreamCard({ dream, variant = 'default' }:
               {formatDuration(dream.full_duration_seconds)}
             </Text>
           </View>
+        </View>
+        <View style={styles.actionButtons}>
+          <QueueButton dreamId={dream.id} size={18} />
+          <FavoriteButton dreamId={dream.id} size={18} />
         </View>
         <View style={styles.playIcon}>
           <Ionicons name="play-circle-outline" size={28} color={colors.gray[500]} />
@@ -150,9 +163,13 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   duration: {
-    fontFamily: 'CourierPrime_400Regular',
+    fontFamily: fontFamily.regular,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   playIcon: {
-    marginLeft: 8,
+    marginLeft: 4,
   },
 });

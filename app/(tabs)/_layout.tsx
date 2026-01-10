@@ -1,22 +1,23 @@
 import { Tabs } from 'expo-router';
-import { Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '@/theme/tokens';
+import { colors, fontFamily } from '@/theme/tokens';
 
-type TabIconName = 'home' | 'search' | 'heart' | 'person' | 'moon';
+type TabIconName = 'home' | 'search' | 'heart' | 'settings' | 'moon';
 
-const monoFont = Platform.select({
-  ios: 'Menlo',
-  android: 'monospace',
-  default: 'monospace',
-});
-
-function TabBarIcon({ name, color, focused }: { name: TabIconName; color: string; focused: boolean }) {
+function TabBarIcon({
+  name,
+  color,
+  focused,
+}: {
+  name: TabIconName;
+  color: string;
+  focused: boolean;
+}) {
   const iconMap: Record<TabIconName, keyof typeof Ionicons.glyphMap> = {
     home: focused ? 'home' : 'home-outline',
     search: focused ? 'search' : 'search-outline',
     heart: focused ? 'heart' : 'heart-outline',
-    person: focused ? 'person' : 'person-outline',
+    settings: focused ? 'settings' : 'settings-outline',
     moon: focused ? 'moon' : 'moon-outline',
   };
 
@@ -40,7 +41,7 @@ export default function TabLayout() {
         tabBarLabelStyle: {
           fontSize: 10,
           fontWeight: '500',
-          fontFamily: monoFont,
+          fontFamily: fontFamily.regular,
           letterSpacing: 0.5,
           textTransform: 'uppercase',
         },
@@ -75,11 +76,11 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="profile"
+        name="settings"
         options={{
-          title: 'Profile',
+          title: 'Settings',
           tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon name="person" color={color} focused={focused} />
+            <TabBarIcon name="settings" color={color} focused={focused} />
           ),
         }}
       />

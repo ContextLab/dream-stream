@@ -29,9 +29,11 @@ export default function AboutScreen() {
       />
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
         <View style={styles.heroSection}>
-          <Heading variant="h1" color="primary">dream_stream</Heading>
+          <Heading variant="h1" color="primary">
+            dream_stream
+          </Heading>
           <MonoText color="accent" style={styles.tagline}>
-            // lucid dream audio experiences
+            // guided lucid dreaming
           </MonoText>
         </View>
 
@@ -40,9 +42,9 @@ export default function AboutScreen() {
             What is DreamStream?
           </Heading>
           <Text variant="body" color="secondary" style={styles.paragraph}>
-            DreamStream delivers guided audio experiences designed to enhance your dreams. 
-            Each session combines soothing narration with carefully placed pauses, 
-            giving you space to explore your own dreamscape.
+            DreamStream guides you into vivid, conscious dreams through immersive audio journeys.
+            Each experience weaves gentle narration with peaceful silences, creating space for your
+            imagination to awaken within your dreams.
           </Text>
         </View>
 
@@ -53,21 +55,30 @@ export default function AboutScreen() {
           <View style={styles.stepContainer}>
             <View style={styles.step}>
               <View style={styles.stepNumber}>
-                <Text variant="body" weight="bold" color="primary">1</Text>
+                <Text variant="body" weight="bold" color="primary">
+                  1
+                </Text>
               </View>
               <View style={styles.stepContent}>
-                <Text variant="body" weight="semibold" color="primary">Browse & Preview</Text>
+                <Text variant="body" weight="semibold" color="primary">
+                  Browse & Preview
+                </Text>
                 <Text variant="bodySmall" color="secondary">
-                  Explore dreams by category. Tap any dream to hear a preview and read the description.
+                  Explore dreams by category. Tap any dream to hear a preview and read the
+                  description.
                 </Text>
               </View>
             </View>
             <View style={styles.step}>
               <View style={styles.stepNumber}>
-                <Text variant="body" weight="bold" color="primary">2</Text>
+                <Text variant="body" weight="bold" color="primary">
+                  2
+                </Text>
               </View>
               <View style={styles.stepContent}>
-                <Text variant="body" weight="semibold" color="primary">Prepare for Sleep</Text>
+                <Text variant="body" weight="semibold" color="primary">
+                  Prepare for Sleep
+                </Text>
                 <Text variant="bodySmall" color="secondary">
                   Get comfortable in bed. Set your phone nearby with the volume at a gentle level.
                 </Text>
@@ -75,25 +86,33 @@ export default function AboutScreen() {
             </View>
             <View style={styles.step}>
               <View style={styles.stepNumber}>
-                <Text variant="body" weight="bold" color="primary">3</Text>
+                <Text variant="body" weight="bold" color="primary">
+                  3
+                </Text>
               </View>
               <View style={styles.stepContent}>
-                <Text variant="body" weight="semibold" color="primary">Play Full Experience</Text>
+                <Text variant="body" weight="semibold" color="primary">
+                  Play Full Experience
+                </Text>
                 <Text variant="bodySmall" color="secondary">
-                  Start the dream audio. The narration will guide you through imagery 
-                  with pauses for your mind to wander and create.
+                  Start the dream audio. The narration will guide you through imagery with pauses
+                  for your mind to wander and create.
                 </Text>
               </View>
             </View>
             <View style={styles.step}>
               <View style={styles.stepNumber}>
-                <Text variant="body" weight="bold" color="primary">4</Text>
+                <Text variant="body" weight="bold" color="primary">
+                  4
+                </Text>
               </View>
               <View style={styles.stepContent}>
-                <Text variant="body" weight="semibold" color="primary">Drift Off</Text>
+                <Text variant="body" weight="semibold" color="primary">
+                  Drift Off
+                </Text>
                 <Text variant="bodySmall" color="secondary">
-                  Let the audio fade as you fall asleep. The suggestions may carry 
-                  into your dreams, enhancing awareness and creativity.
+                  Let the audio fade as you fall asleep. The suggestions may carry into your dreams,
+                  enhancing awareness and creativity.
                 </Text>
               </View>
             </View>
@@ -105,15 +124,14 @@ export default function AboutScreen() {
             About Lucid Dreaming
           </Heading>
           <Text variant="body" color="secondary" style={styles.paragraph}>
-            Lucid dreaming is the experience of becoming aware that you're dreaming 
-            while still in the dream. This awareness can allow you to explore, 
-            create, and even direct your dream experiences.
+            Lucid dreaming is the experience of becoming aware that you're dreaming while still in
+            the dream. This awareness can allow you to explore, create, and even direct your dream
+            experiences.
           </Text>
           <Text variant="body" color="secondary" style={styles.paragraph}>
-            Our audio guides include gentle reality-check prompts and awareness cues 
-            designed to increase the likelihood of lucid dreams. The [PAUSE] markers 
-            in each script provide silent periods for your subconscious to process 
-            and respond to the suggestions.
+            Our audio guides include gentle reality-check prompts and awareness cues designed to
+            increase the likelihood of lucid dreams. The [PAUSE] markers in each script provide
+            silent periods for your subconscious to process and respond to the suggestions.
           </Text>
         </View>
 
@@ -154,10 +172,10 @@ export default function AboutScreen() {
             Credits
           </Heading>
           <Text variant="body" color="secondary" style={styles.paragraph}>
-            DreamStream is an open-source project from the Contextual Dynamics Lab 
-            at Dartmouth College.
+            DreamStream is an open-source project from the Contextual Dynamics Lab at Dartmouth
+            College.
           </Text>
-          <Pressable 
+          <Pressable
             style={styles.linkButton}
             onPress={() => openLink('https://github.com/ContextLab/dream-stream')}
           >

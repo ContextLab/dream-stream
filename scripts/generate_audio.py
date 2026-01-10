@@ -37,10 +37,10 @@ PROJECT_ROOT = Path(__file__).parent.parent
 DREAM_DATA_PATH = PROJECT_ROOT / "lib" / "dreamData.ts"
 OUTPUT_DIR = PROJECT_ROOT / "public" / "audio" / "dreams"
 
-# Voice settings - Jenny is a calm, soothing US English voice
-VOICE = "en-US-JennyNeural"
-RATE = "-10%"  # Slightly slower for dream narration
-PITCH = "-5Hz"  # Slightly lower pitch for calming effect
+# Voice settings - Sonia is a calm, soothing British English voice
+VOICE = "en-GB-SoniaNeural"
+RATE = "-30%"  # Slower for dream narration
+PITCH = "-15Hz"  # Lower pitch for calming effect
 
 # Pause durations
 PAUSE_DURATION_MS = 45000  # Long pause for lucid exploration
