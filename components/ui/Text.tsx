@@ -1,5 +1,5 @@
-import { Text as RNText, TextProps as RNTextProps, Platform, StyleSheet } from 'react-native';
-import { colors } from '@/theme/tokens';
+import { Text as RNText, TextProps as RNTextProps, StyleSheet } from 'react-native';
+import { colors, fontFamily } from '@/theme/tokens';
 
 type TextVariant = 'h1' | 'h2' | 'h3' | 'h4' | 'body' | 'bodySmall' | 'caption' | 'label' | 'mono' | 'code';
 type TextWeight = 'normal' | 'medium' | 'semibold' | 'bold';
@@ -12,30 +12,31 @@ interface TextProps extends RNTextProps {
   children: React.ReactNode;
 }
 
-const monoFont = Platform.select({
-  ios: 'Menlo',
-  android: 'monospace',
-  default: 'monospace',
+const variantStyles = StyleSheet.create({
+  h1: { fontSize: 35, lineHeight: 42, letterSpacing: -0.5, fontFamily: fontFamily.bold },
+  h2: { fontSize: 29, lineHeight: 36, letterSpacing: -0.3, fontFamily: fontFamily.bold },
+  h3: { fontSize: 23, lineHeight: 30, letterSpacing: -0.2, fontFamily: fontFamily.bold },
+  h4: { fontSize: 19, lineHeight: 26, letterSpacing: -0.1, fontFamily: fontFamily.regular },
+  body: { fontSize: 15, lineHeight: 24, fontFamily: fontFamily.regular },
+  bodySmall: { fontSize: 13, lineHeight: 20, fontFamily: fontFamily.regular },
+  caption: { fontSize: 11, lineHeight: 16, letterSpacing: 0.2, fontFamily: fontFamily.regular },
+  label: { fontSize: 11, lineHeight: 16, letterSpacing: 1.2, textTransform: 'uppercase', fontFamily: fontFamily.bold },
+  mono: { fontSize: 14, lineHeight: 22, fontFamily: fontFamily.regular },
+  code: { fontSize: 13, lineHeight: 20, fontFamily: fontFamily.regular, letterSpacing: -0.3 },
 });
 
-const variantStyles = StyleSheet.create({
-  h1: { fontSize: 35, lineHeight: 42, letterSpacing: -0.5 },
-  h2: { fontSize: 29, lineHeight: 36, letterSpacing: -0.3 },
-  h3: { fontSize: 23, lineHeight: 30, letterSpacing: -0.2 },
-  h4: { fontSize: 19, lineHeight: 26, letterSpacing: -0.1 },
-  body: { fontSize: 15, lineHeight: 24 },
-  bodySmall: { fontSize: 13, lineHeight: 20 },
-  caption: { fontSize: 11, lineHeight: 16, letterSpacing: 0.2 },
-  label: { fontSize: 11, lineHeight: 16, letterSpacing: 1.2, textTransform: 'uppercase' },
-  mono: { fontSize: 14, lineHeight: 22, fontFamily: monoFont },
-  code: { fontSize: 13, lineHeight: 20, fontFamily: monoFont, letterSpacing: -0.3 },
-});
+const fontFamilyForWeight: Record<TextWeight, string> = {
+  normal: fontFamily.regular,
+  medium: fontFamily.regular,
+  semibold: fontFamily.bold,
+  bold: fontFamily.bold,
+};
 
 const weightStyles = StyleSheet.create({
-  normal: { fontWeight: '400' },
-  medium: { fontWeight: '500' },
-  semibold: { fontWeight: '600' },
-  bold: { fontWeight: '700' },
+  normal: { fontFamily: fontFamily.regular },
+  medium: { fontFamily: fontFamily.regular },
+  semibold: { fontFamily: fontFamily.bold },
+  bold: { fontFamily: fontFamily.bold },
 });
 
 const colorMap = {

@@ -15,8 +15,8 @@
     "build:android": "eas build --platform android"
   },
   "dependencies": {
+    "@expo-google-fonts/courier-prime": "^0.4.1",
     "@expo/vector-icons": "^15.0.3",
-    "@mux/mux-player-react": "^3.10.2",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@supabase/supabase-js": "^2.90.1",
     "expo": "~54.0.31",
@@ -27,7 +27,7 @@
     "expo-router": "^6.0.21",
     "expo-splash-screen": "^31.0.13",
     "expo-status-bar": "~3.0.9",
-    "expo-video": "^3.0.15",
+    "meyda": "^5.6.3",
     "nativewind": "^4.2.1",
     "react": "19.1.0",
     "react-dom": "19.1.0",
@@ -42,6 +42,7 @@
   "devDependencies": {
     "@babel/core": "^7.28.5",
     "@eslint/js": "^9.39.2",
+    "@types/meyda": "^4.3.8",
     "@types/node": "^25.0.5",
     "@types/react": "~19.1.0",
     "@types/react-native": "^0.72.8",

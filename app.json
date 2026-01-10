@@ -36,7 +36,13 @@
     },
     "web": {
       "favicon": "./assets/favicon.png",
-      "bundler": "metro"
+      "bundler": "metro",
+      "output": "static",
+      "name": "Dream Stream",
+      "shortName": "DreamStream",
+      "description": "Lucid dream induction through intelligent sleep-aware audio prompting",
+      "themeColor": "#09090b",
+      "backgroundColor": "#09090b"
     },
     "plugins": [
       "expo-router",

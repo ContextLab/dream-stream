@@ -33,13 +33,13 @@ export const DreamCard = memo(function DreamCard({ dream, variant = 'default' }:
       >
         <View style={[styles.imageContainer, isFeatured && styles.featuredImageContainer]}>
           <Image
-            source={{ uri: dream.thumbnail_url }}
+            source={{ uri: dream.artwork_url }}
             style={styles.image}
             resizeMode="cover"
           />
           <View style={styles.durationBadge}>
             <Text variant="caption" color="inherit" style={styles.durationText}>
-              {formatDuration(dream.duration_seconds)}
+              {formatDuration(dream.full_duration_seconds)}
             </Text>
           </View>
           {dream.is_featured && !isFeatured && (
