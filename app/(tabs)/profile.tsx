@@ -1,16 +1,18 @@
 import { useCallback } from 'react';
-import { View, StyleSheet, ScrollView, Pressable, Alert } from 'react-native';
+import { View, StyleSheet, ScrollView, Pressable, Alert, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text, Heading } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/hooks/useAuth';
+import { useTheme } from '@/components/ThemeProvider';
 import { colors, spacing } from '@/theme/tokens';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, isAuthenticated, isLoading, signOut } = useAuth();
+  const { isDark, toggleTheme } = useTheme();
 
   const handleSignOut = useCallback(async () => {
     Alert.alert(
@@ -98,6 +100,18 @@ export default function ProfileScreen() {
         <View style={styles.menuSection}>
           <MenuRow icon="heart-outline" label="My Favorites" onPress={() => router.push('/(tabs)/favorites')} />
           <MenuRow icon="time-outline" label="Watch History" onPress={() => {}} />
+          <View style={styles.themeRow}>
+            <Ionicons name={isDark ? 'moon' : 'sunny'} size={24} color={colors.gray[400]} />
+            <Text variant="body" color="primary" style={styles.menuLabel}>
+              Dark Mode
+            </Text>
+            <Switch
+              value={isDark}
+              onValueChange={toggleTheme}
+              trackColor={{ false: colors.gray[600], true: colors.primary[500] }}
+              thumbColor="#ffffff"
+            />
+          </View>
           <MenuRow icon="settings-outline" label="Settings" onPress={() => {}} />
           <MenuRow icon="help-circle-outline" label="Help & Support" onPress={() => {}} />
         </View>
@@ -198,6 +212,11 @@ const styles = StyleSheet.create({
   menuLabel: {
     flex: 1,
     marginLeft: spacing.md,
+  },
+  themeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
   },
   signOutSection: {
     padding: spacing.xl,

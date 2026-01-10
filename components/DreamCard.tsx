@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { View, Image, Pressable, StyleSheet } from 'react-native';
 import { Link } from 'expo-router';
 import { Text } from '@/components/ui/Text';
-import { shadows, touchTargetMinSize } from '@/theme/tokens';
+import { colors, shadows, touchTargetMinSize, borderRadius } from '@/theme/tokens';
 import type { DreamListItem } from '@/types/database';
 
 interface DreamCardProps {
@@ -76,15 +76,17 @@ export const DreamCard = memo(function DreamCard({ dream, variant = 'default' }:
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#1a1a2e',
-    borderRadius: 16,
+    backgroundColor: colors.gray[900],
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.gray[800],
     overflow: 'hidden',
     minHeight: touchTargetMinSize,
-    ...shadows.md,
   },
   featuredContainer: {
     width: 280,
     marginRight: 16,
+    borderColor: colors.primary[900],
   },
   compactContainer: {
     flexDirection: 'row',
@@ -93,6 +95,7 @@ const styles = StyleSheet.create({
   imageContainer: {
     aspectRatio: 16 / 9,
     position: 'relative',
+    backgroundColor: colors.gray[950],
   },
   featuredImageContainer: {
     aspectRatio: 4 / 3,
@@ -105,28 +108,31 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 8,
     right: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: borderRadius.sm,
   },
   durationText: {
-    color: '#ffffff',
-    fontSize: 12,
+    color: colors.gray[300],
+    fontSize: 11,
+    fontFamily: 'monospace',
   },
   featuredBadge: {
     position: 'absolute',
     top: 8,
     left: 8,
-    backgroundColor: '#6366f1',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
+    backgroundColor: colors.primary[600],
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: borderRadius.sm,
   },
   featuredText: {
-    color: '#ffffff',
+    color: colors.gray[950],
     fontSize: 10,
     fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   content: {
     padding: 12,
@@ -136,7 +142,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: {
-    color: '#ffffff',
+    color: colors.gray[100],
   },
   categoryContainer: {
     flexDirection: 'row',
@@ -144,9 +150,9 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   categoryDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     marginRight: 6,
   },
 });
