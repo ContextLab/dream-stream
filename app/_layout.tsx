@@ -8,33 +8,18 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider } from '@/components/AuthProvider';
 import { ThemeProvider, useTheme } from '@/components/ThemeProvider';
+import {
+  useFonts,
+  CourierPrime_400Regular,
+  CourierPrime_400Regular_Italic,
+  CourierPrime_700Bold,
+  CourierPrime_700Bold_Italic,
+} from '@expo-google-fonts/courier-prime';
 
 SplashScreen.preventAutoHideAsync();
 
 function RootLayoutContent() {
   const { theme, isDark } = useTheme();
-  const [appIsReady, setAppIsReady] = useState(false);
-
-  useEffect(() => {
-    async function prepare() {
-      try {
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      } finally {
-        setAppIsReady(true);
-      }
-    }
-    prepare();
-  }, []);
-
-  useEffect(() => {
-    if (appIsReady) {
-      SplashScreen.hideAsync();
-    }
-  }, [appIsReady]);
-
-  if (!appIsReady) {
-    return null;
-  }
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
@@ -51,6 +36,23 @@ function RootLayoutContent() {
 }
 
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    CourierPrime_400Regular,
+    CourierPrime_400Regular_Italic,
+    CourierPrime_700Bold,
+    CourierPrime_700Bold_Italic,
+  });
+
+  useEffect(() => {
+    if (fontsLoaded) {
+      SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded]);
+
+  if (!fontsLoaded) {
+    return null;
+  }
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
