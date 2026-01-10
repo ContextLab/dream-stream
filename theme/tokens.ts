@@ -104,7 +104,9 @@ export const fontWeight = {
   bold: '700',
 } as const;
 
-export const shadows = {
+import { Platform } from 'react-native';
+
+const nativeShadows = {
   sm: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -133,7 +135,16 @@ export const shadows = {
     shadowRadius: 12,
     elevation: 0,
   },
-} as const;
+};
+
+const webShadows = {
+  sm: { boxShadow: '0 1px 2px rgba(0, 0, 0, 0.2)' },
+  md: { boxShadow: '0 2px 4px rgba(0, 0, 0, 0.25)' },
+  lg: { boxShadow: '0 4px 8px rgba(0, 0, 0, 0.3)' },
+  glow: { boxShadow: '0 0 12px rgba(34, 197, 94, 0.4)' },
+};
+
+export const shadows = Platform.OS === 'web' ? webShadows : nativeShadows;
 
 export const touchTargetMinSize = 44;
 
