@@ -22,9 +22,9 @@ DreamStream combines sleep science, wearable technology, and AI-generated audio 
 
 | Platform | Status | Notes |
 |----------|--------|-------|
-| **Web** | Planned | Progressive Web App for prompt management |
-| **Android** | Planned | Full companion app + background audio |
-| **iOS** | Planned | Full companion app + background audio |
+| **Web** | **Live** | PWA at [context-lab.com/dream-stream](https://context-lab.com/dream-stream/) |
+| **Android** | In Progress | Expo-based companion app |
+| **iOS** | In Progress | Expo-based companion app |
 | **WearOS** | Planned | Primary sleep detection device |
 | **watchOS** | Planned | Primary sleep detection device |
 | **macOS** | Planned | Desktop companion |
@@ -62,35 +62,34 @@ DreamStream integrates with multiple sleep tracking sources:
 
 ### AI Audio Generation
 
-Audio is generated using a multi-layer approach:
+Audio is generated automatically in CI using Edge TTS:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                     AUDIO PIPELINE                          │
 ├─────────────────────────────────────────────────────────────┤
-│  1. TEXT PROMPT                                             │
-│     └─> LLM Enhancement (expand into natural speech)        │
+│  1. DREAM NARRATIVES                                        │
+│     └─> Stored in lib/mockData.ts with [PAUSE] markers      │
 │                                                             │
-│  2. VOICE SYNTHESIS                                         │
-│     └─> ElevenLabs / Kokoro-82M (soothing, whispered voice) │
+│  2. VOICE SYNTHESIS (CI)                                    │
+│     └─> Edge TTS (en-US-JennyNeural, -10% rate, -5Hz pitch) │
+│     └─> Free, no API keys required                          │
 │                                                             │
-│  3. BACKGROUND MUSIC                                        │
-│     └─> Mubert API (procedural ambient generation)          │
-│     └─> Binaural beats (Theta/Delta frequencies)            │
+│  3. AUDIO PROCESSING                                        │
+│     └─> FFmpeg for Opus encoding (64kbps)                   │
+│     └─> 45-second pause markers for lucid exploration       │
 │                                                             │
-│  4. AUDIO MIXING                                            │
-│     └─> FFmpeg sidechain compression (voice ducks music)    │
-│     └─> Smooth fade-in/fade-out                             │
+│  4. CACHING                                                 │
+│     └─> GitHub Actions caches based on mockData.ts hash     │
+│     └─> Regenerates only when narratives change             │
 │                                                             │
 │  5. DELIVERY                                                │
-│     └─> Cached locally for offline playback                 │
+│     └─> Served from GitHub Pages                            │
+│     └─> public/audio/dreams/{id}_full.opus                  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**Voice Options**:
-- Whispered (Amazon Polly SSML)
-- Calm narrator (ElevenLabs "Sleep Specialist")
-- Custom cloned voice (user's own voice)
+**Current Voice**: `en-US-JennyNeural` - calm, soothing US English voice
 
 **Music Styles**:
 - Ambient pads (432Hz tuning)
@@ -214,23 +213,24 @@ Optional frequency entrainment to support lucid dreaming:
 ## Project Structure
 
 ```
-dreamstream/
-├── shared/                    # KMP shared module
-│   ├── src/commonMain/       # Shared business logic
-│   ├── src/androidMain/      # Android-specific implementations
-│   ├── src/iosMain/          # iOS-specific implementations
-│   └── src/desktopMain/      # Desktop-specific implementations
-├── android/                   # Android app module
-├── ios/                       # iOS app (Xcode project)
-├── wearos/                    # WearOS app module
-├── watchos/                   # watchOS app (Xcode project)
-├── desktop/                   # Desktop app module
-├── web/                       # Web app module
-├── backend/                   # Backend services
-│   ├── audio-service/        # Audio generation pipeline
-│   ├── dream-service/        # Dream processing
-│   └── api/                  # REST API
-└── docs/                      # Documentation
+dream-stream/
+├── app/                       # Expo Router screens
+│   ├── (tabs)/               # Tab navigation (home, search, favorites, profile)
+│   ├── auth/                 # Login/signup screens
+│   ├── dream/                # Dream detail and launch screens
+│   └── sleep/                # Sleep tracking screen
+├── components/                # React components
+│   ├── ui/                   # Base UI (Button, Card, Input, Text)
+│   └── *.tsx                 # Feature components (DreamCard, DreamPlayer, etc.)
+├── hooks/                     # React hooks (useAuth, useDreams, useFavorites, etc.)
+├── services/                  # Business logic and API calls
+├── lib/                       # Utilities, constants, and mock data
+├── theme/                     # Design system tokens
+├── types/                     # TypeScript type definitions
+├── scripts/                   # Build scripts (audio generation)
+├── supabase/                  # Database migrations and config
+├── public/                    # Static assets (audio files)
+└── notes/                     # Session notes and documentation
 ```
 
 ---
@@ -239,64 +239,88 @@ dreamstream/
 
 ### Prerequisites
 
-- JDK 17+
-- Android Studio Hedgehog (2023.1.1) or later
-- Xcode 15+ (for iOS/watchOS)
-- Node.js 18+ (for web tooling)
+- Node.js 20+
+- npm or yarn
+- Python 3.11+ (for audio generation scripts)
+- ffmpeg (for audio processing)
 
 ### Development Setup
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/dreamstream.git
-cd dreamstream
+git clone https://github.com/ContextLab/dream-stream.git
+cd dream-stream
 
-# Build shared module
-./gradlew :shared:build
+# Install dependencies
+npm install
 
-# Run Android app
-./gradlew :android:installDebug
+# Run web development server
+npm run web
 
-# Run Desktop app
-./gradlew :desktop:run
+# Run on iOS simulator
+npm run ios
 
-# Run Web app
-./gradlew :web:jsBrowserDevelopmentRun
+# Run on Android emulator
+npm run android
+
+# Type check
+npm run typecheck
+```
+
+### Audio Generation (Local)
+
+```bash
+# Create Python virtual environment
+python -m venv .venv
+source .venv/bin/activate
+
+# Install dependencies
+pip install edge-tts
+
+# Generate audio for all dreams
+python scripts/generate_audio.py
+
+# Generate audio for specific dream
+python scripts/generate_audio.py --dream dream-1
+
+# List available voices
+python scripts/generate_audio.py --list-voices
 ```
 
 ### Environment Variables
 
 ```bash
-# API Keys (required for audio generation)
-ELEVENLABS_API_KEY=your_key_here
-MUBERT_API_KEY=your_key_here
-OPENAI_API_KEY=your_key_here  # For Whisper transcription
-
-# Backend
-SUPABASE_URL=your_project_url
-SUPABASE_ANON_KEY=your_anon_key
+# Backend (optional - app works with mock data)
+EXPO_PUBLIC_SUPABASE_URL=your_project_url
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
 ```
 
 ---
 
 ## Roadmap
 
-### Phase 1: Foundation (MVP)
-- [ ] Core prompt management (CRUD)
-- [ ] Basic audio generation pipeline
-- [ ] WearOS sleep detection prototype
-- [ ] Android companion app
+### Phase 1: Foundation (MVP) - **In Progress**
+- [x] Core dream browsing and search
+- [x] Audio playback with progress persistence
+- [x] CI-based audio generation (Edge TTS)
+- [x] Basic auth UI (login/signup/profile)
+- [x] Favorites system
+- [x] Sleep tracking UI (audio-based detection)
+- [ ] Connect auth to real Supabase backend
+- [ ] HealthKit/Health Connect integration
 
 ### Phase 2: Full Mobile
-- [ ] iOS companion app
+- [ ] iOS companion app (Expo)
+- [ ] Android companion app (Expo)
 - [ ] watchOS sleep detection
-- [ ] Dream recording & transcription
-- [ ] Cloud sync
+- [ ] WearOS sleep detection
+- [ ] Push notifications for sleep reminders
 
 ### Phase 3: Intelligence
 - [ ] LLM dream-to-prompt transformation
 - [ ] Personalized prompt recommendations
 - [ ] Sleep quality analytics
+- [ ] Community dream sharing
 
 ### Phase 4: Expansion
 - [ ] Desktop apps (macOS, Windows, Linux)
