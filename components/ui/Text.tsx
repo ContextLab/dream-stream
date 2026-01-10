@@ -1,58 +1,70 @@
-import { Text as RNText, TextProps as RNTextProps } from 'react-native';
+import { Text as RNText, TextProps as RNTextProps, Platform, StyleSheet } from 'react-native';
+import { colors } from '@/theme/tokens';
 
-type TextVariant = 'h1' | 'h2' | 'h3' | 'h4' | 'body' | 'bodySmall' | 'caption' | 'label';
+type TextVariant = 'h1' | 'h2' | 'h3' | 'h4' | 'body' | 'bodySmall' | 'caption' | 'label' | 'mono' | 'code';
 type TextWeight = 'normal' | 'medium' | 'semibold' | 'bold';
 
 interface TextProps extends RNTextProps {
   variant?: TextVariant;
   weight?: TextWeight;
-  color?: 'primary' | 'secondary' | 'muted' | 'error' | 'success' | 'inherit';
+  color?: 'primary' | 'secondary' | 'muted' | 'error' | 'success' | 'accent' | 'inherit';
   align?: 'left' | 'center' | 'right';
   children: React.ReactNode;
 }
 
-const variantStyles: Record<TextVariant, string> = {
-  h1: 'text-4xl leading-tight',
-  h2: 'text-3xl leading-tight',
-  h3: 'text-2xl leading-snug',
-  h4: 'text-xl leading-snug',
-  body: 'text-base leading-relaxed',
-  bodySmall: 'text-sm leading-relaxed',
-  caption: 'text-xs leading-normal',
-  label: 'text-sm leading-normal uppercase tracking-wide',
+const monoFont = Platform.select({
+  ios: 'Menlo',
+  android: 'monospace',
+  default: 'monospace',
+});
+
+const variantStyles = StyleSheet.create({
+  h1: { fontSize: 35, lineHeight: 42, letterSpacing: -0.5 },
+  h2: { fontSize: 29, lineHeight: 36, letterSpacing: -0.3 },
+  h3: { fontSize: 23, lineHeight: 30, letterSpacing: -0.2 },
+  h4: { fontSize: 19, lineHeight: 26, letterSpacing: -0.1 },
+  body: { fontSize: 15, lineHeight: 24 },
+  bodySmall: { fontSize: 13, lineHeight: 20 },
+  caption: { fontSize: 11, lineHeight: 16, letterSpacing: 0.2 },
+  label: { fontSize: 11, lineHeight: 16, letterSpacing: 1.2, textTransform: 'uppercase' },
+  mono: { fontSize: 14, lineHeight: 22, fontFamily: monoFont },
+  code: { fontSize: 13, lineHeight: 20, fontFamily: monoFont, letterSpacing: -0.3 },
+});
+
+const weightStyles = StyleSheet.create({
+  normal: { fontWeight: '400' },
+  medium: { fontWeight: '500' },
+  semibold: { fontWeight: '600' },
+  bold: { fontWeight: '700' },
+});
+
+const colorMap = {
+  primary: colors.gray[50],
+  secondary: colors.gray[400],
+  muted: colors.gray[600],
+  error: colors.error,
+  success: colors.success,
+  accent: colors.primary[400],
+  inherit: undefined,
 };
 
-const weightStyles: Record<TextWeight, string> = {
-  normal: 'font-normal',
-  medium: 'font-medium',
-  semibold: 'font-semibold',
-  bold: 'font-bold',
-};
-
-const colorStyles: Record<string, string> = {
-  primary: 'text-gray-900 dark:text-white',
-  secondary: 'text-gray-600 dark:text-gray-300',
-  muted: 'text-gray-400 dark:text-gray-500',
-  error: 'text-red-500',
-  success: 'text-green-500',
-  inherit: '',
-};
-
-const alignStyles: Record<string, string> = {
-  left: 'text-left',
-  center: 'text-center',
-  right: 'text-right',
+const alignMap = {
+  left: 'left' as const,
+  center: 'center' as const,
+  right: 'right' as const,
 };
 
 const defaultWeights: Record<TextVariant, TextWeight> = {
   h1: 'bold',
   h2: 'bold',
   h3: 'semibold',
-  h4: 'semibold',
+  h4: 'medium',
   body: 'normal',
   bodySmall: 'normal',
   caption: 'normal',
   label: 'medium',
+  mono: 'normal',
+  code: 'normal',
 };
 
 export function Text({
@@ -68,8 +80,12 @@ export function Text({
 
   return (
     <RNText
-      className={`${variantStyles[variant]} ${weightStyles[resolvedWeight]} ${colorStyles[color]} ${alignStyles[align]}`}
-      style={style}
+      style={[
+        variantStyles[variant],
+        weightStyles[resolvedWeight],
+        { color: colorMap[color], textAlign: alignMap[align] },
+        style,
+      ]}
       {...props}
     >
       {children}
@@ -87,4 +103,12 @@ export function Paragraph(props: Omit<TextProps, 'variant'>) {
 
 export function Caption(props: Omit<TextProps, 'variant'>) {
   return <Text variant="caption" color="secondary" {...props} />;
+}
+
+export function MonoText(props: Omit<TextProps, 'variant'>) {
+  return <Text variant="mono" {...props} />;
+}
+
+export function Code(props: Omit<TextProps, 'variant'>) {
+  return <Text variant="code" color="accent" {...props} />;
 }

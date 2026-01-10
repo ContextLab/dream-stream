@@ -3,15 +3,16 @@ import '../global.css';
 import { useEffect, useState } from 'react';
 import { Stack, SplashScreen } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { View, useColorScheme } from 'react-native';
+import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider } from '@/components/AuthProvider';
+import { ThemeProvider, useTheme } from '@/components/ThemeProvider';
 
 SplashScreen.preventAutoHideAsync();
 
-export default function RootLayout() {
-  const colorScheme = useColorScheme();
+function RootLayoutContent() {
+  const { theme, isDark } = useTheme();
   const [appIsReady, setAppIsReady] = useState(false);
 
   useEffect(() => {
@@ -35,24 +36,29 @@ export default function RootLayout() {
     return null;
   }
 
-  const isDark = colorScheme === 'dark';
-  const backgroundColor = isDark ? '#0f0f23' : '#ffffff';
+  return (
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: theme.background },
+          animation: 'slide_from_right',
+        }}
+      />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+    </View>
+  );
+}
 
+export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <AuthProvider>
-          <View style={{ flex: 1, backgroundColor }}>
-            <Stack
-              screenOptions={{
-                headerShown: false,
-                contentStyle: { backgroundColor },
-                animation: 'slide_from_right',
-              }}
-            />
-            <StatusBar style={isDark ? 'light' : 'dark'} />
-          </View>
-        </AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <RootLayoutContent />
+          </AuthProvider>
+        </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
