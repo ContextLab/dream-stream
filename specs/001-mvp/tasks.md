@@ -204,33 +204,33 @@ Expo/React Native project structure:
 **Purpose**: Verify compliance with Constitution principles before polish
 
 ### Principle I: Intuitive Experience
-- [ ] T076 Verify browse → play completes in 2 taps without instructions
-- [ ] T077 Validate all error states guide users toward resolution
-- [ ] T078 Run accessibility audit (WCAG 2.1 AA) on all screens
+- [x] T076 Verify browse → play completes in 2 taps without instructions
+- [x] T077 Validate all error states guide users toward resolution
+- [x] T078 Run accessibility audit (WCAG 2.1 AA) on all screens
 
 ### Principle II: Seamless Functionality
-- [ ] T079 Verify playback progress persists across sessions
-- [ ] T080 Confirm no blocking operations in UI thread (check 60fps)
+- [x] T079 Verify playback progress persists across sessions
+- [x] T080 Confirm no blocking operations in UI thread (check 60fps)
 - [ ] T081 Validate performance budgets (<3s load, <100ms interactions)
 
 ### Principle III: Beautiful Interfaces
-- [ ] T082 Verify design system consistency across all screens
-- [ ] T083 Confirm visual hierarchy guides attention on each screen
-- [ ] T084 Implement and validate dark/light theme switching
+- [x] T082 Verify design system consistency across all screens
+- [x] T083 Confirm visual hierarchy guides attention on each screen
+- [x] T084 Implement and validate dark/light theme switching
 
 ### Principle IV: Cross-Platform Excellence
 - [ ] T085 Test on iOS simulator (iPhone 15 Pro)
 - [ ] T086 Test on Android emulator (Pixel 7)
 - [ ] T087 Test on web browser (Chrome, Safari)
-- [ ] T088 Verify offline capability and graceful degradation
+- [x] T088 Verify offline capability and graceful degradation
 
 ### Principle V: Effortless Usability
-- [ ] T089 Verify all touch targets ≥44pts
+- [x] T089 Verify all touch targets ≥44pts
 - [ ] T090 Test search with typos for typo tolerance
 - [ ] T091 Validate keyboard navigation for web
 
 ### Principle VI: Unwavering Stability
-- [ ] T092 Confirm graceful degradation for API failures
+- [x] T092 Confirm graceful degradation for API failures
 - [ ] T093 Validate error tracking configured (Sentry or similar)
 - [ ] T094 Verify app doesn't crash on edge cases
 
@@ -242,7 +242,7 @@ Expo/React Native project structure:
 
 **Purpose**: Final improvements affecting multiple user stories
 
-- [ ] T095 [P] Seed database with 30 sample dreams (MVP content)
+- [x] T095 [P] Seed database with 30 sample dreams (MVP content)
 - [x] T096 [P] Add app icons and splash screen
 - [x] T097 Performance optimization (lazy loading, memoization)
 - [ ] T098 [P] Add loading animations with Reanimated

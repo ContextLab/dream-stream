@@ -1,70 +1,70 @@
 export const colors = {
   primary: {
-    50: '#f0f4ff',
-    100: '#e0e9ff',
-    200: '#c7d6fe',
-    300: '#a4b8fc',
-    400: '#8093f8',
-    500: '#6366f1',
-    600: '#4f46e5',
-    700: '#4338ca',
-    800: '#3730a3',
-    900: '#312e81',
-    950: '#1e1b4b',
+    50: '#f0fdf4',
+    100: '#dcfce7',
+    200: '#bbf7d0',
+    300: '#86efac',
+    400: '#4ade80',
+    500: '#22c55e',
+    600: '#16a34a',
+    700: '#15803d',
+    800: '#166534',
+    900: '#14532d',
+    950: '#052e16',
   },
-  secondary: {
-    50: '#faf5ff',
-    100: '#f3e8ff',
-    200: '#e9d5ff',
-    300: '#d8b4fe',
-    400: '#c084fc',
-    500: '#a855f7',
-    600: '#9333ea',
-    700: '#7c3aed',
-    800: '#6b21a8',
-    900: '#581c87',
-    950: '#3b0764',
+  accent: {
+    cyan: '#22d3ee',
+    purple: '#a855f7',
+    amber: '#fbbf24',
+    rose: '#fb7185',
   },
   gray: {
-    50: '#f9fafb',
-    100: '#f3f4f6',
-    200: '#e5e7eb',
-    300: '#d1d5db',
-    400: '#9ca3af',
-    500: '#6b7280',
-    600: '#4b5563',
-    700: '#374151',
-    800: '#1f2937',
-    900: '#111827',
-    950: '#030712',
+    50: '#fafafa',
+    100: '#f4f4f5',
+    200: '#e4e4e7',
+    300: '#d4d4d8',
+    400: '#a1a1aa',
+    500: '#71717a',
+    600: '#52525b',
+    700: '#3f3f46',
+    800: '#27272a',
+    900: '#18181b',
+    950: '#09090b',
   },
-  success: '#10b981',
-  warning: '#f59e0b',
+  success: '#22c55e',
+  warning: '#fbbf24',
   error: '#ef4444',
-  info: '#3b82f6',
+  info: '#22d3ee',
 } as const;
 
-export const lightTheme = {
-  background: '#ffffff',
-  surface: '#f8fafc',
-  surfaceAlt: '#f1f5f9',
-  text: colors.gray[900],
-  textSecondary: colors.gray[600],
-  textMuted: colors.gray[400],
-  border: colors.gray[200],
-  borderFocus: colors.primary[500],
+export const darkTheme = {
+  background: '#09090b',
+  surface: '#18181b',
+  surfaceAlt: '#27272a',
+  text: '#fafafa',
+  textSecondary: '#a1a1aa',
+  textMuted: '#52525b',
+  border: '#3f3f46',
+  borderFocus: '#22c55e',
 };
 
-export const darkTheme = {
-  background: '#0f0f23',
-  surface: '#1a1a2e',
-  surfaceAlt: '#252542',
-  text: '#ffffff',
-  textSecondary: colors.gray[300],
-  textMuted: colors.gray[500],
-  border: colors.gray[700],
-  borderFocus: colors.primary[400],
+export const lightTheme = {
+  background: '#fafafa',
+  surface: '#ffffff',
+  surfaceAlt: '#f4f4f5',
+  text: '#18181b',
+  textSecondary: '#52525b',
+  textMuted: '#a1a1aa',
+  border: '#e4e4e7',
+  borderFocus: '#16a34a',
 };
+
+export const fontFamily = {
+  mono: 'JetBrainsMono',
+  monoFallback: 'monospace',
+  sans: 'Inter',
+  sansFallback: 'system-ui',
+} as const;
 
 export const spacing = {
   xs: 4,
@@ -78,23 +78,23 @@ export const spacing = {
 
 export const borderRadius = {
   none: 0,
-  sm: 4,
-  md: 8,
-  lg: 12,
-  xl: 16,
-  '2xl': 24,
+  sm: 2,
+  md: 4,
+  lg: 8,
+  xl: 12,
+  '2xl': 16,
   full: 9999,
 } as const;
 
 export const fontSize = {
-  xs: 12,
-  sm: 14,
-  base: 16,
-  lg: 18,
-  xl: 20,
-  '2xl': 24,
-  '3xl': 30,
-  '4xl': 36,
+  xs: 11,
+  sm: 13,
+  base: 15,
+  lg: 17,
+  xl: 19,
+  '2xl': 23,
+  '3xl': 29,
+  '4xl': 35,
 } as const;
 
 export const fontWeight = {
@@ -108,26 +108,42 @@ export const shadows = {
   sm: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.2,
     shadowRadius: 2,
     elevation: 1,
   },
   md: {
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
     elevation: 3,
   },
   lg: {
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.15,
-    shadowRadius: 15,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
     elevation: 5,
+  },
+  glow: {
+    shadowColor: '#22c55e',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 0,
   },
 } as const;
 
 export const touchTargetMinSize = 44;
 
-export type Theme = typeof lightTheme;
+export type Theme = {
+  background: string;
+  surface: string;
+  surfaceAlt: string;
+  text: string;
+  textSecondary: string;
+  textMuted: string;
+  border: string;
+  borderFocus: string;
+};
