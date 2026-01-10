@@ -21,16 +21,16 @@ export const DreamCard = memo(function DreamCard({ dream, variant = 'default' }:
   const isFeatured = variant === 'featured';
   const isCompact = variant === 'compact';
 
-  const containerStyle = useMemo(() => [
-    styles.container,
-    isFeatured && styles.featuredContainer,
-    isCompact && styles.compactContainer,
-  ], [isFeatured, isCompact]);
+  const containerStyle = useMemo(() => ({
+    ...styles.container,
+    ...(isFeatured ? styles.featuredContainer : {}),
+    ...(isCompact ? styles.compactContainer : {}),
+  }), [isFeatured, isCompact]);
 
   return (
     <Link href={`/dream/${dream.id}`} asChild>
       <Pressable style={containerStyle}>
-        <View style={[styles.iconSection, isFeatured && styles.featuredIconSection]}>
+        <View style={isFeatured ? {...styles.iconSection, ...styles.featuredIconSection} : styles.iconSection}>
           <Ionicons 
             name="moon-outline" 
             size={isFeatured ? 32 : 24} 
@@ -42,7 +42,7 @@ export const DreamCard = memo(function DreamCard({ dream, variant = 'default' }:
             </View>
           )}
         </View>
-        <View style={[styles.content, isCompact && styles.compactContent]}>
+        <View style={isCompact ? {...styles.content, ...styles.compactContent} : styles.content}>
           <Text
             variant={isFeatured ? 'h4' : 'body'}
             weight="semibold"
