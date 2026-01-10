@@ -38,13 +38,13 @@ export const LaunchQueueCard = memo(function LaunchQueueCard({
     <View style={[styles.container, isActive && styles.containerActive]}>
       <View style={styles.imageContainer}>
         <Image
-          source={{ uri: item.dream.thumbnail_url }}
+          source={{ uri: item.dream.artwork_url }}
           style={styles.image}
           resizeMode="cover"
         />
         <View style={styles.durationBadge}>
           <Text variant="caption" style={styles.durationText}>
-            {formatDuration(item.dream.duration_seconds)}
+            {formatDuration(item.dream.full_duration_seconds)}
           </Text>
         </View>
       </View>

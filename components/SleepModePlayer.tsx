@@ -11,8 +11,7 @@ import Animated, {
   cancelAnimation,
 } from 'react-native-reanimated';
 import { Text } from '@/components/ui/Text';
-import { getMuxStreamUrl } from '@/services/mux';
-import { colors, spacing, borderRadius } from '@/theme/tokens';
+import { colors, spacing } from '@/theme/tokens';
 import type { Dream } from '@/types/database';
 
 interface SleepModePlayerProps {
@@ -33,7 +32,7 @@ export function SleepModePlayer({
 }: SleepModePlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [duration, setDuration] = useState(dream.duration_seconds);
+  const [duration, setDuration] = useState(dream.full_duration_seconds);
   const soundRef = useRef<Audio.Sound | null>(null);
   const pulseScale = useSharedValue(1);
 
@@ -42,7 +41,7 @@ export function SleepModePlayer({
     return () => {
       cleanup();
     };
-  }, [dream.mux_playback_id]);
+  }, [dream.id]);
 
   const setupAudio = async () => {
     try {
@@ -52,7 +51,8 @@ export function SleepModePlayer({
         shouldDuckAndroid: true,
       });
 
-      const streamUrl = getMuxStreamUrl(dream.mux_playback_id);
+      // TODO: Replace with TTS-generated audio URL
+      const streamUrl = dream.artwork_url; // Placeholder - will be TTS audio
       const { sound, status } = await Audio.Sound.createAsync(
         { uri: streamUrl },
         { shouldPlay: false }

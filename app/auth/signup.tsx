@@ -49,7 +49,7 @@ export default function SignUpScreen() {
 
     try {
       await signUp({ email, password, displayName: displayName || undefined });
-      router.replace('/(tabs)/');
+      router.replace('/(tabs)');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign up failed');
     }

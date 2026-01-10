@@ -60,10 +60,11 @@ export const lightTheme = {
 };
 
 export const fontFamily = {
-  mono: 'JetBrainsMono',
-  monoFallback: 'monospace',
-  sans: 'Inter',
-  sansFallback: 'system-ui',
+  regular: 'CourierPrime_400Regular',
+  italic: 'CourierPrime_400Regular_Italic',
+  bold: 'CourierPrime_700Bold',
+  boldItalic: 'CourierPrime_700Bold_Italic',
+  fallback: 'Courier, monospace',
 } as const;
 
 export const spacing = {

@@ -7,18 +7,36 @@ export interface User {
   updated_at: string;
 }
 
+export type PlaybackMode = 'preview' | 'full' | 'dream';
+
+export type MusicStyle = 
+  | 'ambient'
+  | 'nature'
+  | 'cosmic'
+  | 'piano'
+  | 'binaural'
+  | 'silence';
+
+export interface MusicSettings {
+  style: MusicStyle;
+  base_intensity: number;
+  adaptive: boolean;
+}
+
 export interface Dream {
   id: string;
   title: string;
-  description: string | null;
-  thumbnail_url: string;
-  mux_playback_id: string;
-  mux_asset_id: string;
-  duration_seconds: number;
+  summary: string;
+  content: string;
+  artwork_url: string;
+  voice_id: string;
+  default_music: MusicSettings;
+  preview_duration_seconds: number;
+  full_duration_seconds: number;
   category_id: string;
   is_featured: boolean;
   created_at: string;
-  view_count: number;
+  play_count: number;
   category?: Category;
   tags?: string[];
 }
@@ -84,7 +102,7 @@ export interface DreamLaunchQueue {
 
 export type DreamListItem = Pick<
   Dream,
-  'id' | 'title' | 'thumbnail_url' | 'duration_seconds' | 'is_featured'
+  'id' | 'title' | 'artwork_url' | 'preview_duration_seconds' | 'full_duration_seconds' | 'is_featured'
 > & {
   category?: Pick<Category, 'name' | 'slug' | 'color'>;
 };
