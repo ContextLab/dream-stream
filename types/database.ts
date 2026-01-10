@@ -28,7 +28,6 @@ export interface Dream {
   title: string;
   summary: string;
   content: string;
-  artwork_url: string;
   voice_id: string;
   default_music: MusicSettings;
   preview_duration_seconds: number;
@@ -102,7 +101,7 @@ export interface DreamLaunchQueue {
 
 export type DreamListItem = Pick<
   Dream,
-  'id' | 'title' | 'artwork_url' | 'preview_duration_seconds' | 'full_duration_seconds' | 'is_featured'
+  'id' | 'title' | 'preview_duration_seconds' | 'full_duration_seconds' | 'is_featured'
 > & {
   category?: Pick<Category, 'name' | 'slug' | 'color'>;
 };

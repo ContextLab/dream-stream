@@ -1081,7 +1081,6 @@ function generateMockDreams(): DreamListItem[] {
     return {
       id: `dream-${index + 1}`,
       title: dream.title,
-      artwork_url: `https://picsum.photos/seed/${dream.title.replace(/\s/g, '')}/640/640`,
       preview_duration_seconds: estimateDuration(summaryText),
       full_duration_seconds: estimateDuration(dream.content),
       is_featured: index < 5,
@@ -1109,7 +1108,6 @@ export function getMockDreamById(id: string): Dream | null {
     title: listItem.title,
     summary: dreamScript.content.split('\n\n')[0],
     content: dreamScript.content,
-    artwork_url: listItem.artwork_url,
     voice_id: 'alloy',
     default_music: {
       style: dreamScript.music,

@@ -51,10 +51,13 @@ export function SleepModePlayer({
         shouldDuckAndroid: true,
       });
 
-      // TODO: Replace with TTS-generated audio URL
-      const streamUrl = dream.artwork_url; // Placeholder - will be TTS audio
+      const baseUrl = Platform.OS === 'web' 
+        ? '/dream-stream/audio/dreams'
+        : 'https://context-lab.com/dream-stream/audio/dreams';
+      const audioUrl = `${baseUrl}/${dream.id}_full.opus`;
+      
       const { sound, status } = await Audio.Sound.createAsync(
-        { uri: streamUrl },
+        { uri: audioUrl },
         { shouldPlay: false }
       );
 

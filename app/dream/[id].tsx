@@ -1,10 +1,10 @@
 import { useEffect, useState, useCallback } from 'react';
-import { View, ScrollView, StyleSheet, ActivityIndicator, Pressable, Alert, Image } from 'react-native';
+import { View, ScrollView, StyleSheet, ActivityIndicator, Pressable, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Text, Heading } from '@/components/ui/Text';
-import { PlaybackControls } from '@/components/PlaybackControls';
+import { DreamPlayer } from '@/components/DreamPlayer';
 import { DreamRecommendations } from '@/components/DreamRecommendations';
 import { FavoriteButton } from '@/components/FavoriteButton';
 import { ShareButton } from '@/components/ShareButton';
@@ -13,9 +13,7 @@ import { usePlaybackProgress } from '@/hooks/usePlaybackProgress';
 import { useAuth } from '@/hooks/useAuth';
 import { useLaunchQueue, useQueueStatus } from '@/hooks/useLaunchQueue';
 import { colors, spacing, borderRadius } from '@/theme/tokens';
-import type { Dream } from '@/types/database';
-
-type PlayerStatus = 'idle' | 'loading' | 'ready' | 'playing' | 'paused' | 'error';
+import type { Dream, PlaybackMode } from '@/types/database';
 
 export default function DreamDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -25,17 +23,13 @@ export default function DreamDetailScreen() {
   const [dream, setDream] = useState<Dream | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
-
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [playerStatus, setPlayerStatus] = useState<PlayerStatus>('idle');
+  const [playbackMode, setPlaybackMode] = useState<PlaybackMode>('full');
 
   const { add: addToQueue } = useLaunchQueue();
   const { inQueue } = useQueueStatus(id || '');
 
   const {
     initialPosition,
-    shouldResume,
     isLoading: progressLoading,
     saveProgress,
     markCompleted,
@@ -84,7 +78,6 @@ export default function DreamDetailScreen() {
 
   const handleProgress = useCallback(
     (positionSeconds: number) => {
-      setCurrentTime(positionSeconds);
       saveProgress(positionSeconds);
     },
     [saveProgress]
@@ -92,20 +85,7 @@ export default function DreamDetailScreen() {
 
   const handleComplete = useCallback(() => {
     markCompleted();
-    setIsPlaying(false);
   }, [markCompleted]);
-
-  const handlePlayPause = useCallback(() => {
-    setIsPlaying((prev) => !prev);
-  }, []);
-
-  const handleSeek = useCallback((time: number) => {
-    setCurrentTime(time);
-  }, []);
-
-  const handleSeekRelative = useCallback((delta: number) => {
-    setCurrentTime((prev) => Math.max(0, prev + delta));
-  }, []);
 
   const handleAddToQueue = useCallback(async () => {
     if (!id) return;
@@ -124,7 +104,7 @@ export default function DreamDetailScreen() {
 
     try {
       await addToQueue(id);
-      Alert.alert('Added to Queue', 'Dream added to your sleep queue. Go to Sleep Mode to launch it.');
+      Alert.alert('Added to Queue', 'Dream added to your sleep queue.');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to add to queue';
       Alert.alert('Error', message);
@@ -183,48 +163,40 @@ export default function DreamDetailScreen() {
       </SafeAreaView>
 
       <ScrollView style={styles.scrollContent} bounces={false}>
-        <View style={styles.artworkContainer}>
-          <Image
-            source={{ uri: dream.artwork_url }}
-            style={styles.artwork}
-            resizeMode="cover"
-          />
-          <View style={styles.artworkOverlay}>
-            <Pressable style={styles.playButton} onPress={handlePlayPause}>
-              <Ionicons
-                name={isPlaying ? 'pause' : 'play'}
-                size={48}
-                color="#ffffff"
-              />
-            </Pressable>
-          </View>
+        <View style={styles.modeSelector}>
+          <Pressable
+            style={[styles.modeButton, playbackMode === 'preview' && styles.modeButtonActive]}
+            onPress={() => setPlaybackMode('preview')}
+          >
+            <Text 
+              variant="bodySmall" 
+              color={playbackMode === 'preview' ? 'primary' : 'secondary'}
+            >
+              Preview
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.modeButton, playbackMode === 'full' && styles.modeButtonActive]}
+            onPress={() => setPlaybackMode('full')}
+          >
+            <Text 
+              variant="bodySmall" 
+              color={playbackMode === 'full' ? 'primary' : 'secondary'}
+            >
+              Full Dream
+            </Text>
+          </Pressable>
         </View>
 
-        <PlaybackControls
-          isPlaying={isPlaying}
-          currentTime={currentTime}
-          duration={dream.full_duration_seconds}
-          onPlayPause={handlePlayPause}
-          onSeek={handleSeek}
-          onSeekRelative={handleSeekRelative}
+        <DreamPlayer
+          dream={dream}
+          playbackMode={playbackMode}
+          initialPosition={initialPosition}
+          onProgress={handleProgress}
+          onComplete={handleComplete}
         />
 
         <View style={styles.details}>
-          <Heading variant="h3" color="primary">
-            {dream.title}
-          </Heading>
-
-          {dream.category && (
-            <View style={styles.categoryRow}>
-              {dream.category.color && (
-                <View style={[styles.categoryDot, { backgroundColor: dream.category.color }]} />
-              )}
-              <Text variant="bodySmall" color="secondary">
-                {dream.category.name}
-              </Text>
-            </View>
-          )}
-
           {dream.summary && (
             <Text variant="body" color="secondary" style={styles.description}>
               {dream.summary}
@@ -309,48 +281,31 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flex: 1,
+    marginTop: 60,
   },
-  artworkContainer: {
-    width: '100%',
-    aspectRatio: 1,
-    position: 'relative',
-    backgroundColor: '#18181b',
-  },
-  artwork: {
-    width: '100%',
-    height: '100%',
-  },
-  artworkOverlay: {
-    ...StyleSheet.absoluteFillObject,
+  modeSelector: {
+    flexDirection: 'row',
     justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    padding: spacing.md,
+    gap: spacing.sm,
   },
-  playButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingLeft: 6,
+  modeButton: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.gray[900],
+    borderWidth: 1,
+    borderColor: colors.gray[800],
+  },
+  modeButtonActive: {
+    backgroundColor: colors.gray[800],
+    borderColor: colors.primary[700],
   },
   details: {
     padding: spacing.md,
   },
-  categoryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: spacing.xs,
-  },
-  categoryDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: spacing.xs,
-  },
   description: {
-    marginTop: spacing.md,
+    lineHeight: 24,
   },
   tagsRow: {
     flexDirection: 'row',

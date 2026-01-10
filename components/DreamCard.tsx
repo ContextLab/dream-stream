@@ -1,6 +1,7 @@
 import { memo, useMemo } from 'react';
-import { View, Image, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable, StyleSheet } from 'react-native';
 import { Link } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
 import { colors, touchTargetMinSize, borderRadius } from '@/theme/tokens';
 import type { DreamListItem } from '@/types/database';
@@ -20,33 +21,24 @@ export const DreamCard = memo(function DreamCard({ dream, variant = 'default' }:
   const isFeatured = variant === 'featured';
   const isCompact = variant === 'compact';
 
-  const containerStyle = useMemo(() => ({
-    ...styles.container,
-    ...(isFeatured ? styles.featuredContainer : {}),
-    ...(isCompact ? styles.compactContainer : {}),
-  }), [isFeatured, isCompact]);
+  const containerStyle = useMemo(() => [
+    styles.container,
+    isFeatured && styles.featuredContainer,
+    isCompact && styles.compactContainer,
+  ], [isFeatured, isCompact]);
 
   return (
     <Link href={`/dream/${dream.id}`} asChild>
-      <Pressable style={containerStyle}
-
-      >
-        <View style={[styles.imageContainer, isFeatured && styles.featuredImageContainer]}>
-          <Image
-            source={{ uri: dream.artwork_url }}
-            style={styles.image}
-            resizeMode="cover"
+      <Pressable style={containerStyle}>
+        <View style={[styles.iconSection, isFeatured && styles.featuredIconSection]}>
+          <Ionicons 
+            name="moon-outline" 
+            size={isFeatured ? 32 : 24} 
+            color={colors.primary[500]} 
           />
-          <View style={styles.durationBadge}>
-            <Text variant="caption" color="inherit" style={styles.durationText}>
-              {formatDuration(dream.full_duration_seconds)}
-            </Text>
-          </View>
           {dream.is_featured && !isFeatured && (
             <View style={styles.featuredBadge}>
-              <Text variant="caption" color="inherit" style={styles.featuredText}>
-                Featured
-              </Text>
+              <Ionicons name="star" size={10} color={colors.gray[950]} />
             </View>
           )}
         </View>
@@ -59,16 +51,24 @@ export const DreamCard = memo(function DreamCard({ dream, variant = 'default' }:
           >
             {dream.title}
           </Text>
-          {dream.category && (
-            <View style={styles.categoryContainer}>
-              {dream.category.color && (
-                <View style={[styles.categoryDot, { backgroundColor: dream.category.color }]} />
-              )}
-              <Text variant="caption" color="secondary">
-                {dream.category.name}
-              </Text>
-            </View>
-          )}
+          <View style={styles.metaRow}>
+            {dream.category && (
+              <View style={styles.categoryContainer}>
+                {dream.category.color && (
+                  <View style={[styles.categoryDot, { backgroundColor: dream.category.color }]} />
+                )}
+                <Text variant="caption" color="secondary">
+                  {dream.category.name}
+                </Text>
+              </View>
+            )}
+            <Text variant="caption" color="muted" style={styles.duration}>
+              {formatDuration(dream.full_duration_seconds)}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.playIcon}>
+          <Ionicons name="play-circle-outline" size={28} color={colors.gray[500]} />
         </View>
       </Pressable>
     </Link>
@@ -81,79 +81,78 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     borderWidth: 1,
     borderColor: colors.gray[800],
-    overflow: 'hidden',
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
     minHeight: touchTargetMinSize,
   },
   featuredContainer: {
     width: 280,
     marginRight: 16,
     borderColor: colors.primary[900],
+    flexDirection: 'column',
+    padding: 16,
   },
   compactContainer: {
-    flexDirection: 'row',
-    height: 100,
+    padding: 10,
   },
-  imageContainer: {
-    aspectRatio: 16 / 9,
-    position: 'relative',
-    backgroundColor: colors.gray[950],
+  iconSection: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.gray[800],
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
-  featuredImageContainer: {
-    aspectRatio: 4 / 3,
-  },
-  image: {
-    width: '100%',
-    height: '100%',
-  },
-  durationBadge: {
-    position: 'absolute',
-    bottom: 8,
-    right: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: borderRadius.sm,
-  },
-  durationText: {
-    color: colors.gray[300],
-    fontSize: 11,
-    fontFamily: 'monospace',
+  featuredIconSection: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    marginRight: 0,
+    marginBottom: 12,
+    alignSelf: 'center',
   },
   featuredBadge: {
     position: 'absolute',
-    top: 8,
-    left: 8,
-    backgroundColor: colors.primary[600],
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: borderRadius.sm,
-  },
-  featuredText: {
-    color: colors.gray[950],
-    fontSize: 10,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    top: -2,
+    right: -2,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: colors.primary[500],
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   content: {
-    padding: 12,
+    flex: 1,
   },
   compactContent: {
-    flex: 1,
     justifyContent: 'center',
   },
   title: {
     color: colors.gray[100],
   },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
   categoryContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 4,
   },
   categoryDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
     marginRight: 6,
+  },
+  duration: {
+    fontFamily: 'CourierPrime_400Regular',
+  },
+  playIcon: {
+    marginLeft: 8,
   },
 });

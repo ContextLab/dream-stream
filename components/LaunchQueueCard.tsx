@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { View, Image, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
 import { getStatusDisplayName, getStatusColor } from '@/services/launchQueue';
@@ -36,17 +36,11 @@ export const LaunchQueueCard = memo(function LaunchQueueCard({
 
   return (
     <View style={[styles.container, isActive && styles.containerActive]}>
-      <View style={styles.imageContainer}>
-        <Image
-          source={{ uri: item.dream.artwork_url }}
-          style={styles.image}
-          resizeMode="cover"
-        />
-        <View style={styles.durationBadge}>
-          <Text variant="caption" style={styles.durationText}>
-            {formatDuration(item.dream.full_duration_seconds)}
-          </Text>
-        </View>
+      <View style={styles.iconContainer}>
+        <Ionicons name="moon-outline" size={24} color={colors.primary[500]} />
+        <Text variant="caption" color="muted" style={styles.durationText}>
+          {formatDuration(item.dream.full_duration_seconds)}
+        </Text>
       </View>
 
       <View style={styles.content}>
@@ -106,37 +100,29 @@ const styles = StyleSheet.create({
     backgroundColor: '#1a1a2e',
     borderRadius: borderRadius.xl,
     overflow: 'hidden',
+    padding: spacing.sm,
     ...shadows.md,
   },
   containerActive: {
     borderWidth: 2,
     borderColor: colors.primary[500],
   },
-  imageContainer: {
-    width: 100,
-    aspectRatio: 1,
-    position: 'relative',
-  },
-  image: {
-    width: '100%',
-    height: '100%',
-  },
-  durationBadge: {
-    position: 'absolute',
-    bottom: 4,
-    right: 4,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+  iconContainer: {
+    width: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.gray[900],
+    borderRadius: borderRadius.lg,
+    padding: spacing.sm,
   },
   durationText: {
-    color: '#ffffff',
+    marginTop: 4,
+    fontFamily: 'CourierPrime_400Regular',
     fontSize: 10,
   },
   content: {
     flex: 1,
-    padding: spacing.sm,
+    paddingLeft: spacing.sm,
     justifyContent: 'space-between',
   },
   title: {

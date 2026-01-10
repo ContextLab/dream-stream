@@ -1,16 +1,8 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { View, StyleSheet, ActivityIndicator, Pressable, Image, Platform } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, Pressable, Platform } from 'react-native';
 import { Audio, AVPlaybackStatus } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
-import { 
-  isWebSpeechAvailable, 
-  speakWithWebSpeech, 
-  stopWebSpeech,
-  buildAudioTimeline,
-  getTotalDuration,
-  type AudioSegment,
-} from '@/services/tts';
 import { colors, spacing } from '@/theme/tokens';
 import type { Dream, PlaybackMode } from '@/types/database';
 
@@ -25,7 +17,14 @@ interface DreamPlayerProps {
   onStatusChange?: (status: PlayerStatus) => void;
   onComplete?: () => void;
   onError?: (error: Error) => void;
-  onSegmentChange?: (segment: AudioSegment | null) => void;
+}
+
+function getAudioUrl(dreamId: string, mode: PlaybackMode): string {
+  const baseUrl = Platform.OS === 'web' 
+    ? '/dream-stream/audio/dreams'
+    : 'https://context-lab.com/dream-stream/audio/dreams';
+  const suffix = mode === 'preview' ? '_preview' : '_full';
+  return `${baseUrl}/${dreamId}${suffix}.opus`;
 }
 
 export function DreamPlayer({
@@ -37,33 +36,26 @@ export function DreamPlayer({
   onStatusChange,
   onComplete,
   onError,
-  onSegmentChange,
 }: DreamPlayerProps) {
   const [status, setStatus] = useState<PlayerStatus>('idle');
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(initialPosition);
-  const [duration, setDuration] = useState(dream.full_duration_seconds);
+  const [duration, setDuration] = useState(
+    playbackMode === 'preview' ? dream.preview_duration_seconds : dream.full_duration_seconds
+  );
   
   const soundRef = useRef<Audio.Sound | null>(null);
-  const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hasCompletedRef = useRef(false);
-  const timelineRef = useRef<AudioSegment[]>([]);
-  const currentSegmentIndexRef = useRef(0);
-  const isWebSpeechActiveRef = useRef(false);
 
   useEffect(() => {
-    const content = playbackMode === 'preview' ? dream.summary : dream.content;
-    timelineRef.current = buildAudioTimeline(content);
-    setDuration(getTotalDuration(timelineRef.current));
-    
-    setupAudio();
+    loadAudio();
     
     return () => {
       cleanup();
     };
   }, [dream.id, playbackMode]);
 
-  const setupAudio = async () => {
+  const loadAudio = async () => {
     setStatus('loading');
     onStatusChange?.('loading');
 
@@ -74,123 +66,91 @@ export function DreamPlayer({
         shouldDuckAndroid: true,
       });
 
+      const audioUrl = getAudioUrl(dream.id, playbackMode);
+      
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: audioUrl },
+        { shouldPlay: autoPlay, positionMillis: initialPosition * 1000 },
+        onPlaybackStatusUpdate
+      );
+      
+      soundRef.current = sound;
       setStatus('ready');
       onStatusChange?.('ready');
 
       if (autoPlay) {
-        play();
+        setIsPlaying(true);
+        setStatus('playing');
+        onStatusChange?.('playing');
       }
     } catch (err) {
-      console.error('Audio setup failed:', err);
+      console.error('Audio load failed:', err);
       setStatus('error');
       onStatusChange?.('error');
-      onError?.(err instanceof Error ? err : new Error('Audio setup failed'));
+      onError?.(err instanceof Error ? err : new Error('Failed to load audio'));
+    }
+  };
+
+  const onPlaybackStatusUpdate = (playbackStatus: AVPlaybackStatus) => {
+    if (!playbackStatus.isLoaded) {
+      if (playbackStatus.error) {
+        console.error('Playback error:', playbackStatus.error);
+        setStatus('error');
+        onError?.(new Error(playbackStatus.error));
+      }
+      return;
+    }
+
+    const positionSec = Math.floor(playbackStatus.positionMillis / 1000);
+    const durationSec = playbackStatus.durationMillis 
+      ? Math.floor(playbackStatus.durationMillis / 1000) 
+      : duration;
+
+    setCurrentTime(positionSec);
+    setDuration(durationSec);
+    setIsPlaying(playbackStatus.isPlaying);
+    onProgress?.(positionSec);
+
+    if (playbackStatus.didJustFinish && !hasCompletedRef.current) {
+      hasCompletedRef.current = true;
+      setIsPlaying(false);
+      setStatus('paused');
+      onComplete?.();
     }
   };
 
   const cleanup = async () => {
-    stopProgressTracking();
-    stopWebSpeech();
-    isWebSpeechActiveRef.current = false;
-    
     if (soundRef.current) {
       await soundRef.current.unloadAsync();
       soundRef.current = null;
     }
   };
 
-  const startProgressTracking = () => {
-    stopProgressTracking();
-    
-    progressIntervalRef.current = setInterval(() => {
-      setCurrentTime(prev => {
-        const newTime = prev + 1;
-        onProgress?.(newTime);
-
-        const currentSegment = getCurrentSegment(newTime);
-        onSegmentChange?.(currentSegment);
-
-        if (newTime >= duration && !hasCompletedRef.current) {
-          hasCompletedRef.current = true;
-          pause();
-          onComplete?.();
-        }
-
-        return newTime;
-      });
-    }, 1000);
-  };
-
-  const stopProgressTracking = () => {
-    if (progressIntervalRef.current) {
-      clearInterval(progressIntervalRef.current);
-      progressIntervalRef.current = null;
-    }
-  };
-
-  const getCurrentSegment = (time: number): AudioSegment | null => {
-    return timelineRef.current.find(
-      seg => time >= seg.startTime && time < seg.endTime
-    ) || null;
-  };
-
   const play = useCallback(async () => {
-    if (status === 'error') return;
-
-    setIsPlaying(true);
-    setStatus('playing');
-    onStatusChange?.('playing');
-    startProgressTracking();
-
-    if (Platform.OS === 'web' && isWebSpeechAvailable()) {
-      playWithWebSpeech();
+    if (!soundRef.current || status === 'error') return;
+    
+    try {
+      await soundRef.current.playAsync();
+      setIsPlaying(true);
+      setStatus('playing');
+      onStatusChange?.('playing');
+      hasCompletedRef.current = false;
+    } catch (err) {
+      console.error('Play failed:', err);
     }
   }, [status]);
 
-  const playWithWebSpeech = async () => {
-    if (isWebSpeechActiveRef.current) return;
-    isWebSpeechActiveRef.current = true;
-
-    const narrationSegments = timelineRef.current.filter(s => s.type === 'narration');
+  const pause = useCallback(async () => {
+    if (!soundRef.current) return;
     
-    for (let i = currentSegmentIndexRef.current; i < narrationSegments.length; i++) {
-      if (!isWebSpeechActiveRef.current) break;
-      
-      const segment = narrationSegments[i];
-      if (segment.text) {
-        try {
-          await speakWithWebSpeech(segment.text, { 
-            rate: playbackMode === 'dream' ? 0.75 : 0.85 
-          });
-        } catch (err) {
-          console.warn('Web speech error:', err);
-        }
-      }
-      
-      currentSegmentIndexRef.current = i + 1;
-
-      const pauseAfter = timelineRef.current.find(
-        s => s.type === 'pause' && s.startTime >= segment.endTime
-      );
-      if (pauseAfter && playbackMode === 'dream') {
-        await new Promise(resolve => setTimeout(resolve, (pauseAfter.endTime - pauseAfter.startTime) * 1000));
-      }
+    try {
+      await soundRef.current.pauseAsync();
+      setIsPlaying(false);
+      setStatus('paused');
+      onStatusChange?.('paused');
+    } catch (err) {
+      console.error('Pause failed:', err);
     }
-
-    if (isWebSpeechActiveRef.current) {
-      hasCompletedRef.current = true;
-      pause();
-      onComplete?.();
-    }
-  };
-
-  const pause = useCallback(() => {
-    setIsPlaying(false);
-    setStatus('paused');
-    onStatusChange?.('paused');
-    stopProgressTracking();
-    stopWebSpeech();
-    isWebSpeechActiveRef.current = false;
   }, []);
 
   const togglePlayPause = useCallback(() => {
@@ -201,18 +161,25 @@ export function DreamPlayer({
     }
   }, [isPlaying, play, pause]);
 
-  const seekTo = useCallback((seconds: number) => {
-    setCurrentTime(Math.max(0, Math.min(seconds, duration)));
-    hasCompletedRef.current = false;
-  }, [duration]);
+  const seekTo = useCallback(async (seconds: number) => {
+    if (!soundRef.current) return;
+    
+    try {
+      await soundRef.current.setPositionAsync(seconds * 1000);
+      setCurrentTime(seconds);
+      hasCompletedRef.current = false;
+    } catch (err) {
+      console.error('Seek failed:', err);
+    }
+  }, []);
 
   const seekRelative = useCallback((delta: number) => {
-    seekTo(currentTime + delta);
-  }, [currentTime, seekTo]);
+    const newTime = Math.max(0, Math.min(currentTime + delta, duration));
+    seekTo(newTime);
+  }, [currentTime, duration, seekTo]);
 
   const isLoading = status === 'loading';
-  const isReady = status === 'ready' || status === 'paused';
-  const showPlayButton = isReady && !isPlaying && !isLoading;
+  const hasError = status === 'error';
 
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
@@ -220,64 +187,89 @@ export function DreamPlayer({
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const currentSegment = getCurrentSegment(currentTime);
-  const isPauseSegment = currentSegment?.type === 'pause';
-
   return (
     <View style={styles.container}>
-      <Image
-        source={{ uri: dream.artwork_url }}
-        style={styles.artwork}
-        resizeMode="cover"
-      />
-
-      <View style={styles.overlay}>
-        {isLoading && (
-          <View style={styles.loadingOverlay}>
-            <ActivityIndicator size="large" color={colors.primary[500]} />
-          </View>
+      <View style={styles.visualizer}>
+        <Ionicons 
+          name={isPlaying ? "radio-outline" : "moon-outline"} 
+          size={64} 
+          color={isPlaying ? colors.primary[500] : colors.gray[600]} 
+        />
+        <Text variant="h4" weight="semibold" style={styles.title} numberOfLines={2}>
+          {dream.title}
+        </Text>
+        {dream.category && (
+          <Text variant="caption" color="secondary">
+            {dream.category.name}
+          </Text>
         )}
+      </View>
 
-        <Pressable style={styles.controlArea} onPress={togglePlayPause}>
-          {showPlayButton && (
-            <View style={styles.playButton}>
-              <Ionicons name="play" size={48} color="#ffffff" />
-            </View>
-          )}
-
-          {isPlaying && (
-            <View style={styles.playingIndicator}>
-              <View style={styles.pulseRing} />
-              <Ionicons name="pause" size={32} color="#ffffff" />
-            </View>
-          )}
-        </Pressable>
-
-        {isPauseSegment && playbackMode === 'dream' && (
-          <View style={styles.pauseOverlay}>
-            <Text variant="h4" color="primary" align="center">
-              Exploration Pause
+      <View style={styles.controls}>
+        {hasError ? (
+          <View style={styles.errorContainer}>
+            <Ionicons name="alert-circle-outline" size={32} color={colors.error} />
+            <Text variant="bodySmall" color="error" style={styles.errorText}>
+              Audio not available
             </Text>
-            <Text variant="bodySmall" color="secondary" align="center" style={styles.pauseHint}>
-              Let your mind wander freely...
+            <Text variant="caption" color="muted">
+              Pre-generated audio files not yet uploaded
             </Text>
           </View>
-        )}
+        ) : (
+          <>
+            <View style={styles.progressContainer}>
+              <Pressable 
+                style={styles.progressBar}
+                onPress={(e) => {
+                  const { locationX } = e.nativeEvent;
+                  const width = 300;
+                  const percent = locationX / width;
+                  seekTo(percent * duration);
+                }}
+              >
+                <View 
+                  style={[
+                    styles.progressFill, 
+                    { width: duration > 0 ? `${(currentTime / duration) * 100}%` : '0%' }
+                  ]} 
+                />
+              </Pressable>
+              <View style={styles.timeRow}>
+                <Text variant="caption" color="secondary" style={styles.timeText}>
+                  {formatTime(currentTime)}
+                </Text>
+                <Text variant="caption" color="secondary" style={styles.timeText}>
+                  {formatTime(duration)}
+                </Text>
+              </View>
+            </View>
 
-        <View style={styles.progressContainer}>
-          <View style={styles.progressBar}>
-            <View 
-              style={[
-                styles.progressFill, 
-                { width: `${(currentTime / duration) * 100}%` }
-              ]} 
-            />
-          </View>
-          <View style={styles.timeRow}>
-            <Text variant="caption" color="secondary">{formatTime(currentTime)}</Text>
-            <Text variant="caption" color="secondary">{formatTime(duration)}</Text>
-          </View>
-        </View>
+            <View style={styles.buttonRow}>
+              <Pressable onPress={() => seekRelative(-15)} style={styles.seekButton}>
+                <Ionicons name="play-back" size={24} color={colors.gray[400]} />
+                <Text variant="caption" color="muted">15s</Text>
+              </Pressable>
+
+              <Pressable onPress={togglePlayPause} style={styles.playButton}>
+                {isLoading ? (
+                  <ActivityIndicator size="large" color={colors.primary[500]} />
+                ) : (
+                  <Ionicons 
+                    name={isPlaying ? "pause" : "play"} 
+                    size={36} 
+                    color="#ffffff" 
+                  />
+                )}
+              </Pressable>
+
+              <Pressable onPress={() => seekRelative(15)} style={styles.seekButton}>
+                <Ionicons name="play-forward" size={24} color={colors.gray[400]} />
+                <Text variant="caption" color="muted">15s</Text>
+              </Pressable>
+            </View>
+          </>
+        )}
       </View>
     </View>
   );
@@ -288,87 +280,66 @@ export { DreamPlayer as default };
 const styles = StyleSheet.create({
   container: {
     width: '100%',
-    aspectRatio: 1,
-    backgroundColor: '#09090b',
-    position: 'relative',
+    backgroundColor: colors.gray[950],
+    padding: spacing.lg,
   },
-  artwork: {
-    width: '100%',
-    height: '100%',
-  },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'center',
+  visualizer: {
     alignItems: 'center',
+    paddingVertical: spacing.xl,
   },
-  controlArea: {
-    flex: 1,
-    justifyContent: 'center',
+  title: {
+    color: colors.gray[100],
+    marginTop: spacing.md,
+    textAlign: 'center',
+  },
+  controls: {
+    marginTop: spacing.lg,
+  },
+  errorContainer: {
     alignItems: 'center',
+    padding: spacing.lg,
   },
-  playButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingLeft: 6,
-  },
-  playingIndicator: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: 'rgba(34, 197, 94, 0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  pulseRing: {
-    position: 'absolute',
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 2,
-    borderColor: 'rgba(34, 197, 94, 0.5)',
-  },
-  pauseOverlay: {
-    position: 'absolute',
-    top: spacing.xl,
-    left: spacing.md,
-    right: spacing.md,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    padding: spacing.md,
-    borderRadius: 12,
-  },
-  pauseHint: {
-    marginTop: spacing.xs,
+  errorText: {
+    marginTop: spacing.sm,
   },
   progressContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: spacing.md,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    marginBottom: spacing.lg,
   },
   progressBar: {
-    height: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 2,
+    height: 6,
+    backgroundColor: colors.gray[800],
+    borderRadius: 3,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
     backgroundColor: colors.primary[500],
-    borderRadius: 2,
+    borderRadius: 3,
   },
   timeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginTop: spacing.xs,
+  },
+  timeText: {
+    fontFamily: 'CourierPrime_400Regular',
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: spacing.xl,
+  },
+  seekButton: {
+    alignItems: 'center',
+    padding: spacing.sm,
+  },
+  playButton: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: colors.primary[600],
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
