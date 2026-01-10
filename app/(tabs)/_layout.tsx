@@ -1,9 +1,15 @@
 import { Tabs } from 'expo-router';
-import { View, useColorScheme } from 'react-native';
+import { Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme/tokens';
 
-type TabIconName = 'home' | 'search' | 'heart' | 'person';
+type TabIconName = 'home' | 'search' | 'heart' | 'person' | 'moon';
+
+const monoFont = Platform.select({
+  ios: 'Menlo',
+  android: 'monospace',
+  default: 'monospace',
+});
 
 function TabBarIcon({ name, color, focused }: { name: TabIconName; color: string; focused: boolean }) {
   const iconMap: Record<TabIconName, keyof typeof Ionicons.glyphMap> = {
@@ -11,36 +17,32 @@ function TabBarIcon({ name, color, focused }: { name: TabIconName; color: string
     search: focused ? 'search' : 'search-outline',
     heart: focused ? 'heart' : 'heart-outline',
     person: focused ? 'person' : 'person-outline',
+    moon: focused ? 'moon' : 'moon-outline',
   };
 
-  return <Ionicons name={iconMap[name]} size={24} color={color} />;
+  return <Ionicons name={iconMap[name]} size={22} color={color} />;
 }
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
-
-  const tabBarActiveTintColor = colors.primary[500];
-  const tabBarInactiveTintColor = isDark ? colors.gray[500] : colors.gray[400];
-  const tabBarBackgroundColor = isDark ? '#1a1a2e' : '#ffffff';
-  const borderColor = isDark ? colors.gray[800] : colors.gray[200];
-
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor,
-        tabBarInactiveTintColor,
+        tabBarActiveTintColor: colors.primary[400],
+        tabBarInactiveTintColor: colors.gray[600],
         tabBarStyle: {
-          backgroundColor: tabBarBackgroundColor,
-          borderTopColor: borderColor,
+          backgroundColor: colors.gray[950],
+          borderTopColor: colors.gray[900],
           borderTopWidth: 1,
-          paddingTop: 8,
-          paddingBottom: 8,
-          height: 60,
+          paddingTop: 6,
+          paddingBottom: 6,
+          height: 56,
         },
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: 10,
           fontWeight: '500',
+          fontFamily: monoFont,
+          letterSpacing: 0.5,
+          textTransform: 'uppercase',
         },
         headerShown: false,
       }}
