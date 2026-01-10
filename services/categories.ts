@@ -1,11 +1,16 @@
 import { supabase } from './supabase';
 import type { Category } from '@/types/database';
+import { isMockMode, MOCK_CATEGORIES } from '@/lib/mockData';
 
 let categoriesCache: Category[] | null = null;
 let cacheTimestamp: number | null = null;
 const CACHE_DURATION_MS = 5 * 60 * 1000;
 
 export async function getCategories(): Promise<Category[]> {
+  if (isMockMode()) {
+    return MOCK_CATEGORIES;
+  }
+
   if (categoriesCache && cacheTimestamp && Date.now() - cacheTimestamp < CACHE_DURATION_MS) {
     return categoriesCache;
   }
