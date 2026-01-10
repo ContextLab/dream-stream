@@ -37,9 +37,8 @@ export function SearchBar({
 
   const handleChangeText = useCallback(
     (text: string) => {
-      if (controlledValue === undefined) {
-        setInternalValue(text);
-      }
+      // Always update internal value for immediate UI feedback
+      setInternalValue(text);
 
       if (debounceRef.current) {
         clearTimeout(debounceRef.current);
@@ -49,17 +48,15 @@ export function SearchBar({
         onChangeText?.(text);
       }, debounceMs);
     },
-    [controlledValue, onChangeText, debounceMs]
+    [onChangeText, debounceMs]
   );
 
   const handleClear = useCallback(() => {
-    if (controlledValue === undefined) {
-      setInternalValue('');
-    }
+    setInternalValue('');
     onClear?.();
     onChangeText?.('');
     inputRef.current?.focus();
-  }, [controlledValue, onClear, onChangeText]);
+  }, [onClear, onChangeText]);
 
   const handleSubmit = useCallback(() => {
     Keyboard.dismiss();

@@ -12,6 +12,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Text } from '@/components/ui/Text';
 import { colors, spacing } from '@/theme/tokens';
+import { storage } from '@/lib/storage';
 import type { Dream } from '@/types/database';
 
 interface SleepModePlayerProps {
@@ -33,17 +34,26 @@ export function SleepModePlayer({
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(dream.full_duration_seconds);
+  const [lockedVolume, setLockedVolume] = useState(0.3);
+  const [isVolumeLocked, setIsVolumeLocked] = useState(false);
   const soundRef = useRef<Audio.Sound | null>(null);
   const pulseScale = useSharedValue(1);
+  const volumeCheckInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    setupAudio();
+    loadVolumeAndSetupAudio();
     return () => {
       cleanup();
     };
   }, [dream.id]);
 
-  const setupAudio = async () => {
+  const loadVolumeAndSetupAudio = async () => {
+    const prefs = await storage.getPreferences();
+    setLockedVolume(prefs.voiceVolume);
+    setupAudio(prefs.voiceVolume);
+  };
+
+  const setupAudio = async (volume: number = 0.3) => {
     try {
       await Audio.setAudioModeAsync({
         playsInSilentModeIOS: true,
@@ -58,7 +68,7 @@ export function SleepModePlayer({
       
       const { sound, status } = await Audio.Sound.createAsync(
         { uri: audioUrl },
-        { shouldPlay: false }
+        { shouldPlay: false, volume }
       );
 
       soundRef.current = sound;
@@ -73,11 +83,31 @@ export function SleepModePlayer({
   };
 
   const cleanup = async () => {
+    stopVolumeEnforcement();
     if (soundRef.current) {
       await soundRef.current.unloadAsync();
       soundRef.current = null;
     }
     cancelAnimation(pulseScale);
+  };
+
+  const startVolumeEnforcement = () => {
+    setIsVolumeLocked(true);
+    volumeCheckInterval.current = setInterval(async () => {
+      if (soundRef.current) {
+        try {
+          await soundRef.current.setVolumeAsync(lockedVolume);
+        } catch {}
+      }
+    }, 500);
+  };
+
+  const stopVolumeEnforcement = () => {
+    setIsVolumeLocked(false);
+    if (volumeCheckInterval.current) {
+      clearInterval(volumeCheckInterval.current);
+      volumeCheckInterval.current = null;
+    }
   };
 
   const onPlaybackStatusUpdate = (status: AVPlaybackStatus) => {
@@ -93,6 +123,7 @@ export function SleepModePlayer({
   };
 
   const handleComplete = () => {
+    stopVolumeEnforcement();
     setIsPlaying(false);
     cancelAnimation(pulseScale);
     
@@ -118,9 +149,11 @@ export function SleepModePlayer({
     if (!soundRef.current) return;
 
     try {
+      await soundRef.current.setVolumeAsync(lockedVolume);
       await soundRef.current.playAsync();
       setIsPlaying(true);
       startPulseAnimation();
+      startVolumeEnforcement();
 
       if (enableHaptics && Platform.OS !== 'web') {
         Vibration.vibrate(HAPTIC_PATTERN_GENTLE);
@@ -136,6 +169,7 @@ export function SleepModePlayer({
     try {
       await soundRef.current.pauseAsync();
       setIsPlaying(false);
+      stopVolumeEnforcement();
       cancelAnimation(pulseScale);
       pulseScale.value = withTiming(1, { duration: 300 });
     } catch (err) {
@@ -144,6 +178,7 @@ export function SleepModePlayer({
   };
 
   const handleStop = async () => {
+    stopVolumeEnforcement();
     if (soundRef.current) {
       await soundRef.current.stopAsync();
       await soundRef.current.setPositionAsync(0);
@@ -224,9 +259,19 @@ export function SleepModePlayer({
       </View>
 
       {isPlaying && (
-        <Text variant="caption" color="secondary" align="center" style={styles.hint}>
-          Playing in sleep mode...
-        </Text>
+        <View style={styles.statusRow}>
+          <Text variant="caption" color="secondary" align="center">
+            Playing in sleep mode
+          </Text>
+          {isVolumeLocked && (
+            <View style={styles.volumeLockedBadge}>
+              <Ionicons name="lock-closed" size={12} color={colors.primary[400]} />
+              <Text variant="caption" color="primary" style={styles.volumeText}>
+                {Math.round(lockedVolume * 100)}%
+              </Text>
+            </View>
+          )}
+        </View>
       )}
     </View>
   );
@@ -307,5 +352,23 @@ const styles = StyleSheet.create({
   },
   hint: {
     marginTop: spacing.sm,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  volumeLockedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: 12,
+  },
+  volumeText: {
+    fontSize: 11,
   },
 });

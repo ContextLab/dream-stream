@@ -9,9 +9,13 @@ import type { QueuedDream } from '@/services/launchQueue';
 
 interface LaunchQueueCardProps {
   item: QueuedDream;
+  index?: number;
+  totalCount?: number;
   onRemove?: () => void;
   onSetReady?: () => void;
   onLaunch?: () => void;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
   isActive?: boolean;
 }
 
@@ -23,9 +27,13 @@ function formatDuration(seconds: number): string {
 
 export const LaunchQueueCard = memo(function LaunchQueueCard({
   item,
+  index = 0,
+  totalCount = 1,
   onRemove,
   onSetReady,
   onLaunch,
+  onMoveUp,
+  onMoveDown,
   isActive = false,
 }: LaunchQueueCardProps) {
   const statusColor = getStatusColor(item.status);
@@ -34,8 +42,32 @@ export const LaunchQueueCard = memo(function LaunchQueueCard({
     ? getSleepStageDisplayName(item.target_sleep_stage)
     : 'Any stage';
 
+  const canMoveUp = index > 0 && item.status === 'pending';
+  const canMoveDown = index < totalCount - 1 && item.status === 'pending';
+
   return (
     <View style={[styles.container, isActive && styles.containerActive]}>
+      {totalCount > 1 && (
+        <View style={styles.reorderControls}>
+          <Pressable
+            style={[styles.reorderButton, !canMoveUp && styles.reorderButtonDisabled]}
+            onPress={canMoveUp ? onMoveUp : undefined}
+            disabled={!canMoveUp}
+          >
+            <Ionicons name="chevron-up" size={16} color={canMoveUp ? colors.gray[300] : colors.gray[700]} />
+          </Pressable>
+          <Text variant="caption" color="muted" style={styles.orderNumber}>
+            {index + 1}
+          </Text>
+          <Pressable
+            style={[styles.reorderButton, !canMoveDown && styles.reorderButtonDisabled]}
+            onPress={canMoveDown ? onMoveDown : undefined}
+            disabled={!canMoveDown}
+          >
+            <Ionicons name="chevron-down" size={16} color={canMoveDown ? colors.gray[300] : colors.gray[700]} />
+          </Pressable>
+        </View>
+      )}
       <View style={styles.iconContainer}>
         <Ionicons name="moon-outline" size={24} color={colors.primary[500]} />
         <Text variant="caption" color="muted" style={styles.durationText}>
@@ -182,5 +214,21 @@ const styles = StyleSheet.create({
     minHeight: touchTargetMinSize,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  reorderControls: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xs,
+    marginRight: spacing.xs,
+  },
+  reorderButton: {
+    padding: 4,
+  },
+  reorderButtonDisabled: {
+    opacity: 0.3,
+  },
+  orderNumber: {
+    fontFamily: 'CourierPrime_400Regular',
+    fontSize: 11,
   },
 });

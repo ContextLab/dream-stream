@@ -1,8 +1,8 @@
-import { supabase } from './supabase';
 import { storage } from '@/lib/storage';
 import type { WearableDevice, DeviceType } from '@/types/database';
 
 const STORAGE_KEY_WEARABLE = 'wearable_device';
+const STORAGE_KEY_DEVICES = 'wearable_devices';
 
 export interface WearableConnectionState {
   device: WearableDevice | null;
@@ -17,178 +17,111 @@ export interface HealthData {
   timestamp: string;
 }
 
-/**
- * Get the currently connected wearable device for a user
- */
+async function getLocalDevices(): Promise<WearableDevice[]> {
+  const data = await storage.get<WearableDevice[]>(STORAGE_KEY_DEVICES);
+  return data || [];
+}
+
+async function setLocalDevices(devices: WearableDevice[]): Promise<void> {
+  await storage.set(STORAGE_KEY_DEVICES, devices);
+}
+
 export async function getConnectedDevice(userId: string): Promise<WearableDevice | null> {
-  try {
-    const { data, error } = await supabase
-      .from('wearable_devices')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('is_connected', true)
-      .single();
-
-    if (error || !data) {
-      return null;
-    }
-
-    return data as WearableDevice;
-  } catch {
-    return null;
-  }
+  const devices = await getLocalDevices();
+  return devices.find((d) => d.user_id === userId && d.is_connected) || null;
 }
 
-/**
- * Get all wearable devices for a user
- */
 export async function getUserDevices(userId: string): Promise<WearableDevice[]> {
-  try {
-    const { data, error } = await supabase
-      .from('wearable_devices')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.warn('Error fetching wearable devices:', error.message);
-      return [];
-    }
-
-    return (data || []) as WearableDevice[];
-  } catch {
-    return [];
-  }
+  const devices = await getLocalDevices();
+  return devices.filter((d) => d.user_id === userId);
 }
 
-/**
- * Register a new wearable device
- */
 export async function registerDevice(
   userId: string,
   deviceType: DeviceType,
   deviceName: string | null,
   platformId: string | null
 ): Promise<WearableDevice> {
-  // First disconnect any existing devices of the same type
-  await supabase
-    .from('wearable_devices')
-    .update({ is_connected: false })
-    .eq('user_id', userId)
-    .eq('device_type', deviceType);
+  const devices = await getLocalDevices();
+  
+  devices.forEach((d) => {
+    if (d.user_id === userId && d.device_type === deviceType) {
+      d.is_connected = false;
+    }
+  });
 
-  const { data, error } = await supabase
-    .from('wearable_devices')
-    .insert({
-      user_id: userId,
-      device_type: deviceType,
-      device_name: deviceName,
-      platform_id: platformId,
-      is_connected: true,
-      last_sync_at: new Date().toISOString(),
-    })
-    .select()
-    .single();
+  const newDevice: WearableDevice = {
+    id: `device-${Date.now()}`,
+    user_id: userId,
+    device_type: deviceType,
+    device_name: deviceName,
+    platform_id: platformId,
+    is_connected: true,
+    last_sync_at: new Date().toISOString(),
+    created_at: new Date().toISOString(),
+  };
 
-  if (error) {
-    throw new Error(`Failed to register device: ${error.message}`);
-  }
+  devices.push(newDevice);
+  await setLocalDevices(devices);
+  await storage.set(STORAGE_KEY_WEARABLE, newDevice);
 
-  // Cache the device locally
-  await storage.set(STORAGE_KEY_WEARABLE, data);
-
-  return data as WearableDevice;
+  return newDevice;
 }
 
-/**
- * Connect to an existing wearable device
- */
 export async function connectDevice(deviceId: string): Promise<WearableDevice> {
-  const { data, error } = await supabase
-    .from('wearable_devices')
-    .update({
-      is_connected: true,
-      last_sync_at: new Date().toISOString(),
-    })
-    .eq('id', deviceId)
-    .select()
-    .single();
+  const devices = await getLocalDevices();
+  const device = devices.find((d) => d.id === deviceId);
 
-  if (error) {
-    throw new Error(`Failed to connect device: ${error.message}`);
+  if (!device) {
+    throw new Error('Device not found');
   }
 
-  await storage.set(STORAGE_KEY_WEARABLE, data);
+  device.is_connected = true;
+  device.last_sync_at = new Date().toISOString();
 
-  return data as WearableDevice;
+  await setLocalDevices(devices);
+  await storage.set(STORAGE_KEY_WEARABLE, device);
+
+  return device;
 }
 
-/**
- * Disconnect a wearable device
- */
 export async function disconnectDevice(deviceId: string): Promise<void> {
-  const { error } = await supabase
-    .from('wearable_devices')
-    .update({ is_connected: false })
-    .eq('id', deviceId);
+  const devices = await getLocalDevices();
+  const device = devices.find((d) => d.id === deviceId);
 
-  if (error) {
-    throw new Error(`Failed to disconnect device: ${error.message}`);
+  if (device) {
+    device.is_connected = false;
+    await setLocalDevices(devices);
   }
 
   await storage.remove(STORAGE_KEY_WEARABLE);
 }
 
-/**
- * Remove a wearable device completely
- */
 export async function removeDevice(deviceId: string): Promise<void> {
-  const { error } = await supabase
-    .from('wearable_devices')
-    .delete()
-    .eq('id', deviceId);
-
-  if (error) {
-    throw new Error(`Failed to remove device: ${error.message}`);
-  }
-
+  let devices = await getLocalDevices();
+  devices = devices.filter((d) => d.id !== deviceId);
+  await setLocalDevices(devices);
   await storage.remove(STORAGE_KEY_WEARABLE);
 }
 
-/**
- * Update the last sync timestamp for a device
- */
 export async function updateLastSync(deviceId: string): Promise<void> {
-  const { error } = await supabase
-    .from('wearable_devices')
-    .update({ last_sync_at: new Date().toISOString() })
-    .eq('id', deviceId);
+  const devices = await getLocalDevices();
+  const device = devices.find((d) => d.id === deviceId);
 
-  if (error) {
-    console.warn('Failed to update last sync:', error.message);
+  if (device) {
+    device.last_sync_at = new Date().toISOString();
+    await setLocalDevices(devices);
   }
 }
 
-/**
- * Get cached device from local storage (for offline access)
- */
 export async function getCachedDevice(): Promise<WearableDevice | null> {
   return storage.get<WearableDevice>(STORAGE_KEY_WEARABLE);
 }
 
-/**
- * Check if HealthKit/Health Connect is available on this platform
- * This is a stub that would integrate with expo-health in production
- */
 export function isHealthKitAvailable(): boolean {
-  // In production, this would check Platform.OS and availability
-  // For now, return false as health integration requires native setup
   return false;
 }
 
-/**
- * Get display name for device type
- */
 export function getDeviceTypeName(deviceType: DeviceType): string {
   const names: Record<DeviceType, string> = {
     apple_watch: 'Apple Watch',
@@ -200,9 +133,6 @@ export function getDeviceTypeName(deviceType: DeviceType): string {
   return names[deviceType] || 'Unknown Device';
 }
 
-/**
- * Get icon name for device type (Ionicons)
- */
 export function getDeviceTypeIcon(deviceType: DeviceType): string {
   const icons: Record<DeviceType, string> = {
     apple_watch: 'watch-outline',
@@ -214,9 +144,6 @@ export function getDeviceTypeIcon(deviceType: DeviceType): string {
   return icons[deviceType] || 'bluetooth-outline';
 }
 
-/**
- * Supported device types for pairing
- */
 export const SUPPORTED_DEVICE_TYPES: DeviceType[] = [
   'apple_watch',
   'fitbit',

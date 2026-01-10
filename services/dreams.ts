@@ -1,10 +1,10 @@
-import { supabase } from './supabase';
 import type { Dream, DreamListItem, PaginatedResponse } from '@/types/database';
 import { PAGINATION } from '@/lib/constants';
-import { isMockMode, MOCK_DREAMS, getMockDreamById, searchMockDreams } from '@/lib/mockData';
+import { DREAMS, getDreamById as getLocalDreamById, searchDreams as searchLocalDreams } from '@/lib/dreamData';
 
 export interface DreamFilters {
   categoryId?: string;
+  categorySlugs?: string[];
   isFeatured?: boolean;
   tags?: string[];
 }
@@ -24,147 +24,59 @@ export async function getDreams(
     page = 1,
     pageSize = PAGINATION.DEFAULT_PAGE_SIZE,
     filters = {},
-    orderBy = 'created_at',
-    orderDirection = 'desc',
   } = options;
 
-  if (isMockMode()) {
-    let filtered = [...MOCK_DREAMS];
-    if (filters.isFeatured !== undefined) {
-      filtered = filtered.filter((d) => d.is_featured === filters.isFeatured);
-    }
-    const from = (page - 1) * pageSize;
-    const to = from + pageSize;
-    const paged = filtered.slice(from, to);
-    return {
-      data: paged,
-      count: filtered.length,
-      page,
-      pageSize,
-      hasMore: filtered.length > page * pageSize,
-    };
+  let filtered = [...DREAMS];
+  
+  if (filters.categorySlugs && filters.categorySlugs.length > 0) {
+    filtered = filtered.filter((d) => d.category?.slug && filters.categorySlugs!.includes(d.category.slug));
+  } else if (filters.categoryId) {
+    filtered = filtered.filter((d) => d.category?.slug === filters.categoryId);
   }
-
-  const from = (page - 1) * pageSize;
-  const to = from + pageSize - 1;
-
-  let query = supabase
-    .from('dreams')
-    .select('id, title, thumbnail_url, duration_seconds, is_featured, category:categories(name, slug, color)', { count: 'exact' })
-    .order(orderBy, { ascending: orderDirection === 'asc' })
-    .range(from, to);
-
-  if (filters.categoryId) {
-    query = query.eq('category_id', filters.categoryId);
-  }
-
+  
   if (filters.isFeatured !== undefined) {
-    query = query.eq('is_featured', filters.isFeatured);
+    filtered = filtered.filter((d) => d.is_featured === filters.isFeatured);
   }
-
-  const { data, error, count } = await query;
-
-  if (error) {
-    throw new Error(`Failed to fetch dreams: ${error.message}`);
-  }
-
+  
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize;
+  const paged = filtered.slice(from, to);
+  
   return {
-    data: (data as unknown as DreamListItem[]) || [],
-    count: count || 0,
+    data: paged,
+    count: filtered.length,
     page,
     pageSize,
-    hasMore: (count || 0) > page * pageSize,
+    hasMore: filtered.length > page * pageSize,
   };
 }
 
 export async function getFeaturedDreams(limit = 5): Promise<DreamListItem[]> {
-  if (isMockMode()) {
-    return MOCK_DREAMS.filter((d) => d.is_featured).slice(0, limit);
-  }
-
-  const { data, error } = await supabase
-    .from('dreams')
-    .select('id, title, thumbnail_url, duration_seconds, is_featured, category:categories(name, slug, color)')
-    .eq('is_featured', true)
-    .order('created_at', { ascending: false })
-    .limit(limit);
-
-  if (error) {
-    throw new Error(`Failed to fetch featured dreams: ${error.message}`);
-  }
-
-  return (data as unknown as DreamListItem[]) || [];
+  return DREAMS.filter((d) => d.is_featured).slice(0, limit);
 }
 
 export async function getDreamById(id: string): Promise<Dream | null> {
-  if (isMockMode()) {
-    return getMockDreamById(id);
-  }
-
-  const { data, error } = await supabase
-    .from('dreams')
-    .select('*, category:categories(*), tags:dream_tags(tag)')
-    .eq('id', id)
-    .single();
-
-  if (error) {
-    if (error.code === 'PGRST116') {
-      return null;
-    }
-    throw new Error(`Failed to fetch dream: ${error.message}`);
-  }
-
-  const rawDream = data as Record<string, unknown>;
-  const tagsData = rawDream.tags as Array<{ tag: string }> | undefined;
-  return {
-    ...rawDream,
-    tags: tagsData?.map((t) => t.tag) || [],
-  } as Dream;
+  return getLocalDreamById(id);
 }
 
 export async function searchDreams(
   query: string,
   limit = PAGINATION.DEFAULT_PAGE_SIZE
 ): Promise<DreamListItem[]> {
-  if (isMockMode()) {
-    return searchMockDreams(query).slice(0, limit);
-  }
-
-  const { data, error } = await supabase
-    .rpc('search_dreams', { query, result_limit: limit });
-
-  if (error) {
-    throw new Error(`Failed to search dreams: ${error.message}`);
-  }
-
-  return (data as unknown as DreamListItem[]) || [];
+  return searchLocalDreams(query).slice(0, limit);
 }
 
 export async function incrementViewCount(dreamId: string): Promise<void> {
-  const { error } = await supabase.rpc('increment_view_count', { dream_id: dreamId });
-  
-  if (error) {
-    console.warn(`Failed to increment view count: ${error.message}`);
-  }
+  // No-op for local storage mode
 }
 
 export async function getDreamsByCategory(
   categorySlug: string,
   options: Omit<DreamListOptions, 'filters'> = {}
 ): Promise<PaginatedResponse<DreamListItem>> {
-  const { data: category } = await supabase
-    .from('categories')
-    .select('id')
-    .eq('slug', categorySlug)
-    .single();
-
-  if (!category) {
-    return { data: [], count: 0, page: 1, pageSize: PAGINATION.DEFAULT_PAGE_SIZE, hasMore: false };
-  }
-
   return getDreams({
     ...options,
-    filters: { categoryId: category.id },
+    filters: { categoryId: categorySlug },
   });
 }
 
@@ -172,27 +84,22 @@ export async function getRelatedDreams(
   dreamId: string,
   limit = 6
 ): Promise<DreamListItem[]> {
-  if (isMockMode()) {
-    return MOCK_DREAMS.filter((d) => d.id !== dreamId).slice(0, limit);
-  }
-
   const dream = await getDreamById(dreamId);
   
-  if (!dream?.category_id) {
+  if (!dream?.category?.slug) {
     return getFeaturedDreams(limit);
   }
 
-  const { data, error } = await supabase
-    .from('dreams')
-    .select('id, title, thumbnail_url, duration_seconds, is_featured, category:categories(name, slug, color)')
-    .eq('category_id', dream.category_id)
-    .neq('id', dreamId)
-    .order('view_count', { ascending: false })
-    .limit(limit);
+  const related = DREAMS
+    .filter((d) => d.category?.slug === dream.category?.slug && d.id !== dreamId)
+    .slice(0, limit);
 
-  if (error || !data || data.length === 0) {
-    return getFeaturedDreams(limit);
+  if (related.length < limit) {
+    const more = DREAMS
+      .filter((d) => d.id !== dreamId && !related.some((r) => r.id === d.id))
+      .slice(0, limit - related.length);
+    return [...related, ...more];
   }
 
-  return data as unknown as DreamListItem[];
+  return related;
 }

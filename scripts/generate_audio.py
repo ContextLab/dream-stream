@@ -34,7 +34,7 @@ except ImportError:
     import edge_tts
 
 PROJECT_ROOT = Path(__file__).parent.parent
-MOCK_DATA_PATH = PROJECT_ROOT / "lib" / "mockData.ts"
+DREAM_DATA_PATH = PROJECT_ROOT / "lib" / "dreamData.ts"
 OUTPUT_DIR = PROJECT_ROOT / "public" / "audio" / "dreams"
 
 # Voice settings - Jenny is a calm, soothing US English voice
@@ -54,9 +54,9 @@ class DreamContent(NamedTuple):
     content: str
 
 
-def parse_mock_data() -> list[DreamContent]:
-    """Extract dream content from mockData.ts"""
-    content = MOCK_DATA_PATH.read_text()
+def parse_dream_data() -> list[DreamContent]:
+    """Extract dream content from dreamData.ts"""
+    content = DREAM_DATA_PATH.read_text()
 
     pattern = r"\{\s*title:\s*['\"]([^'\"]+)['\"],\s*music:\s*['\"]([^'\"]+)['\"],\s*content:\s*`([^`]+)`"
     matches = re.findall(pattern, content, re.DOTALL)
@@ -329,7 +329,7 @@ async def main():
     print(f"Rate: {RATE}, Pitch: {PITCH}")
 
     print("\nParsing dream narratives...")
-    dreams = parse_mock_data()
+    dreams = parse_dream_data()
     print(f"Found {len(dreams)} dreams")
 
     if args.dream:

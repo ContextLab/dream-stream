@@ -12,24 +12,19 @@ import { colors, spacing, borderRadius, touchTargetMinSize } from '@/theme/token
 
 interface CategoryFilterProps {
   categories: Category[];
-  selectedId: string | null;
-  onSelect: (categoryId: string | null) => void;
+  selectedIds: Set<string>;
+  onToggle: (categoryId: string) => void;
+  onClearAll: () => void;
   isLoading?: boolean;
 }
 
 export function CategoryFilter({
   categories,
-  selectedId,
-  onSelect,
+  selectedIds,
+  onToggle,
+  onClearAll,
   isLoading = false,
 }: CategoryFilterProps) {
-  const handlePress = useCallback(
-    (categoryId: string | null) => {
-      onSelect(categoryId === selectedId ? null : categoryId);
-    },
-    [selectedId, onSelect]
-  );
-
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -37,6 +32,8 @@ export function CategoryFilter({
       </View>
     );
   }
+
+  const hasSelection = selectedIds.size > 0;
 
   return (
     <ScrollView
@@ -46,16 +43,16 @@ export function CategoryFilter({
     >
       <CategoryChip
         label="All"
-        isSelected={selectedId === null}
-        onPress={() => handlePress(null)}
+        isSelected={!hasSelection}
+        onPress={onClearAll}
       />
       {categories.map((category) => (
         <CategoryChip
           key={category.id}
           label={category.name}
           color={category.color}
-          isSelected={selectedId === category.id}
-          onPress={() => handlePress(category.id)}
+          isSelected={selectedIds.has(category.slug)}
+          onPress={() => onToggle(category.slug)}
         />
       ))}
     </ScrollView>

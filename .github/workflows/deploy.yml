@@ -43,8 +43,8 @@ jobs:
         id: audio-cache
         with:
           path: public/audio/dreams
-          # Cache key based on mockData.ts content - regenerates when narratives change
-          key: audio-${{ hashFiles('lib/mockData.ts') }}
+          # Cache key based on dreamData.ts content - regenerates when narratives change
+          key: audio-${{ hashFiles('lib/dreamData.ts') }}
 
       - name: Generate dream audio
         if: steps.audio-cache.outputs.cache-hit != 'true'

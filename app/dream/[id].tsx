@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { View, ScrollView, StyleSheet, ActivityIndicator, Pressable, Alert } from 'react-native';
+import { View, ScrollView, StyleSheet, ActivityIndicator, Pressable, Alert, Modal } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,6 +24,7 @@ export default function DreamDetailScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [playbackMode, setPlaybackMode] = useState<PlaybackMode>('full');
+  const [showFullText, setShowFullText] = useState(false);
 
   const { add: addToQueue } = useLaunchQueue();
   const { inQueue } = useQueueStatus(id || '');
@@ -203,6 +204,13 @@ export default function DreamDetailScreen() {
             </Text>
           )}
 
+          <Pressable style={styles.readFullButton} onPress={() => setShowFullText(true)}>
+            <Ionicons name="book-outline" size={18} color={colors.primary[400]} />
+            <Text variant="bodySmall" color="primary">
+              Read Full Script
+            </Text>
+          </Pressable>
+
           {dream.tags && dream.tags.length > 0 && (
             <View style={styles.tagsRow}>
               {dream.tags.map((tag) => (
@@ -220,6 +228,29 @@ export default function DreamDetailScreen() {
 
         <View style={styles.bottomPadding} />
       </ScrollView>
+
+      <Modal
+        visible={showFullText}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowFullText(false)}
+      >
+        <SafeAreaView style={styles.modalContainer} edges={['top', 'bottom']}>
+          <View style={styles.modalHeader}>
+            <Text variant="h4" weight="semibold" color="primary" numberOfLines={1} style={styles.modalTitle}>
+              {dream.title}
+            </Text>
+            <Pressable onPress={() => setShowFullText(false)} style={styles.modalCloseButton}>
+              <Ionicons name="close" size={24} color={colors.gray[400]} />
+            </Pressable>
+          </View>
+          <ScrollView style={styles.modalContent} contentContainerStyle={styles.modalContentContainer}>
+            <Text variant="body" color="secondary" style={styles.fullText}>
+              {dream.content.replace(/\[PAUSE\]/g, '\n\n')}
+            </Text>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </View>
   );
 }
@@ -321,5 +352,42 @@ const styles = StyleSheet.create({
   },
   bottomPadding: {
     height: spacing['3xl'],
+  },
+  readFullButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#0f0f1a',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray[800],
+  },
+  modalTitle: {
+    flex: 1,
+    marginRight: spacing.md,
+  },
+  modalCloseButton: {
+    padding: spacing.sm,
+  },
+  modalContent: {
+    flex: 1,
+  },
+  modalContentContainer: {
+    padding: spacing.lg,
+    paddingBottom: spacing['3xl'],
+  },
+  fullText: {
+    lineHeight: 28,
   },
 });

@@ -1,5 +1,5 @@
-import { useCallback } from 'react';
-import { View, StyleSheet, ScrollView, FlatList, Alert, Pressable } from 'react-native';
+import { useCallback, useState } from 'react';
+import { View, StyleSheet, ScrollView, Alert, Pressable, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,6 +7,8 @@ import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
 import { WearableStatus } from '@/components/WearableStatus';
 import { LaunchQueueCard } from '@/components/LaunchQueueCard';
+import { VolumeSetup } from '@/components/VolumeSetup';
+import { MusicSettings } from '@/components/MusicSettings';
 import { useAuth } from '@/hooks/useAuth';
 import { useSleepTracking } from '@/hooks/useSleepTracking';
 import { useLaunchQueue } from '@/hooks/useLaunchQueue';
@@ -14,20 +16,37 @@ import { useWearable } from '@/hooks/useWearable';
 import { getSleepStageDisplayName, getSleepStageColor } from '@/services/sleep';
 import { colors, spacing, borderRadius } from '@/theme/tokens';
 
+function formatQueueDuration(totalSeconds: number): string {
+  const hours = Math.floor(totalSeconds / 3600);
+  const mins = Math.floor((totalSeconds % 3600) / 60);
+  if (hours > 0) {
+    return `${hours}h ${mins}m`;
+  }
+  return `${mins}m`;
+}
+
 export default function SleepScreen() {
   const router = useRouter();
   const { isAuthenticated } = useAuth();
   const { connectedDevice } = useWearable();
   const { session, currentStage, isTracking, start, stop } = useSleepTracking();
-  const { queue, activeItem, setReady, launch, remove, isLoading } = useLaunchQueue();
+  const { queue, activeItem, setReady, launch, remove, moveUp, moveDown, isLoading } = useLaunchQueue();
+  const [showVolumeSetup, setShowVolumeSetup] = useState(false);
+  const [setupTab, setSetupTab] = useState<'volume' | 'music'>('volume');
 
-  const handleStartTracking = useCallback(async () => {
+  const handleVolumeComplete = useCallback(async (volume: number) => {
+    setShowVolumeSetup(false);
     try {
       await start(connectedDevice ? 'wearable' : 'manual');
     } catch {
       Alert.alert('Error', 'Failed to start sleep tracking');
     }
   }, [start, connectedDevice]);
+
+  const handleStartTracking = useCallback(() => {
+    setSetupTab('volume');
+    setShowVolumeSetup(true);
+  }, []);
 
   const handleStopTracking = useCallback(async () => {
     Alert.alert(
@@ -80,6 +99,22 @@ export default function SleepScreen() {
       Alert.alert('Error', 'Failed to remove from queue');
     }
   }, [remove]);
+
+  const handleMoveUp = useCallback(async (queueId: string) => {
+    try {
+      await moveUp(queueId);
+    } catch {
+      Alert.alert('Error', 'Failed to reorder queue');
+    }
+  }, [moveUp]);
+
+  const handleMoveDown = useCallback(async (queueId: string) => {
+    try {
+      await moveDown(queueId);
+    } catch {
+      Alert.alert('Error', 'Failed to reorder queue');
+    }
+  }, [moveDown]);
 
   if (!isAuthenticated) {
     return (
@@ -171,9 +206,16 @@ export default function SleepScreen() {
 
         <View style={styles.queueSection}>
           <View style={styles.sectionHeader}>
-            <Text variant="bodySmall" color="secondary" weight="medium">
-              DREAM QUEUE
-            </Text>
+            <View style={styles.queueHeaderLeft}>
+              <Text variant="bodySmall" color="secondary" weight="medium">
+                DREAM QUEUE
+              </Text>
+              {queue.length > 0 && (
+                <Text variant="caption" color="muted" style={styles.queueDuration}>
+                  {formatQueueDuration(queue.reduce((acc, item) => acc + item.dream.full_duration_seconds, 0))}
+                </Text>
+              )}
+            </View>
             <Pressable onPress={() => router.push('/(tabs)')}>
               <Text variant="bodySmall" color="primary">
                 Browse Dreams
@@ -193,20 +235,91 @@ export default function SleepScreen() {
             </View>
           ) : (
             <View style={styles.queueList}>
-              {queue.map((item) => (
+              {queue.map((item, index) => (
                 <LaunchQueueCard
                   key={item.id}
                   item={item}
+                  index={index}
+                  totalCount={queue.length}
                   isActive={activeItem?.id === item.id}
                   onSetReady={() => handleSetReady(item.id)}
                   onLaunch={() => handleLaunch(item.id)}
                   onRemove={() => handleRemove(item.id)}
+                  onMoveUp={() => handleMoveUp(item.id)}
+                  onMoveDown={() => handleMoveDown(item.id)}
                 />
               ))}
             </View>
           )}
         </View>
       </ScrollView>
+
+      <Modal
+        visible={showVolumeSetup}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowVolumeSetup(false)}
+      >
+        <SafeAreaView style={styles.modalContainer} edges={['top', 'bottom']}>
+          <View style={styles.modalHeader}>
+            <View style={styles.tabRow}>
+              <Pressable
+                style={[styles.tab, setupTab === 'volume' && styles.tabActive]}
+                onPress={() => setSetupTab('volume')}
+              >
+                <Ionicons
+                  name="volume-medium"
+                  size={18}
+                  color={setupTab === 'volume' ? colors.primary[400] : colors.gray[500]}
+                />
+                <Text
+                  variant="bodySmall"
+                  weight={setupTab === 'volume' ? 'semibold' : 'normal'}
+                  color={setupTab === 'volume' ? 'primary' : 'muted'}
+                >
+                  Volume
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[styles.tab, setupTab === 'music' && styles.tabActive]}
+                onPress={() => setSetupTab('music')}
+              >
+                <Ionicons
+                  name="musical-notes"
+                  size={18}
+                  color={setupTab === 'music' ? colors.primary[400] : colors.gray[500]}
+                />
+                <Text
+                  variant="bodySmall"
+                  weight={setupTab === 'music' ? 'semibold' : 'normal'}
+                  color={setupTab === 'music' ? 'primary' : 'muted'}
+                >
+                  Music
+                </Text>
+              </Pressable>
+            </View>
+            <Pressable onPress={() => setShowVolumeSetup(false)} style={styles.closeButton}>
+              <Ionicons name="close" size={24} color={colors.gray[400]} />
+            </Pressable>
+          </View>
+          {setupTab === 'volume' ? (
+            <VolumeSetup
+              onComplete={handleVolumeComplete}
+              onSkip={() => {
+                setShowVolumeSetup(false);
+                start(connectedDevice ? 'wearable' : 'manual').catch(() => {
+                  Alert.alert('Error', 'Failed to start sleep tracking');
+                });
+              }}
+            />
+          ) : (
+            <MusicSettings
+              onComplete={() => setSetupTab('volume')}
+              showHeader={true}
+            />
+          )}
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -312,5 +425,42 @@ const styles = StyleSheet.create({
   },
   queueList: {
     gap: spacing.md,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#0f0f1a',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+  },
+  closeButton: {
+    padding: spacing.sm,
+  },
+  queueHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  queueDuration: {
+    fontFamily: 'CourierPrime_400Regular',
+  },
+  tabRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  tab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.gray[800],
+  },
+  tabActive: {
+    backgroundColor: 'rgba(99, 102, 241, 0.2)',
   },
 });

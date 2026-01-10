@@ -1,12 +1,8 @@
-import { supabase } from './supabase';
-import { storage } from '@/lib/storage';
-import { syncLocalProgressToServer } from './playback';
 import type { User } from '@/types/database';
-import type { AuthChangeEvent, Session, User as SupabaseUser } from '@supabase/supabase-js';
 
 export interface AuthState {
   user: User | null;
-  session: Session | null;
+  session: null;
   isLoading: boolean;
 }
 
@@ -21,135 +17,52 @@ export interface SignInCredentials {
   password: string;
 }
 
-function mapSupabaseUser(supabaseUser: SupabaseUser | null): User | null {
-  if (!supabaseUser) return null;
-  
-  return {
-    id: supabaseUser.id,
-    email: supabaseUser.email || '',
-    display_name: supabaseUser.user_metadata?.display_name || null,
-    avatar_url: supabaseUser.user_metadata?.avatar_url || null,
-    created_at: supabaseUser.created_at || new Date().toISOString(),
-    updated_at: supabaseUser.updated_at || new Date().toISOString(),
-  };
+const LOCAL_USER: User = {
+  id: 'local-user',
+  email: 'dreamer@local',
+  display_name: 'Dreamer',
+  avatar_url: null,
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+};
+
+export async function signUp({ displayName }: SignUpCredentials): Promise<User> {
+  return { ...LOCAL_USER, display_name: displayName || 'Dreamer' };
 }
 
-export async function signUp({ email, password, displayName }: SignUpCredentials): Promise<User> {
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      data: {
-        display_name: displayName || null,
-      },
-    },
-  });
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  if (!data.user) {
-    throw new Error('Registration failed. Please try again.');
-  }
-
-  const user = mapSupabaseUser(data.user);
-  if (!user) {
-    throw new Error('Failed to process user data');
-  }
-
-  if (data.session) {
-    await syncLocalProgressToServer(user.id);
-  }
-
-  return user;
-}
-
-export async function signIn({ email, password }: SignInCredentials): Promise<User> {
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  const user = mapSupabaseUser(data.user);
-  if (!user) {
-    throw new Error('Failed to sign in');
-  }
-
-  await syncLocalProgressToServer(user.id);
-
-  return user;
+export async function signIn(_credentials: SignInCredentials): Promise<User> {
+  return LOCAL_USER;
 }
 
 export async function signOut(): Promise<void> {
-  const { error } = await supabase.auth.signOut();
-  
-  if (error) {
-    throw new Error(error.message);
-  }
+  // No-op for local mode
 }
 
-export async function getCurrentSession(): Promise<{ user: User | null; session: Session | null }> {
-  const { data, error } = await supabase.auth.getSession();
-
-  if (error) {
-    console.warn('Error getting session:', error.message);
-    return { user: null, session: null };
-  }
-
-  return {
-    user: mapSupabaseUser(data.session?.user || null),
-    session: data.session,
-  };
+export async function getCurrentSession(): Promise<{ user: User | null; session: null }> {
+  return { user: LOCAL_USER, session: null };
 }
 
 export async function getCurrentUser(): Promise<User | null> {
-  const { data, error } = await supabase.auth.getUser();
-  
-  if (error || !data.user) {
-    return null;
-  }
-
-  return mapSupabaseUser(data.user);
+  return LOCAL_USER;
 }
 
 export async function updateProfile(updates: { displayName?: string; avatarUrl?: string }): Promise<User> {
-  const { data, error } = await supabase.auth.updateUser({
-    data: {
-      display_name: updates.displayName,
-      avatar_url: updates.avatarUrl,
-    },
-  });
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  const user = mapSupabaseUser(data.user);
-  if (!user) {
-    throw new Error('Failed to update profile');
-  }
-
-  return user;
+  return {
+    ...LOCAL_USER,
+    display_name: updates.displayName || LOCAL_USER.display_name,
+    avatar_url: updates.avatarUrl || LOCAL_USER.avatar_url,
+  };
 }
 
-export async function resetPassword(email: string): Promise<void> {
-  const { error } = await supabase.auth.resetPasswordForEmail(email);
-  
-  if (error) {
-    throw new Error(error.message);
-  }
+export async function resetPassword(_email: string): Promise<void> {
+  // No-op for local mode
 }
 
 export function onAuthStateChange(
-  callback: (event: AuthChangeEvent, session: Session | null) => void
+  callback: (event: string, session: null) => void
 ): () => void {
-  const { data: { subscription } } = supabase.auth.onAuthStateChange(callback);
-  return () => subscription.unsubscribe();
+  callback('SIGNED_IN', null);
+  return () => {};
 }
 
 export function validateEmail(email: string): string | null {

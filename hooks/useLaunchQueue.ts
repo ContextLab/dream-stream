@@ -10,6 +10,8 @@ import {
   cancelQueueItem,
   clearQueue,
   isInQueue,
+  reorderQueue,
+  getNextQueueItem,
   type QueuedDream,
 } from '@/services/launchQueue';
 import { useAuth } from './useAuth';
@@ -29,6 +31,9 @@ interface UseLaunchQueueReturn {
   cancel: (queueId: string) => Promise<void>;
   clear: () => Promise<void>;
   checkInQueue: (dreamId: string) => Promise<boolean>;
+  moveUp: (queueId: string) => Promise<void>;
+  moveDown: (queueId: string) => Promise<void>;
+  getNext: () => Promise<QueuedDream | null>;
 }
 
 export function useLaunchQueue(): UseLaunchQueueReturn {
@@ -174,6 +179,39 @@ export function useLaunchQueue(): UseLaunchQueueReturn {
     [user]
   );
 
+  const handleMoveUp = useCallback(
+    async (queueId: string) => {
+      if (!user) return;
+      try {
+        await reorderQueue(user.id, queueId, 'up');
+        await fetchQueue();
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('Failed to reorder'));
+        throw err;
+      }
+    },
+    [user, fetchQueue]
+  );
+
+  const handleMoveDown = useCallback(
+    async (queueId: string) => {
+      if (!user) return;
+      try {
+        await reorderQueue(user.id, queueId, 'down');
+        await fetchQueue();
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('Failed to reorder'));
+        throw err;
+      }
+    },
+    [user, fetchQueue]
+  );
+
+  const handleGetNext = useCallback(async (): Promise<QueuedDream | null> => {
+    if (!user) return null;
+    return getNextQueueItem(user.id);
+  }, [user]);
+
   return {
     queue,
     activeItem,
@@ -188,6 +226,9 @@ export function useLaunchQueue(): UseLaunchQueueReturn {
     cancel: handleCancel,
     clear: handleClear,
     checkInQueue: handleCheckInQueue,
+    moveUp: handleMoveUp,
+    moveDown: handleMoveDown,
+    getNext: handleGetNext,
   };
 }
 

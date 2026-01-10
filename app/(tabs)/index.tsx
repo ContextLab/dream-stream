@@ -1,22 +1,40 @@
-import { useState, useMemo } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { useState, useMemo, useCallback } from 'react';
+import { View, StyleSheet, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Link } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { Text, MonoText } from '@/components/ui/Text';
 import { DreamFeed } from '@/components/DreamFeed';
 import { CategoryFilter } from '@/components/CategoryFilter';
 import { useDreams, useFeaturedDreams } from '@/hooks/useDreams';
 import { useCategories } from '@/hooks/useCategories';
-import { colors, spacing } from '@/theme/tokens';
+import { colors, spacing, borderRadius } from '@/theme/tokens';
 import type { DreamListOptions } from '@/services/dreams';
 
 export default function HomeScreen() {
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
 
   const { categories, isLoading: categoriesLoading } = useCategories();
 
+  const handleToggleCategory = useCallback((categorySlug: string) => {
+    setSelectedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(categorySlug)) {
+        next.delete(categorySlug);
+      } else {
+        next.add(categorySlug);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleClearCategories = useCallback(() => {
+    setSelectedCategories(new Set());
+  }, []);
+
   const dreamsOptions = useMemo<DreamListOptions>(
-    () => (selectedCategoryId ? { filters: { categoryId: selectedCategoryId } } : {}),
-    [selectedCategoryId]
+    () => (selectedCategories.size > 0 ? { filters: { categorySlugs: [...selectedCategories] } } : {}),
+    [selectedCategories]
   );
 
   const {
@@ -34,18 +52,32 @@ export default function HomeScreen() {
   const headerComponent = (
     <View>
       <View style={styles.header}>
-        <Text variant="h2" weight="bold">dream_stream</Text>
+        <View style={styles.titleRow}>
+          <Text variant="h2" weight="bold">dream_stream</Text>
+          <Link href={"/about" as any} asChild>
+            <Pressable style={styles.aboutButton} hitSlop={8}>
+              <Ionicons name="information-circle-outline" size={24} color={colors.gray[400]} />
+            </Pressable>
+          </Link>
+        </View>
         <MonoText color="muted" style={styles.subtitle}>
-          // explore your subconscious
+          // lucid dream audio experiences
         </MonoText>
+      </View>
+      <View style={styles.instructionsCard}>
+        <Text variant="bodySmall" color="secondary" style={styles.instructionsText}>
+          Browse dreams below, tap to preview, then play the full experience as you fall asleep. 
+          Each dream includes guided narration with pauses for lucid exploration.
+        </Text>
       </View>
       <CategoryFilter
         categories={categories}
-        selectedId={selectedCategoryId}
-        onSelect={setSelectedCategoryId}
+        selectedIds={selectedCategories}
+        onToggle={handleToggleCategory}
+        onClearAll={handleClearCategories}
         isLoading={categoriesLoading}
       />
-      {selectedCategoryId === null && featuredDreams.length > 0 && (
+      {selectedCategories.size === 0 && featuredDreams.length > 0 && (
         <View style={styles.sectionHeader}>
           <Text variant="label" color="accent">
             FEATURED
@@ -67,8 +99,8 @@ export default function HomeScreen() {
         onLoadMore={loadMore}
         ListHeaderComponent={headerComponent}
         emptyMessage={
-          selectedCategoryId
-            ? 'No dreams found in this category'
+          selectedCategories.size > 0
+            ? 'No dreams found in selected categories'
             : 'No dreams available yet'
         }
       />
@@ -86,8 +118,28 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     paddingBottom: spacing.sm,
   },
+  titleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  aboutButton: {
+    padding: 4,
+  },
   subtitle: {
     marginTop: 4,
+  },
+  instructionsCard: {
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    padding: spacing.md,
+    backgroundColor: colors.gray[900],
+    borderRadius: borderRadius.lg,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primary[500],
+  },
+  instructionsText: {
+    lineHeight: 20,
   },
   sectionHeader: {
     paddingHorizontal: spacing.md,
