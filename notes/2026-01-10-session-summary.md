@@ -2,16 +2,22 @@
 
 ## Session Overview
 
-This session focused on:
+This session covered two major work items:
 1. Adding CI-based audio generation using Edge TTS
 2. Auditing and cleaning up GitHub issues
 3. Updating project documentation
 
-## Major Accomplishments
+---
 
-### 1. CI Audio Generation (Completed)
+## Part 1: CI Audio Generation
 
-Replaced local Kokoro TTS with Edge TTS for GitHub Actions CI:
+### Problem
+- Kokoro TTS required 340MB of model files (too large for git)
+- Local generation was slow and required manual steps
+- Audio files weren't automatically regenerated when narratives changed
+
+### Solution
+Implemented Edge TTS for GitHub Actions CI:
 
 - **Script**: `scripts/generate_audio.py` - Uses Microsoft Edge TTS (free, no API keys)
 - **Workflow**: `.github/workflows/deploy.yml` - Added Python, ffmpeg, and audio generation step
@@ -19,55 +25,70 @@ Replaced local Kokoro TTS with Edge TTS for GitHub Actions CI:
 - **Voice**: `en-US-JennyNeural` at -10% rate, -5Hz pitch for calming effect
 - **Output**: Opus-encoded audio at 64kbps with 45-second pause markers
 
-Commit: `7ee8d52`
+### Commit
+`7ee8d52` - feat: add CI audio generation with Edge TTS
 
-### 2. GitHub Issues Audit
+---
 
-**Closed (65 issues):**
-- T001-T020: Infrastructure/setup tasks
-- T021-T031: US1 Browse/Search
-- T032-T038: US2 Playback (core)
-- T041, T043-T047, T049: US3 Auth
-- T050-T053, T055-T056: US4 Favorites
-- T057-T059: US5 Share (core)
-- T062-T074: US6 Sleep Tracking
-- T102: CI Audio Generation (new, completed)
+## Part 2: GitHub Issues Audit
 
-**Partial (9 issues) - Updated with status comments:**
-- T039: Offline indicator (component exists, not integrated)
-- T040: Buffering state (initial load only, no mid-stream)
-- T042: useAuth hook (currently mocked)
-- T048: Auth persistence (depends on T042)
-- T054: FavoriteButton on DreamCard (missing)
-- T060: Deep link handling (scheme configured, handler missing)
-- T075: HealthKit/Health Connect (stub only)
-- T095: Seed database (mock data exists, no SQL seed)
+Used 5 parallel explore agents to analyze codebase against all open issues.
 
-**Not Started (1 issue):**
-- T061: Supabase share edge function
+### Closed Issues (66 total)
 
-**Remaining Open (26 issues):**
-QA/Testing tasks (T076-T101) - require manual testing and validation
+| Range | Category | Status |
+|-------|----------|--------|
+| T001-T020 | Infrastructure/setup | All complete |
+| T021-T031 | US1 Browse/Search | All complete |
+| T032-T038 | US2 Playback core | All complete |
+| T041, T043-T047, T049 | US3 Auth | Complete |
+| T050-T053, T055-T056 | US4 Favorites | Complete |
+| T057-T059 | US5 Share core | Complete |
+| T062-T074 | US6 Sleep Tracking | All complete |
+| T102 | CI Audio Generation | New issue, closed as complete |
 
-## Current Architecture
+### Partial Issues (8 total) - Updated with comments
+
+| Issue | Problem | Remaining Work |
+|-------|---------|----------------|
+| T039 | Offline indicator exists but not integrated | Add to root layout, support native via expo-network |
+| T040 | Initial load only, no mid-stream buffering | Handle `isBuffering` from AVPlaybackStatus |
+| T042 | useAuth hook uses mock data | Replace with real Supabase session management |
+| T048 | Auth persistence blocked by T042 | Depends on T042 fix |
+| T054 | FavoriteButton missing from DreamCard | Integrate component |
+| T060 | URL scheme configured, handler missing | Add deep link handler in app layout |
+| T075 | HealthKit/Health Connect stubbed | Implement real native integration |
+| T095 | Mock data exists, no SQL seed | Optional: create supabase/seed.sql |
+
+### Not Started (1 issue)
+- **T061**: Supabase share edge function
+
+### Remaining Open (26 issues)
+QA/Testing tasks T076-T101 - require manual testing and validation
+
+---
+
+## Architecture Summary
 
 ```
 dream-stream/
-├── app/                    # Expo Router screens
-│   ├── (tabs)/            # Tab navigation (home, search, favorites, profile)
-│   ├── auth/              # Login/signup screens
-│   ├── dream/             # Dream detail and launch screens
-│   └── sleep/             # Sleep tracking screen
-├── components/            # React components
-│   ├── ui/               # Base UI components (Button, Card, Input, Text)
-│   └── *.tsx             # Feature components
-├── hooks/                 # React hooks
-├── services/              # Business logic and API calls
-├── lib/                   # Utilities and mock data
-├── theme/                 # Design tokens
-├── types/                 # TypeScript types
-├── scripts/               # Build scripts (audio generation)
-└── supabase/             # Database migrations and config
+├── app/                       # Expo Router screens
+│   ├── (tabs)/               # Tab navigation (home, search, favorites, profile)
+│   ├── auth/                 # Login/signup screens
+│   ├── dream/                # Dream detail and launch screens
+│   └── sleep/                # Sleep tracking screen
+├── components/                # React components
+│   ├── ui/                   # Base UI (Button, Card, Input, Text)
+│   └── *.tsx                 # Feature components
+├── hooks/                     # React hooks
+├── services/                  # Business logic and API calls
+├── lib/                       # Utilities, constants, mock data
+├── theme/                     # Design tokens
+├── types/                     # TypeScript types
+├── scripts/                   # Build scripts (audio generation)
+├── supabase/                  # Database migrations and config
+├── public/                    # Static assets (generated audio)
+└── notes/                     # Session notes
 ```
 
 ## Implementation Status by Feature
@@ -82,43 +103,65 @@ dream-stream/
 | Sleep Tracking | Mostly Complete | Audio-based detection, HealthKit stubbed |
 | Audio Generation | Complete | CI-based with Edge TTS |
 
-## Known Issues
+---
 
-1. **Type Mismatch**: `DreamListItem` type doesn't match Supabase query fields (`duration_seconds` vs `full_duration_seconds`)
-2. **Auth Mock**: `hooks/useAuth.ts` returns mock data instead of using real auth service
-3. **Native Network Status**: `OfflineIndicator` only works on web, needs expo-network for native
+## Known Technical Debt
 
-## Next Steps
+1. **Type Mismatch**: `DreamListItem` type doesn't match Supabase query fields
+2. **Auth Mock**: `hooks/useAuth.ts` returns mock data instead of real auth
+3. **Native Network**: `OfflineIndicator` only works on web
 
-Priority tasks for next session:
-1. Fix useAuth hook to use real Supabase auth (T042)
-2. Add FavoriteButton to DreamCard (T054)
-3. Implement deep link handler in app layout (T060)
-4. Test audio playback on deployed site
-5. Run QA validation tasks (T076-T101)
-
-## Files Modified This Session
-
-- `.github/workflows/deploy.yml` - Added audio generation
-- `scripts/generate_audio.py` - Rewrote for Edge TTS
-- `.gitignore` - Added Kokoro model files
-- Removed: `scripts/generate_audio_kokoro.py`, `scripts/generate_audio.sh`
+---
 
 ## Commands Reference
 
 ```bash
-# Generate audio locally
-python scripts/generate_audio.py --limit 3
+# Development
+npm run web            # Run web dev server
+npm run ios            # Run iOS simulator
+npm run android        # Run Android emulator
+npm run typecheck      # TypeScript check
 
-# List available voices
-python scripts/generate_audio.py --list-voices
+# Audio Generation (local)
+python scripts/generate_audio.py           # Generate all audio
+python scripts/generate_audio.py --limit 3 # Generate first 3
+python scripts/generate_audio.py --dream dream-1  # Single dream
+python scripts/generate_audio.py --list-voices    # List available voices
 
-# Type check
-npx tsc --noEmit
-
-# Run dev server
-npm run web
-
-# Check GitHub issues
+# GitHub Issues
 gh issue list --state open
+gh issue close <number> -c "Comment"
+```
+
+---
+
+## Commits This Session
+
+1. `7ee8d52` - feat: add CI audio generation with Edge TTS
+2. `01b6a10` - docs: update README and add session notes
+
+---
+
+## Continuation Prompt
+
+```
+Continue Dream Stream at `/Users/jmanning/dream-stream/`.
+
+## Current State
+- Branch: `main`
+- TypeScript: Compiles clean
+- Live at: https://context-lab.com/dream-stream/
+- Audio: Generated in CI via Edge TTS
+
+## Priority Tasks
+1. Fix useAuth hook to use real Supabase auth (T042)
+2. Add FavoriteButton to DreamCard (T054)
+3. Implement deep link handler (T060)
+4. Create Supabase share edge function (T061)
+5. Run QA validation tasks (T076-T101)
+
+## Key Commands
+npm run web              # Dev server
+npm run typecheck        # Verify types
+gh issue list --state open  # Check remaining issues
 ```
