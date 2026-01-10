@@ -2,11 +2,18 @@
   "name": "dream-stream",
   "version": "1.0.0",
   "main": "index.ts",
+  "type": "module",
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "test": "echo 'No tests configured yet' && exit 0",
+    "lint": "eslint . --ext .ts,.tsx",
+    "typecheck": "tsc --noEmit",
+    "seed": "npx supabase db execute --file supabase/seed.sql",
+    "build:ios": "eas build --platform ios",
+    "build:android": "eas build --platform android"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -35,13 +42,17 @@
   },
   "devDependencies": {
     "@babel/core": "^7.28.5",
+    "@eslint/js": "^9.39.2",
     "@types/node": "^25.0.5",
     "@types/react": "~19.1.0",
     "@types/react-native": "^0.72.8",
     "eslint": "^9.39.2",
     "eslint-config-expo": "^10.0.0",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.0.1",
     "prettier": "^3.7.4",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.2",
+    "typescript-eslint": "^8.52.0"
   },
   "private": true
 }

@@ -245,9 +245,9 @@ Expo/React Native project structure:
 - [x] T095 [P] Seed database with 30 sample dreams (MVP content)
 - [x] T096 [P] Add app icons and splash screen
 - [x] T097 Performance optimization (lazy loading, memoization)
-- [ ] T098 [P] Add loading animations with Reanimated
+- [x] T098 [P] Add loading animations with Reanimated
 - [x] T099 Security review (RLS policies, API keys not exposed)
-- [ ] T100 Run quickstart.md validation end-to-end
+- [x] T100 Run quickstart.md validation end-to-end
 - [x] T101 Create EAS build configuration for iOS/Android
 
 ---
