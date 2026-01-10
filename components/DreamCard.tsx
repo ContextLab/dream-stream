@@ -1,8 +1,8 @@
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { View, Image, Pressable, StyleSheet } from 'react-native';
 import { Link } from 'expo-router';
 import { Text } from '@/components/ui/Text';
-import { colors, shadows, touchTargetMinSize, borderRadius } from '@/theme/tokens';
+import { colors, touchTargetMinSize, borderRadius } from '@/theme/tokens';
 import type { DreamListItem } from '@/types/database';
 
 interface DreamCardProps {
@@ -20,15 +20,16 @@ export const DreamCard = memo(function DreamCard({ dream, variant = 'default' }:
   const isFeatured = variant === 'featured';
   const isCompact = variant === 'compact';
 
+  const containerStyle = useMemo(() => ({
+    ...styles.container,
+    ...(isFeatured ? styles.featuredContainer : {}),
+    ...(isCompact ? styles.compactContainer : {}),
+  }), [isFeatured, isCompact]);
+
   return (
     <Link href={`/dream/${dream.id}`} asChild>
-      <Pressable
-        style={[
-          styles.container,
-          isFeatured && styles.featuredContainer,
-          isCompact && styles.compactContainer,
-        ]}
-        className="active:opacity-90"
+      <Pressable style={containerStyle}
+
       >
         <View style={[styles.imageContainer, isFeatured && styles.featuredImageContainer]}>
           <Image

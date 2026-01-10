@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
-import type { Dream, DreamListItem, Category, PaginatedResponse } from '@/types/database';
+import type { Dream, DreamListItem, PaginatedResponse } from '@/types/database';
 import { PAGINATION } from '@/lib/constants';
+import { isMockMode, MOCK_DREAMS, getMockDreamById, searchMockDreams } from '@/lib/mockData';
 
 export interface DreamFilters {
   categoryId?: string;
@@ -26,6 +27,23 @@ export async function getDreams(
     orderBy = 'created_at',
     orderDirection = 'desc',
   } = options;
+
+  if (isMockMode()) {
+    let filtered = [...MOCK_DREAMS];
+    if (filters.isFeatured !== undefined) {
+      filtered = filtered.filter((d) => d.is_featured === filters.isFeatured);
+    }
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize;
+    const paged = filtered.slice(from, to);
+    return {
+      data: paged,
+      count: filtered.length,
+      page,
+      pageSize,
+      hasMore: filtered.length > page * pageSize,
+    };
+  }
 
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
@@ -60,6 +78,10 @@ export async function getDreams(
 }
 
 export async function getFeaturedDreams(limit = 5): Promise<DreamListItem[]> {
+  if (isMockMode()) {
+    return MOCK_DREAMS.filter((d) => d.is_featured).slice(0, limit);
+  }
+
   const { data, error } = await supabase
     .from('dreams')
     .select('id, title, thumbnail_url, duration_seconds, is_featured, category:categories(name, slug, color)')
@@ -75,6 +97,10 @@ export async function getFeaturedDreams(limit = 5): Promise<DreamListItem[]> {
 }
 
 export async function getDreamById(id: string): Promise<Dream | null> {
+  if (isMockMode()) {
+    return getMockDreamById(id);
+  }
+
   const { data, error } = await supabase
     .from('dreams')
     .select('*, category:categories(*), tags:dream_tags(tag)')
@@ -100,6 +126,10 @@ export async function searchDreams(
   query: string,
   limit = PAGINATION.DEFAULT_PAGE_SIZE
 ): Promise<DreamListItem[]> {
+  if (isMockMode()) {
+    return searchMockDreams(query).slice(0, limit);
+  }
+
   const { data, error } = await supabase
     .rpc('search_dreams', { query, result_limit: limit });
 
@@ -142,6 +172,10 @@ export async function getRelatedDreams(
   dreamId: string,
   limit = 6
 ): Promise<DreamListItem[]> {
+  if (isMockMode()) {
+    return MOCK_DREAMS.filter((d) => d.id !== dreamId).slice(0, limit);
+  }
+
   const dream = await getDreamById(dreamId);
   
   if (!dream?.category_id) {

@@ -211,7 +211,7 @@ Expo/React Native project structure:
 ### Principle II: Seamless Functionality
 - [x] T079 Verify playback progress persists across sessions
 - [x] T080 Confirm no blocking operations in UI thread (check 60fps)
-- [ ] T081 Validate performance budgets (<3s load, <100ms interactions)
+- [x] T081 Validate performance budgets (<3s load, <100ms interactions)
 
 ### Principle III: Beautiful Interfaces
 - [x] T082 Verify design system consistency across all screens
@@ -219,20 +219,20 @@ Expo/React Native project structure:
 - [x] T084 Implement and validate dark/light theme switching
 
 ### Principle IV: Cross-Platform Excellence
-- [ ] T085 Test on iOS simulator (iPhone 15 Pro)
-- [ ] T086 Test on Android emulator (Pixel 7)
-- [ ] T087 Test on web browser (Chrome, Safari)
+- [ ] T085 Test on iOS simulator (iPhone 15 Pro) [BLOCKED: Xcode not installed]
+- [ ] T086 Test on Android emulator (Pixel 7) [BLOCKED: Requires EAS dev build for native modules]
+- [x] T087 Test on web browser (Chrome, Safari)
 - [x] T088 Verify offline capability and graceful degradation
 
 ### Principle V: Effortless Usability
 - [x] T089 Verify all touch targets ≥44pts
-- [ ] T090 Test search with typos for typo tolerance
-- [ ] T091 Validate keyboard navigation for web
+- [x] T090 Test search with typos for typo tolerance
+- [x] T091 Validate keyboard navigation for web
 
 ### Principle VI: Unwavering Stability
 - [x] T092 Confirm graceful degradation for API failures
 - [ ] T093 Validate error tracking configured (Sentry or similar)
-- [ ] T094 Verify app doesn't crash on edge cases
+- [x] T094 Verify app doesn't crash on edge cases
 
 **Checkpoint**: All Constitution principles validated
 
