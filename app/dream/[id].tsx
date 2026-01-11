@@ -34,8 +34,24 @@ export default function DreamDetailScreen() {
   const [playbackMode, setPlaybackMode] = useState<PlaybackMode>('full');
   const [showFullText, setShowFullText] = useState(false);
 
-  const { add: addToQueue } = useLaunchQueue();
+  const { add: addToQueue, remove: removeFromQueue, queue } = useLaunchQueue();
   const { inQueue } = useQueueStatus(id || '');
+  const queueItem = queue.find((item) => item.dream_id === id);
+
+  const handleToggleQueue = useCallback(async () => {
+    if (!id) return;
+
+    try {
+      if (inQueue && queueItem) {
+        await removeFromQueue(queueItem.id);
+      } else {
+        await addToQueue(id);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to update queue';
+      Alert.alert('Error', message);
+    }
+  }, [id, inQueue, queueItem, addToQueue, removeFromQueue]);
 
   const {
     initialPosition,
@@ -96,26 +112,6 @@ export default function DreamDetailScreen() {
     markCompleted();
   }, [markCompleted]);
 
-  const handleAddToQueue = useCallback(async () => {
-    if (!id) return;
-
-    if (!isAuthenticated) {
-      Alert.alert('Sign In Required', 'Create an account to queue dreams for sleep mode.', [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Sign In', onPress: () => router.push('/auth/login' as any) },
-      ]);
-      return;
-    }
-
-    try {
-      await addToQueue(id);
-      Alert.alert('Added to Queue', 'Dream added to your sleep queue.');
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to add to queue';
-      Alert.alert('Error', message);
-    }
-  }, [id, isAuthenticated, addToQueue, router]);
-
   if (isLoading || progressLoading) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
@@ -157,7 +153,7 @@ export default function DreamDetailScreen() {
         <View style={styles.headerActions}>
           <Pressable
             style={[styles.headerButton, inQueue && styles.headerButtonActive]}
-            onPress={handleAddToQueue}
+            onPress={handleToggleQueue}
             hitSlop={8}
           >
             <Ionicons

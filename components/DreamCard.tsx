@@ -1,6 +1,6 @@
 import { memo, useMemo } from 'react';
 import { View, Pressable, StyleSheet } from 'react-native';
-import { Link } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
 import { MarqueeText } from '@/components/ui/MarqueeText';
@@ -23,6 +23,7 @@ function formatDuration(seconds: number): string {
 }
 
 export const DreamCard = memo(function DreamCard({ dream, variant = 'default' }: DreamCardProps) {
+  const router = useRouter();
   const isFeatured = variant === 'featured';
   const isCompact = variant === 'compact';
 
@@ -35,9 +36,13 @@ export const DreamCard = memo(function DreamCard({ dream, variant = 'default' }:
     [isFeatured, isCompact]
   );
 
+  const handleCardPress = () => {
+    router.push(`/dream/${dream.id}`);
+  };
+
   return (
-    <Link href={`/dream/${dream.id}`} asChild>
-      <Pressable style={containerStyle}>
+    <View style={containerStyle}>
+      <Pressable style={styles.cardContent} onPress={handleCardPress}>
         {isFeatured && (
           <View style={{ ...styles.iconSection, ...styles.featuredIconSection }}>
             <Ionicons name="moon-outline" size={32} color={colors.primary[500]} />
@@ -71,18 +76,18 @@ export const DreamCard = memo(function DreamCard({ dream, variant = 'default' }:
             </View>
           )}
         </View>
-        <View style={styles.rightSection}>
-          <Text variant="caption" color="muted" style={styles.duration}>
-            {formatDuration(dream.full_duration_seconds)}
-          </Text>
-          <View style={styles.actionButtons}>
-            <QueueButton dreamId={dream.id} size={18} />
-            <FavoriteButton dreamId={dream.id} size={18} />
-            <Ionicons name="play-circle-outline" size={24} color={colors.gray[500]} />
-          </View>
-        </View>
+        <Text variant="caption" color="muted" style={styles.duration}>
+          {formatDuration(dream.full_duration_seconds)}
+        </Text>
       </Pressable>
-    </Link>
+      <View style={styles.actionButtons}>
+        <QueueButton dreamId={dream.id} size={18} />
+        <FavoriteButton dreamId={dream.id} size={18} />
+        <Pressable onPress={handleCardPress}>
+          <Ionicons name="play-circle-outline" size={24} color={colors.gray[500]} />
+        </Pressable>
+      </View>
+    </View>
   );
 });
 
@@ -155,13 +160,15 @@ const styles = StyleSheet.create({
   duration: {
     fontFamily: fontFamily.regular,
   },
-  rightSection: {
+  cardContent: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
   },
   actionButtons: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
+    marginLeft: 8,
   },
 });

@@ -19,25 +19,31 @@ export function QueueButton({ dreamId, size = 24, showBackground = false }: Queu
 
   const queueItem = queue.find((item) => item.dream_id === dreamId);
 
-  const handlePress = useCallback(async () => {
-    scale.value = withSpring(1.3, { damping: 10 }, () => {
-      scale.value = withSpring(1, { damping: 10 });
-    });
+  const handlePress = useCallback(
+    async (e?: { stopPropagation?: () => void }) => {
+      // Stop propagation to prevent parent Link navigation
+      e?.stopPropagation?.();
 
-    setIsUpdating(true);
-    try {
-      if (inQueue && queueItem) {
-        await remove(queueItem.id);
-      } else {
-        await add(dreamId);
+      scale.value = withSpring(1.3, { damping: 10 }, () => {
+        scale.value = withSpring(1, { damping: 10 });
+      });
+
+      setIsUpdating(true);
+      try {
+        if (inQueue && queueItem) {
+          await remove(queueItem.id);
+        } else {
+          await add(dreamId);
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to update queue';
+        Alert.alert('Error', message);
+      } finally {
+        setIsUpdating(false);
       }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to update queue';
-      Alert.alert('Error', message);
-    } finally {
-      setIsUpdating(false);
-    }
-  }, [inQueue, queueItem, add, remove, dreamId, scale]);
+    },
+    [inQueue, queueItem, add, remove, dreamId, scale]
+  );
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -56,7 +62,7 @@ export function QueueButton({ dreamId, size = 24, showBackground = false }: Queu
   return (
     <Pressable
       style={[styles.button, showBackground && styles.buttonWithBackground]}
-      onPress={handlePress}
+      onPress={(e) => handlePress(e)}
       hitSlop={8}
       accessibilityLabel={inQueue ? 'Remove from queue' : 'Add to queue'}
     >

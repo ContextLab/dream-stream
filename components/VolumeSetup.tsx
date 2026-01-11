@@ -47,7 +47,8 @@ function VolumeSlider({
     onValueChange(newValue);
   };
 
-  const fillPercentage = ((value - minimumValue) / (maximumValue - minimumValue)) * 100;
+  const safeValue = Number.isNaN(value) ? minimumValue : value;
+  const fillPercentage = ((safeValue - minimumValue) / (maximumValue - minimumValue)) * 100;
 
   return (
     <Pressable onPress={handlePress} onLayout={handleLayout} style={styles.sliderTrack}>
@@ -94,6 +95,10 @@ export function VolumeSetup({ onComplete, onSkip, testAudioUrl }: VolumeSetupPro
   };
 
   const cleanup = async () => {
+    if (autoStopTimeoutRef.current) {
+      clearTimeout(autoStopTimeoutRef.current);
+      autoStopTimeoutRef.current = null;
+    }
     if (soundRef.current) {
       try {
         await soundRef.current.unloadAsync();
@@ -102,7 +107,10 @@ export function VolumeSetup({ onComplete, onSkip, testAudioUrl }: VolumeSetupPro
       }
       soundRef.current = null;
     }
+    setIsPlaying(false);
   };
+
+  const autoStopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const playTestAudio = useCallback(async () => {
     setError(null);
@@ -113,6 +121,7 @@ export function VolumeSetup({ onComplete, onSkip, testAudioUrl }: VolumeSetupPro
 
       if (soundRef.current) {
         await soundRef.current.unloadAsync();
+        soundRef.current = null;
       }
 
       const { sound } = await Audio.Sound.createAsync(
@@ -129,11 +138,13 @@ export function VolumeSetup({ onComplete, onSkip, testAudioUrl }: VolumeSetupPro
       setIsPlaying(true);
       setIsLoading(false);
 
-      // Auto-stop after 10 seconds for volume test
-      setTimeout(async () => {
+      if (autoStopTimeoutRef.current) {
+        clearTimeout(autoStopTimeoutRef.current);
+      }
+      autoStopTimeoutRef.current = setTimeout(async () => {
         if (soundRef.current) {
           try {
-            await soundRef.current.stopAsync();
+            await soundRef.current.pauseAsync();
             setIsPlaying(false);
           } catch (e) {
             // Ignore
@@ -156,9 +167,13 @@ export function VolumeSetup({ onComplete, onSkip, testAudioUrl }: VolumeSetupPro
   };
 
   const stopTestAudio = async () => {
+    if (autoStopTimeoutRef.current) {
+      clearTimeout(autoStopTimeoutRef.current);
+      autoStopTimeoutRef.current = null;
+    }
     if (soundRef.current) {
       try {
-        await soundRef.current.stopAsync();
+        await soundRef.current.pauseAsync();
       } catch (e) {
         // Ignore
       }
@@ -256,7 +271,7 @@ export function VolumeSetup({ onComplete, onSkip, testAudioUrl }: VolumeSetupPro
           <Ionicons name="volume-high" size={20} color={colors.gray[500]} />
         </View>
         <Text variant="bodySmall" color="secondary" align="center">
-          Volume: {Math.round(volume * 100)}%
+          Volume: {Math.round((Number.isNaN(volume) ? 0.3 : volume) * 100)}%
         </Text>
         {volumeWarning && (
           <View style={styles.warningBanner}>

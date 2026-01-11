@@ -1,15 +1,17 @@
 import { useState } from 'react';
-import { View, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { View, StyleSheet, ScrollView, Pressable, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text, Heading } from '@/components/ui/Text';
 import { SleepDebugPanel } from '@/components/SleepDebugPanel';
+import { VolumeSetup } from '@/components/VolumeSetup';
 import { colors, spacing } from '@/theme/tokens';
 
 export default function SettingsScreen() {
   const router = useRouter();
   const [showSleepDebug, setShowSleepDebug] = useState(false);
+  const [showVolumeSetup, setShowVolumeSetup] = useState(false);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -21,7 +23,11 @@ export default function SettingsScreen() {
         </View>
 
         <View style={styles.menuSection}>
-          <MenuRow icon="volume-medium-outline" label="Volume & Audio" onPress={() => {}} />
+          <MenuRow
+            icon="volume-medium-outline"
+            label="Volume & Audio"
+            onPress={() => setShowVolumeSetup(true)}
+          />
           <Link href={'/about' as any} asChild>
             <Pressable style={styles.menuRow}>
               <Ionicons name="information-circle-outline" size={24} color={colors.gray[400]} />
@@ -48,6 +54,25 @@ export default function SettingsScreen() {
           </Text>
         </View>
       </ScrollView>
+
+      <Modal
+        visible={showVolumeSetup}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowVolumeSetup(false)}
+      >
+        <SafeAreaView style={styles.modalContainer} edges={['top', 'bottom']}>
+          <View style={styles.modalHeader}>
+            <Pressable onPress={() => setShowVolumeSetup(false)} style={styles.closeButton}>
+              <Ionicons name="close" size={24} color={colors.gray[400]} />
+            </Pressable>
+          </View>
+          <VolumeSetup
+            onComplete={() => setShowVolumeSetup(false)}
+            onSkip={() => setShowVolumeSetup(false)}
+          />
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -109,5 +134,18 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     borderTopWidth: 1,
     borderTopColor: '#252542',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#0f0f1a',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+  },
+  closeButton: {
+    padding: spacing.sm,
   },
 });
