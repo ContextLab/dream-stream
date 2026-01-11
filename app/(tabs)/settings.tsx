@@ -21,14 +21,7 @@ export default function SettingsScreen() {
         </View>
 
         <View style={styles.menuSection}>
-          <MenuRow
-            icon="heart-outline"
-            label="My Favorites"
-            onPress={() => router.push('/(tabs)/favorites')}
-          />
           <MenuRow icon="volume-medium-outline" label="Volume & Audio" onPress={() => {}} />
-          <MenuRow icon="notifications-outline" label="Notifications" onPress={() => {}} />
-          <MenuRow icon="help-circle-outline" label="Help & Support" onPress={() => {}} />
           <Link href={'/about' as any} asChild>
             <Pressable style={styles.menuRow}>
               <Ionicons name="information-circle-outline" size={24} color={colors.gray[400]} />

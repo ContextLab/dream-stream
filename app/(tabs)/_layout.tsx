@@ -2,7 +2,7 @@ import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fontFamily } from '@/theme/tokens';
 
-type TabIconName = 'home' | 'search' | 'heart' | 'settings' | 'moon';
+type TabIconName = 'home' | 'search' | 'heart' | 'settings' | 'moon' | 'list';
 
 function TabBarIcon({
   name,
@@ -19,6 +19,7 @@ function TabBarIcon({
     heart: focused ? 'heart' : 'heart-outline',
     settings: focused ? 'settings' : 'settings-outline',
     moon: focused ? 'moon' : 'moon-outline',
+    list: focused ? 'list' : 'list-outline',
   };
 
   return <Ionicons name={iconMap[name]} size={22} color={color} />;
@@ -72,6 +73,15 @@ export default function TabLayout() {
           title: 'Favorites',
           tabBarIcon: ({ color, focused }) => (
             <TabBarIcon name="heart" color={color} focused={focused} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="queue"
+        options={{
+          title: 'Queue',
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon name="list" color={color} focused={focused} />
           ),
         }}
       />
