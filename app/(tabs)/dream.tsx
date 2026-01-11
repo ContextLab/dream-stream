@@ -188,30 +188,35 @@ export default function DreamScreen() {
   );
 
   const handleStopTracking = useCallback(async () => {
-    Alert.alert('Stop Sleep Tracking', 'Are you sure you want to stop?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Stop',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await cleanup();
-            setIsPlaying(false);
-            setCurrentDream(null);
-            const summary = await stop();
-            if (summary) {
-              Alert.alert(
-                'Sleep Summary',
-                `Total: ${summary.totalDurationMinutes} mins\nREM: ${summary.remMinutes} mins (${summary.remPercentage}%)`
-              );
-            }
-          } catch {
-            Alert.alert('Error', 'Failed to stop sleep tracking');
-          }
-        },
-      },
-    ]);
-  }, [stop]);
+    const doStop = async () => {
+      try {
+        await cleanup();
+        setIsPlaying(false);
+        setCurrentDream(null);
+        const summary = await stop();
+        if (summary) {
+          Alert.alert(
+            'Sleep Summary',
+            `Total: ${summary.totalDurationMinutes} mins\nREM: ${summary.remMinutes} mins (${summary.remPercentage}%)`
+          );
+        }
+      } catch (err) {
+        console.error('Failed to stop sleep tracking:', err);
+        Alert.alert('Error', 'Failed to stop sleep tracking');
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm('Stop Sleep Tracking?\n\nAre you sure you want to stop?')) {
+        await doStop();
+      }
+    } else {
+      Alert.alert('Stop Sleep Tracking', 'Are you sure you want to stop?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Stop', style: 'destructive', onPress: doStop },
+      ]);
+    }
+  }, [stop, cleanup]);
 
   const handleManualPlay = async () => {
     if (isPlaying) {
