@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { View, StyleSheet, Pressable, Vibration, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Audio, AVPlaybackStatus } from 'expo-av';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import Animated, {
   useAnimatedStyle,
   withRepeat,
@@ -14,6 +15,8 @@ import { Text } from '@/components/ui/Text';
 import { colors, spacing } from '@/theme/tokens';
 import { storage } from '@/lib/storage';
 import type { Dream } from '@/types/database';
+
+const KEEP_AWAKE_TAG = 'SleepModePlayer';
 
 interface SleepModePlayerProps {
   dream: Dream;
@@ -90,6 +93,7 @@ export function SleepModePlayer({
       soundRef.current = null;
     }
     cancelAnimation(pulseScale);
+    await deactivateKeepAwake(KEEP_AWAKE_TAG);
   };
 
   const startVolumeEnforcement = () => {
@@ -123,10 +127,11 @@ export function SleepModePlayer({
     }
   };
 
-  const handleComplete = () => {
+  const handleComplete = async () => {
     stopVolumeEnforcement();
     setIsPlaying(false);
     cancelAnimation(pulseScale);
+    await deactivateKeepAwake(KEEP_AWAKE_TAG);
 
     if (enableHaptics && Platform.OS !== 'web') {
       Vibration.vibrate(HAPTIC_PATTERN_PULSE);
@@ -147,6 +152,7 @@ export function SleepModePlayer({
     if (!soundRef.current) return;
 
     try {
+      await activateKeepAwakeAsync(KEEP_AWAKE_TAG);
       await soundRef.current.setVolumeAsync(lockedVolume);
       await soundRef.current.playAsync();
       setIsPlaying(true);
@@ -170,6 +176,7 @@ export function SleepModePlayer({
       stopVolumeEnforcement();
       cancelAnimation(pulseScale);
       pulseScale.value = withTiming(1, { duration: 300 });
+      await deactivateKeepAwake(KEEP_AWAKE_TAG);
     } catch (err) {
       console.warn('Failed to pause audio:', err);
     }
@@ -185,6 +192,7 @@ export function SleepModePlayer({
     setProgress(0);
     cancelAnimation(pulseScale);
     pulseScale.value = withTiming(1, { duration: 300 });
+    await deactivateKeepAwake(KEEP_AWAKE_TAG);
     onStop?.();
   };
 
@@ -206,7 +214,7 @@ export function SleepModePlayer({
       <Animated.View style={[styles.visualizer, animatedStyle]}>
         <View style={styles.innerCircle}>
           <Ionicons
-            name={isPlaying ? 'moon' : 'moon-outline'}
+            name={isPlaying ? 'radio' : 'radio-outline'}
             size={48}
             color={colors.primary[400]}
           />

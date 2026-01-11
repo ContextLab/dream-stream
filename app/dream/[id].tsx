@@ -1,57 +1,27 @@
 import { useEffect, useState, useCallback } from 'react';
-import {
-  View,
-  ScrollView,
-  StyleSheet,
-  ActivityIndicator,
-  Pressable,
-  Alert,
-  Modal,
-} from 'react-native';
+import { View, ScrollView, StyleSheet, ActivityIndicator, Pressable, Modal } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Text, Heading } from '@/components/ui/Text';
+import { Text } from '@/components/ui/Text';
 import { DreamPlayer } from '@/components/DreamPlayer';
 import { DreamRecommendations } from '@/components/DreamRecommendations';
 import { FavoriteButton } from '@/components/FavoriteButton';
-import { ShareButton } from '@/components/ShareButton';
+import { QueueButton } from '@/components/QueueButton';
 import { getDreamById, incrementViewCount } from '@/services/dreams';
 import { usePlaybackProgress } from '@/hooks/usePlaybackProgress';
-import { useAuth } from '@/hooks/useAuth';
-import { useLaunchQueue, useQueueStatus } from '@/hooks/useLaunchQueue';
 import { colors, spacing, borderRadius } from '@/theme/tokens';
 import type { Dream, PlaybackMode } from '@/types/database';
 
 export default function DreamDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { isAuthenticated } = useAuth();
 
   const [dream, setDream] = useState<Dream | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [playbackMode, setPlaybackMode] = useState<PlaybackMode>('full');
   const [showFullText, setShowFullText] = useState(false);
-
-  const { add: addToQueue, remove: removeFromQueue, queue } = useLaunchQueue();
-  const { inQueue } = useQueueStatus(id || '');
-  const queueItem = queue.find((item) => item.dream_id === id);
-
-  const handleToggleQueue = useCallback(async () => {
-    if (!id) return;
-
-    try {
-      if (inQueue && queueItem) {
-        await removeFromQueue(queueItem.id);
-      } else {
-        await addToQueue(id);
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to update queue';
-      Alert.alert('Error', message);
-    }
-  }, [id, inQueue, queueItem, addToQueue, removeFromQueue]);
 
   const {
     initialPosition,
@@ -151,19 +121,8 @@ export default function DreamDetailScreen() {
         </Pressable>
         <View style={styles.headerSpacer} />
         <View style={styles.headerActions}>
-          <Pressable
-            style={[styles.headerButton, inQueue && styles.headerButtonActive]}
-            onPress={handleToggleQueue}
-            hitSlop={8}
-          >
-            <Ionicons
-              name={inQueue ? 'moon' : 'moon-outline'}
-              size={22}
-              color={inQueue ? colors.primary[400] : '#ffffff'}
-            />
-          </Pressable>
+          <QueueButton dreamId={id || ''} showBackground size={22} />
           <FavoriteButton dreamId={id || ''} showBackground />
-          <ShareButton dreamId={id || ''} dreamTitle={dream?.title || ''} showBackground />
         </View>
       </SafeAreaView>
 
@@ -313,9 +272,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-  },
-  headerButtonActive: {
-    backgroundColor: 'rgba(34, 197, 94, 0.3)',
   },
   scrollContent: {
     flex: 1,

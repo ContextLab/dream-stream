@@ -11,10 +11,12 @@ import {
   clearQueue,
   isInQueue,
   reorderQueue,
+  reorderQueueByIndex,
   getNextQueueItem,
   shuffleQueue,
   getRepeatMode,
   setRepeatMode as setRepeatModeService,
+  subscribeToQueueChanges,
   type QueuedDream,
 } from '@/services/launchQueue';
 import { useAuth } from './useAuth';
@@ -37,6 +39,7 @@ interface UseLaunchQueueReturn {
   checkInQueue: (dreamId: string) => Promise<boolean>;
   moveUp: (queueId: string) => Promise<void>;
   moveDown: (queueId: string) => Promise<void>;
+  reorderByIndex: (fromIndex: number, toIndex: number) => Promise<void>;
   getNext: () => Promise<QueuedDream | null>;
   shuffle: () => Promise<void>;
   setRepeatMode: (mode: RepeatMode) => Promise<void>;
@@ -79,6 +82,10 @@ export function useLaunchQueue(): UseLaunchQueueReturn {
 
   useEffect(() => {
     fetchQueue();
+    const unsubscribe = subscribeToQueueChanges(() => {
+      fetchQueue();
+    });
+    return unsubscribe;
   }, [fetchQueue]);
 
   const handleAdd = useCallback(
@@ -242,6 +249,19 @@ export function useLaunchQueue(): UseLaunchQueueReturn {
     }
   }, []);
 
+  const handleReorderByIndex = useCallback(
+    async (fromIndex: number, toIndex: number) => {
+      if (!user) return;
+      try {
+        await reorderQueueByIndex(user.id, fromIndex, toIndex);
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('Failed to reorder'));
+        throw err;
+      }
+    },
+    [user]
+  );
+
   return {
     queue,
     activeItem,
@@ -259,6 +279,7 @@ export function useLaunchQueue(): UseLaunchQueueReturn {
     checkInQueue: handleCheckInQueue,
     moveUp: handleMoveUp,
     moveDown: handleMoveDown,
+    reorderByIndex: handleReorderByIndex,
     getNext: handleGetNext,
     shuffle: handleShuffle,
     setRepeatMode: handleSetRepeatMode,

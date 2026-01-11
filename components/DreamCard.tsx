@@ -45,7 +45,7 @@ export const DreamCard = memo(function DreamCard({ dream, variant = 'default' }:
       <Pressable style={styles.cardContent} onPress={handleCardPress}>
         {isFeatured && (
           <View style={{ ...styles.iconSection, ...styles.featuredIconSection }}>
-            <Ionicons name="moon-outline" size={32} color={colors.primary[500]} />
+            <Ionicons name="radio-outline" size={32} color={colors.primary[500]} />
           </View>
         )}
         <View style={isCompact ? { ...styles.content, ...styles.compactContent } : styles.content}>
@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
   actionButtons: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 12,
     marginLeft: 8,
   },
 });

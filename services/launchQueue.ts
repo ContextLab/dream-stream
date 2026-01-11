@@ -12,6 +12,18 @@ import { getDreamById } from './dreams';
 const STORAGE_KEY_QUEUE = 'dream_launch_queue';
 const STORAGE_KEY_SETTINGS = 'dream_queue_settings';
 
+type QueueChangeListener = () => void;
+const queueChangeListeners = new Set<QueueChangeListener>();
+
+export function subscribeToQueueChanges(listener: QueueChangeListener): () => void {
+  queueChangeListeners.add(listener);
+  return () => queueChangeListeners.delete(listener);
+}
+
+function notifyQueueChanged(): void {
+  queueChangeListeners.forEach((listener) => listener());
+}
+
 export interface QueuedDream extends DreamLaunchQueue {
   dream: Dream;
 }
@@ -81,6 +93,7 @@ export async function shuffleQueue(userId: string): Promise<void> {
 
   queue.items = [...activeItems, ...inactiveItems];
   await setLocalQueue(queue);
+  notifyQueueChanged();
 }
 
 export async function getQueuedDreams(userId: string): Promise<QueuedDream[]> {
@@ -143,6 +156,7 @@ export async function addToQueue(
 
   queue.items.push(newItem);
   await setLocalQueue(queue);
+  notifyQueueChanged();
 
   return newItem;
 }
@@ -151,6 +165,7 @@ export async function removeFromQueue(queueId: string): Promise<void> {
   const queue = await getLocalQueue();
   queue.items = queue.items.filter((item) => item.id !== queueId);
   await setLocalQueue(queue);
+  notifyQueueChanged();
 }
 
 export async function updateQueueStatus(
@@ -170,6 +185,7 @@ export async function updateQueueStatus(
   }
 
   await setLocalQueue(queue);
+  notifyQueueChanged();
   return item;
 }
 
@@ -195,6 +211,7 @@ export async function clearQueue(userId: string): Promise<void> {
     (item) => item.user_id !== userId || !['pending', 'ready'].includes(item.status)
   );
   await setLocalQueue(queue);
+  notifyQueueChanged();
 }
 
 export async function isInQueue(userId: string, dreamId: string): Promise<boolean> {
@@ -248,6 +265,32 @@ export async function reorderQueue(
 
   queue.items = [...activeItems, ...inactiveItems];
   await setLocalQueue(queue);
+  notifyQueueChanged();
+}
+
+export async function reorderQueueByIndex(
+  userId: string,
+  fromIndex: number,
+  toIndex: number
+): Promise<void> {
+  const queue = await getLocalQueue();
+  const activeItems = queue.items.filter(
+    (item) => item.user_id === userId && ['pending', 'ready'].includes(item.status)
+  );
+  const inactiveItems = queue.items.filter(
+    (item) => item.user_id !== userId || !['pending', 'ready'].includes(item.status)
+  );
+
+  if (fromIndex < 0 || fromIndex >= activeItems.length) return;
+  if (toIndex < 0 || toIndex >= activeItems.length) return;
+  if (fromIndex === toIndex) return;
+
+  const [movedItem] = activeItems.splice(fromIndex, 1);
+  activeItems.splice(toIndex, 0, movedItem);
+
+  queue.items = [...activeItems, ...inactiveItems];
+  await setLocalQueue(queue);
+  notifyQueueChanged();
 }
 
 export async function getNextQueueItem(userId: string): Promise<QueuedDream | null> {

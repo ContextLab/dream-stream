@@ -29,6 +29,7 @@ export default function QueueScreen() {
     remove,
     moveUp,
     moveDown,
+    reorderByIndex,
     clear,
     shuffle,
     repeatMode,
@@ -89,6 +90,17 @@ export default function QueueScreen() {
       }
     },
     [moveDown]
+  );
+
+  const handleDragEnd = useCallback(
+    async (fromIndex: number, toIndex: number) => {
+      try {
+        await reorderByIndex(fromIndex, toIndex);
+      } catch {
+        Alert.alert('Error', 'Failed to reorder queue');
+      }
+    },
+    [reorderByIndex]
   );
 
   const handleClear = useCallback(async () => {
@@ -231,7 +243,7 @@ export default function QueueScreen() {
                 Start Sleep Mode
               </Button>
               <Text variant="caption" color="muted" style={styles.dragHint}>
-                Use arrows to reorder
+                Drag to reorder
               </Text>
               {queue.map((item, index) => (
                 <LaunchQueueCard
@@ -245,6 +257,7 @@ export default function QueueScreen() {
                   onRemove={() => handleRemove(item.id)}
                   onMoveUp={() => handleMoveUp(item.id)}
                   onMoveDown={() => handleMoveDown(item.id)}
+                  onDragEnd={handleDragEnd}
                 />
               ))}
             </View>

@@ -194,7 +194,7 @@ export function DreamPlayer({
     <View style={styles.container}>
       <View style={styles.visualizer}>
         <Ionicons
-          name={isPlaying ? 'radio-outline' : 'moon-outline'}
+          name={isPlaying ? 'radio' : 'radio-outline'}
           size={64}
           color={isPlaying ? colors.primary[500] : colors.gray[600]}
         />
