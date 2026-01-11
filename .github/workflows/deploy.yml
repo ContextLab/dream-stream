@@ -11,7 +11,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: "pages"
+  group: 'pages'
   cancel-in-progress: true
 
 jobs:
@@ -27,28 +27,8 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install ffmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
-
-      - name: Install Python dependencies
-        run: pip install edge-tts
-
-      - name: Cache generated audio
-        uses: actions/cache@v4
-        id: audio-cache
-        with:
-          path: public/audio/dreams
-          # Cache key based on dreamData.ts content - regenerates when narratives change
-          key: audio-${{ hashFiles('lib/dreamData.ts') }}
-
-      - name: Generate dream audio
-        if: steps.audio-cache.outputs.cache-hit != 'true'
-        run: python scripts/generate_audio.py
+      # Audio files are pre-generated and committed to the repo
+      # To regenerate: python scripts/generate_audio.py && python scripts/generate_music.py --all
 
       - name: Install dependencies
         run: npm ci
