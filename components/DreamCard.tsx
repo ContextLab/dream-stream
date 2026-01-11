@@ -53,6 +53,7 @@ export const DreamCard = memo(function DreamCard({ dream, variant = 'default' }:
               variant="h4"
               weight="semibold"
               style={styles.title}
+              containerStyle={styles.marqueeContainer}
               speed={25}
               pauseDuration={2000}
             >
@@ -137,6 +138,9 @@ const styles = StyleSheet.create({
   },
   title: {
     color: colors.gray[100],
+  },
+  marqueeContainer: {
+    marginHorizontal: 10,
   },
   metaRow: {
     flexDirection: 'row',
