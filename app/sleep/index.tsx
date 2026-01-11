@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, ScrollView, Alert, Pressable, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -12,7 +12,12 @@ import { MusicSettings } from '@/components/MusicSettings';
 import { useSleepTracking } from '@/hooks/useSleepTracking';
 import { useLaunchQueue } from '@/hooks/useLaunchQueue';
 import { useWearable } from '@/hooks/useWearable';
-import { getSleepStageDisplayName, getSleepStageColor } from '@/services/sleep';
+import {
+  getSleepStageDisplayName,
+  getSleepStageColor,
+  onRemStart,
+  onRemEnd,
+} from '@/services/sleep';
 import { colors, spacing, borderRadius, fontFamily } from '@/theme/tokens';
 import type { RepeatMode } from '@/types/database';
 
@@ -44,17 +49,52 @@ export default function SleepScreen() {
   } = useLaunchQueue();
   const [showVolumeSetup, setShowVolumeSetup] = useState(false);
   const [setupTab, setSetupTab] = useState<'volume' | 'music'>('volume');
+  const remUnsubscribeRef = useRef<(() => void) | null>(null);
+  const remEndUnsubscribeRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    if (isTracking && queue.length > 0) {
+      remUnsubscribeRef.current = onRemStart(() => {
+        console.log('[Sleep] REM detected - launching dream');
+        const firstReady = queue.find((item) => item.status === 'ready');
+        const firstPending = queue.find((item) => item.status === 'pending');
+        const itemToLaunch = firstReady || firstPending;
+
+        if (itemToLaunch) {
+          handleLaunch(itemToLaunch.id);
+        }
+      });
+
+      remEndUnsubscribeRef.current = onRemEnd(() => {
+        console.log('[Sleep] REM ended');
+      });
+    }
+
+    return () => {
+      if (remUnsubscribeRef.current) {
+        remUnsubscribeRef.current();
+        remUnsubscribeRef.current = null;
+      }
+      if (remEndUnsubscribeRef.current) {
+        remEndUnsubscribeRef.current();
+        remEndUnsubscribeRef.current = null;
+      }
+    };
+  }, [isTracking, queue]);
 
   const handleVolumeComplete = useCallback(
     async (volume: number) => {
       setShowVolumeSetup(false);
       try {
-        await start(connectedDevice ? 'wearable' : 'manual');
+        await start('audio');
       } catch {
-        Alert.alert('Error', 'Failed to start sleep tracking');
+        Alert.alert(
+          'Error',
+          'Failed to start sleep tracking. Please ensure microphone access is enabled.'
+        );
       }
     },
-    [start, connectedDevice]
+    [start]
   );
 
   const handleStartTracking = useCallback(() => {
@@ -394,8 +434,11 @@ export default function SleepScreen() {
               onComplete={handleVolumeComplete}
               onSkip={() => {
                 setShowVolumeSetup(false);
-                start(connectedDevice ? 'wearable' : 'manual').catch(() => {
-                  Alert.alert('Error', 'Failed to start sleep tracking');
+                start('audio').catch(() => {
+                  Alert.alert(
+                    'Error',
+                    'Failed to start sleep tracking. Please ensure microphone access is enabled.'
+                  );
                 });
               }}
             />
