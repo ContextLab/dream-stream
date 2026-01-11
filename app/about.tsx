@@ -14,19 +14,15 @@ export default function AboutScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <Stack.Screen
-        options={{
-          title: 'About',
-          headerShown: true,
-          headerStyle: { backgroundColor: colors.gray[950] },
-          headerTintColor: colors.gray[100],
-          headerLeft: () => (
-            <Pressable onPress={() => router.back()} hitSlop={8}>
-              <Ionicons name="arrow-back" size={24} color={colors.gray[100]} />
-            </Pressable>
-          ),
-        }}
-      />
+      <Stack.Screen options={{ headerShown: false }} />
+      <View style={styles.header}>
+        <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={8}>
+          <Ionicons name="arrow-back" size={24} color={colors.gray[100]} />
+          <Text variant="body" color="primary">
+            Back
+          </Text>
+        </Pressable>
+      </View>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
         <View style={styles.heroSection}>
           <Heading variant="h1" color="primary">
@@ -200,6 +196,19 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.gray[950],
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray[800],
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
   },
   scrollView: {
     flex: 1,

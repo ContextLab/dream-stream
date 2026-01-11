@@ -1,16 +1,14 @@
 import { useState } from 'react';
-import { View, StyleSheet, ScrollView, Pressable, Switch } from 'react-native';
+import { View, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text, Heading } from '@/components/ui/Text';
-import { useTheme } from '@/components/ThemeProvider';
 import { SleepDebugPanel } from '@/components/SleepDebugPanel';
 import { colors, spacing } from '@/theme/tokens';
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { isDark, toggleTheme } = useTheme();
   const [showSleepDebug, setShowSleepDebug] = useState(false);
 
   return (
@@ -28,18 +26,6 @@ export default function SettingsScreen() {
             label="My Favorites"
             onPress={() => router.push('/(tabs)/favorites')}
           />
-          <View style={styles.themeRow}>
-            <Ionicons name={isDark ? 'moon' : 'sunny'} size={24} color={colors.gray[400]} />
-            <Text variant="body" color="primary" style={styles.menuLabel}>
-              Dark Mode
-            </Text>
-            <Switch
-              value={isDark}
-              onValueChange={toggleTheme}
-              trackColor={{ false: colors.gray[600], true: colors.primary[500] }}
-              thumbColor="#ffffff"
-            />
-          </View>
           <MenuRow icon="volume-medium-outline" label="Volume & Audio" onPress={() => {}} />
           <MenuRow icon="notifications-outline" label="Notifications" onPress={() => {}} />
           <MenuRow icon="help-circle-outline" label="Help & Support" onPress={() => {}} />
@@ -120,11 +106,6 @@ const styles = StyleSheet.create({
   menuLabel: {
     flex: 1,
     marginLeft: spacing.md,
-  },
-  themeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.md,
   },
   versionSection: {
     padding: spacing.xl,
