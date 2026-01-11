@@ -1,5 +1,13 @@
 import { useEffect, useState, useCallback } from 'react';
-import { View, ScrollView, StyleSheet, ActivityIndicator, Pressable, Alert, Modal } from 'react-native';
+import {
+  View,
+  ScrollView,
+  StyleSheet,
+  ActivityIndicator,
+  Pressable,
+  Alert,
+  Modal,
+} from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -90,16 +98,12 @@ export default function DreamDetailScreen() {
 
   const handleAddToQueue = useCallback(async () => {
     if (!id) return;
-    
+
     if (!isAuthenticated) {
-      Alert.alert(
-        'Sign In Required',
-        'Create an account to queue dreams for sleep mode.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Sign In', onPress: () => router.push('/auth/login') },
-        ]
-      );
+      Alert.alert('Sign In Required', 'Create an account to queue dreams for sleep mode.', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sign In', onPress: () => router.push('/auth/login' as any) },
+      ]);
       return;
     }
 
@@ -142,7 +146,11 @@ export default function DreamDetailScreen() {
       <Stack.Screen options={{ headerShown: false }} />
 
       <SafeAreaView edges={['top']} style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.headerButton} hitSlop={8}>
+        <Pressable
+          onPress={() => router.replace('/(tabs)')}
+          style={styles.headerButton}
+          hitSlop={8}
+        >
           <Ionicons name="arrow-back" size={24} color="#ffffff" />
         </Pressable>
         <View style={styles.headerSpacer} />
@@ -169,10 +177,7 @@ export default function DreamDetailScreen() {
             style={[styles.modeButton, playbackMode === 'preview' && styles.modeButtonActive]}
             onPress={() => setPlaybackMode('preview')}
           >
-            <Text 
-              variant="bodySmall" 
-              color={playbackMode === 'preview' ? 'primary' : 'secondary'}
-            >
+            <Text variant="bodySmall" color={playbackMode === 'preview' ? 'primary' : 'secondary'}>
               Preview
             </Text>
           </Pressable>
@@ -180,10 +185,7 @@ export default function DreamDetailScreen() {
             style={[styles.modeButton, playbackMode === 'full' && styles.modeButtonActive]}
             onPress={() => setPlaybackMode('full')}
           >
-            <Text 
-              variant="bodySmall" 
-              color={playbackMode === 'full' ? 'primary' : 'secondary'}
-            >
+            <Text variant="bodySmall" color={playbackMode === 'full' ? 'primary' : 'secondary'}>
               Full Dream
             </Text>
           </Pressable>
@@ -237,14 +239,23 @@ export default function DreamDetailScreen() {
       >
         <SafeAreaView style={styles.modalContainer} edges={['top', 'bottom']}>
           <View style={styles.modalHeader}>
-            <Text variant="h4" weight="semibold" color="primary" numberOfLines={1} style={styles.modalTitle}>
+            <Text
+              variant="h4"
+              weight="semibold"
+              color="primary"
+              numberOfLines={1}
+              style={styles.modalTitle}
+            >
               {dream.title}
             </Text>
             <Pressable onPress={() => setShowFullText(false)} style={styles.modalCloseButton}>
               <Ionicons name="close" size={24} color={colors.gray[400]} />
             </Pressable>
           </View>
-          <ScrollView style={styles.modalContent} contentContainerStyle={styles.modalContentContainer}>
+          <ScrollView
+            style={styles.modalContent}
+            contentContainerStyle={styles.modalContentContainer}
+          >
             <Text variant="body" color="secondary" style={styles.fullText}>
               {dream.content.replace(/\[PAUSE\]/g, '\n\n')}
             </Text>

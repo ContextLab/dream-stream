@@ -104,7 +104,7 @@ def ensure_silence_files():
 def parse_dream_data() -> list[DreamContent]:
     """Extract dream content from dreamData.ts"""
     content = DREAM_DATA_PATH.read_text()
-    pattern = r"\{\s*title:\s*['\"]([^'\"]+)['\"],\s*music:\s*['\"]([^'\"]+)['\"],\s*content:\s*`([^`]+)`"
+    pattern = r"\{\s*title:\s*['\"](.+?)['\"],\s*music:\s*['\"]([^'\"]+)['\"],\s*content:\s*`([^`]+)`"
     matches = re.findall(pattern, content, re.DOTALL)
 
     dreams = []

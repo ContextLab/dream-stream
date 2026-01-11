@@ -38,15 +38,11 @@ export const DreamCard = memo(function DreamCard({ dream, variant = 'default' }:
   return (
     <Link href={`/dream/${dream.id}`} asChild>
       <Pressable style={containerStyle}>
-        <View
-          style={
-            isFeatured
-              ? { ...styles.iconSection, ...styles.featuredIconSection }
-              : styles.iconSection
-          }
-        >
-          <Ionicons name="moon-outline" size={isFeatured ? 32 : 24} color={colors.primary[500]} />
-        </View>
+        {isFeatured && (
+          <View style={{ ...styles.iconSection, ...styles.featuredIconSection }}>
+            <Ionicons name="moon-outline" size={32} color={colors.primary[500]} />
+          </View>
+        )}
         <View style={isCompact ? { ...styles.content, ...styles.compactContent } : styles.content}>
           {isFeatured ? (
             <MarqueeText
@@ -64,28 +60,26 @@ export const DreamCard = memo(function DreamCard({ dream, variant = 'default' }:
               {dream.title}
             </Text>
           )}
-          <View style={styles.metaRow}>
-            {dream.category && (
-              <View style={styles.categoryContainer}>
-                {dream.category.color && (
-                  <View style={[styles.categoryDot, { backgroundColor: dream.category.color }]} />
-                )}
-                <Text variant="caption" color="secondary">
-                  {dream.category.name}
-                </Text>
-              </View>
-            )}
-            <Text variant="caption" color="muted" style={styles.duration}>
-              {formatDuration(dream.full_duration_seconds)}
-            </Text>
+          {dream.category && (
+            <View style={styles.categoryContainer}>
+              {dream.category.color && (
+                <View style={[styles.categoryDot, { backgroundColor: dream.category.color }]} />
+              )}
+              <Text variant="caption" color="secondary">
+                {dream.category.name}
+              </Text>
+            </View>
+          )}
+        </View>
+        <View style={styles.rightSection}>
+          <Text variant="caption" color="muted" style={styles.duration}>
+            {formatDuration(dream.full_duration_seconds)}
+          </Text>
+          <View style={styles.actionButtons}>
+            <QueueButton dreamId={dream.id} size={18} />
+            <FavoriteButton dreamId={dream.id} size={18} />
+            <Ionicons name="play-circle-outline" size={24} color={colors.gray[500]} />
           </View>
-        </View>
-        <View style={styles.actionButtons}>
-          <QueueButton dreamId={dream.id} size={18} />
-          <FavoriteButton dreamId={dream.id} size={18} />
-        </View>
-        <View style={styles.playIcon}>
-          <Ionicons name="play-circle-outline" size={28} color={colors.gray[500]} />
         </View>
       </Pressable>
     </Link>
@@ -161,11 +155,13 @@ const styles = StyleSheet.create({
   duration: {
     fontFamily: fontFamily.regular,
   },
+  rightSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   actionButtons: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  playIcon: {
-    marginLeft: 4,
   },
 });

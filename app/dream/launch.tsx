@@ -26,7 +26,7 @@ export default function DreamLaunchScreen() {
     try {
       await complete(activeItem.id);
       Alert.alert('Dream Complete', 'Your dream session has ended.', [
-        { text: 'OK', onPress: () => router.back() },
+        { text: 'OK', onPress: () => router.replace('/(tabs)') },
       ]);
     } catch {
       Alert.alert('Error', 'Failed to mark dream as complete');
@@ -36,25 +36,21 @@ export default function DreamLaunchScreen() {
   const handleStop = useCallback(async () => {
     if (!activeItem) return;
 
-    Alert.alert(
-      'Stop Dream',
-      'Are you sure you want to stop this dream?',
-      [
-        { text: 'Continue', style: 'cancel' },
-        {
-          text: 'Stop',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await cancel(activeItem.id);
-              router.back();
-            } catch {
-              Alert.alert('Error', 'Failed to stop dream');
-            }
-          },
+    Alert.alert('Stop Dream', 'Are you sure you want to stop this dream?', [
+      { text: 'Continue', style: 'cancel' },
+      {
+        text: 'Stop',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await cancel(activeItem.id);
+            router.replace('/(tabs)');
+          } catch {
+            Alert.alert('Error', 'Failed to stop dream');
+          }
         },
-      ]
-    );
+      },
+    ]);
   }, [activeItem, cancel, router]);
 
   if (!activeItem) {
@@ -68,7 +64,7 @@ export default function DreamLaunchScreen() {
           <Text variant="body" color="secondary" align="center" style={styles.noItemMessage}>
             Queue a dream and mark it as ready to launch it here
           </Text>
-          <Button variant="primary" onPress={() => router.back()}>
+          <Button variant="primary" onPress={() => router.replace('/(tabs)')}>
             Go Back
           </Button>
         </View>

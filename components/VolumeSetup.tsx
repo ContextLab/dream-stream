@@ -57,10 +57,10 @@ function VolumeSlider({
   );
 }
 
-// Base URL for audio files (GitHub Pages in production, local in dev)
 const AUDIO_BASE_URL =
-  process.env.EXPO_PUBLIC_AUDIO_BASE_URL ||
-  'https://context-lab.github.io/dream-stream/audio/dreams';
+  Platform.OS === 'web'
+    ? '/dream-stream/audio/dreams'
+    : 'https://context-lab.com/dream-stream/audio/dreams';
 
 export function VolumeSetup({ onComplete, onSkip, testAudioUrl }: VolumeSetupProps) {
   const [volume, setVolume] = useState(0.3);
