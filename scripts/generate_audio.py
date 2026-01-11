@@ -366,6 +366,16 @@ async def main():
             print(f"  Duration: {result['duration_seconds'] / 60:.1f} min")
             print(f"  Size: {result['full_size_bytes'] / 1024 / 1024:.1f} MB")
 
+            # Generate music immediately after TTS (don't wait until end)
+            if not args.no_music:
+                print(f"  Generating music...")
+                music_script = Path(__file__).parent / "generate_music.py"
+                if music_script.exists():
+                    subprocess.run(
+                        [sys.executable, str(music_script), "--dream", result["id"]],
+                        check=False,
+                    )
+
     manifest_path = OUTPUT_DIR / "manifest.json"
     if manifest_path.exists():
         with open(manifest_path, "r") as f:
@@ -385,17 +395,6 @@ async def main():
     print(f"Dreams processed: {len(results)}")
     print(f"Total duration: {total_duration / 60:.1f} minutes")
     print(f"Total size: {total_size / 1024 / 1024:.1f} MB")
-
-    if not args.no_music and results:
-        print("\nGenerating music...")
-        music_script = Path(__file__).parent / "generate_music.py"
-        if music_script.exists():
-            for result in results:
-                print(f"  Music for {result['id']}...")
-                subprocess.run(
-                    [sys.executable, str(music_script), "--dream", result["id"]],
-                    check=False,
-                )
 
 
 if __name__ == "__main__":
