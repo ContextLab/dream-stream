@@ -6,8 +6,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { Text, MonoText } from '@/components/ui/Text';
 import { DreamFeed } from '@/components/DreamFeed';
 import { CategoryFilter } from '@/components/CategoryFilter';
-import { useDreams, useFeaturedDreams } from '@/hooks/useDreams';
+import { useDreams } from '@/hooks/useDreams';
 import { useCategories } from '@/hooks/useCategories';
+import { useFavorites } from '@/hooks/useFavorites';
 import { colors, spacing, borderRadius } from '@/theme/tokens';
 import type { DreamListOptions } from '@/services/dreams';
 
@@ -38,10 +39,16 @@ export default function HomeScreen() {
     [selectedCategories]
   );
 
-  const { dreams, isLoading, isLoadingMore, hasMore, error, refresh, loadMore } =
-    useDreams(dreamsOptions);
+  const { favoriteIds } = useFavorites();
 
-  const { dreams: featuredDreams } = useFeaturedDreams(3);
+  const dreamsOptionsWithFavorites = useMemo<DreamListOptions>(
+    () => ({ ...dreamsOptions, favoriteIds }),
+    [dreamsOptions, favoriteIds]
+  );
+
+  const { dreams, isLoading, isLoadingMore, hasMore, error, refresh, loadMore } = useDreams(
+    dreamsOptionsWithFavorites
+  );
 
   const headerComponent = (
     <View>
@@ -73,13 +80,6 @@ export default function HomeScreen() {
         onClearAll={handleClearCategories}
         isLoading={categoriesLoading}
       />
-      {selectedCategories.size === 0 && featuredDreams.length > 0 && (
-        <View style={styles.sectionHeader}>
-          <Text variant="label" color="accent">
-            FEATURED
-          </Text>
-        </View>
-      )}
     </View>
   );
 
@@ -136,10 +136,5 @@ const styles = StyleSheet.create({
   },
   instructionsText: {
     lineHeight: 20,
-  },
-  sectionHeader: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
   },
 });

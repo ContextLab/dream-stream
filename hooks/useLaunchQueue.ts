@@ -266,37 +266,7 @@ export function useLaunchQueue(): UseLaunchQueueReturn {
 }
 
 export function useQueueStatus(dreamId: string) {
-  const { user } = useAuth();
-  const [inQueue, setInQueue] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-
-  useEffect(() => {
-    if (!user || !dreamId) {
-      setInQueue(false);
-      return;
-    }
-
-    let mounted = true;
-
-    async function check() {
-      setIsLoading(true);
-      try {
-        const result = await isInQueue(user!.id, dreamId);
-        if (mounted) {
-          setInQueue(result);
-        }
-      } catch {}
-      if (mounted) {
-        setIsLoading(false);
-      }
-    }
-
-    check();
-
-    return () => {
-      mounted = false;
-    };
-  }, [user, dreamId]);
-
+  const { queue, isLoading } = useLaunchQueue();
+  const inQueue = queue.some((item) => item.dream_id === dreamId);
   return { inQueue, isLoading };
 }

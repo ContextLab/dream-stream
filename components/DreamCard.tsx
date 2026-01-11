@@ -3,6 +3,7 @@ import { View, Pressable, StyleSheet } from 'react-native';
 import { Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
+import { MarqueeText } from '@/components/ui/MarqueeText';
 import { FavoriteButton } from '@/components/FavoriteButton';
 import { QueueButton } from '@/components/QueueButton';
 import { colors, touchTargetMinSize, borderRadius, fontFamily } from '@/theme/tokens';
@@ -45,21 +46,23 @@ export const DreamCard = memo(function DreamCard({ dream, variant = 'default' }:
           }
         >
           <Ionicons name="moon-outline" size={isFeatured ? 32 : 24} color={colors.primary[500]} />
-          {dream.is_featured && !isFeatured && (
-            <View style={styles.featuredBadge}>
-              <Ionicons name="star" size={10} color={colors.gray[950]} />
-            </View>
-          )}
         </View>
         <View style={isCompact ? { ...styles.content, ...styles.compactContent } : styles.content}>
-          <Text
-            variant={isFeatured ? 'h4' : 'body'}
-            weight="semibold"
-            numberOfLines={isFeatured ? 2 : 1}
-            style={styles.title}
-          >
-            {dream.title}
-          </Text>
+          {isFeatured ? (
+            <MarqueeText
+              variant="h4"
+              weight="semibold"
+              style={styles.title}
+              speed={25}
+              pauseDuration={2000}
+            >
+              {dream.title}
+            </MarqueeText>
+          ) : (
+            <Text variant="body" weight="semibold" numberOfLines={1} style={styles.title}>
+              {dream.title}
+            </Text>
+          )}
           <View style={styles.metaRow}>
             {dream.category && (
               <View style={styles.categoryContainer}>
@@ -125,17 +128,6 @@ const styles = StyleSheet.create({
     marginRight: 0,
     marginBottom: 12,
     alignSelf: 'center',
-  },
-  featuredBadge: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: colors.primary[500],
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   content: {
     flex: 1,

@@ -222,6 +222,14 @@ export default function QueueScreen() {
             </View>
           ) : (
             <View style={styles.queueList}>
+              <Button
+                variant="primary"
+                onPress={() => router.push('/(tabs)/dream')}
+                leftIcon={<Ionicons name="play" size={20} color="#ffffff" />}
+                style={styles.playQueueButton}
+              >
+                Start Sleep Mode
+              </Button>
               <Text variant="caption" color="muted" style={styles.dragHint}>
                 Use arrows to reorder
               </Text>
@@ -312,6 +320,9 @@ const styles = StyleSheet.create({
   },
   queueList: {
     gap: spacing.md,
+  },
+  playQueueButton: {
+    marginBottom: spacing.md,
   },
   dragHint: {
     textAlign: 'center',

@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { View, TextInput, Pressable, StyleSheet, Keyboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, touchTargetMinSize, borderRadius } from '@/theme/tokens';
+import { colors, touchTargetMinSize, borderRadius, fontFamily } from '@/theme/tokens';
 
 interface SearchBarProps {
   placeholder?: string;
@@ -125,6 +125,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#ffffff',
     paddingVertical: 12,
+    fontFamily: fontFamily.regular,
   },
   clearButton: {
     padding: 4,

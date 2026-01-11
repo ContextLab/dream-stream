@@ -16,7 +16,7 @@ export default function AboutScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={8}>
+        <Pressable onPress={() => router.replace('/(tabs)')} style={styles.backButton} hitSlop={8}>
           <Ionicons name="arrow-back" size={24} color={colors.gray[100]} />
           <Text variant="body" color="primary">
             Back
@@ -246,7 +246,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: colors.primary[900],
+    backgroundColor: colors.primary[600],
     alignItems: 'center',
     justifyContent: 'center',
   },

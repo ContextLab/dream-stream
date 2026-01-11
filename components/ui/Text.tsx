@@ -1,10 +1,20 @@
 import { Text as RNText, TextProps as RNTextProps, StyleSheet } from 'react-native';
 import { colors, fontFamily } from '@/theme/tokens';
 
-type TextVariant = 'h1' | 'h2' | 'h3' | 'h4' | 'body' | 'bodySmall' | 'caption' | 'label' | 'mono' | 'code';
+type TextVariant =
+  | 'h1'
+  | 'h2'
+  | 'h3'
+  | 'h4'
+  | 'body'
+  | 'bodySmall'
+  | 'caption'
+  | 'label'
+  | 'mono'
+  | 'code';
 type TextWeight = 'normal' | 'medium' | 'semibold' | 'bold';
 
-interface TextProps extends RNTextProps {
+export interface TextProps extends RNTextProps {
   variant?: TextVariant;
   weight?: TextWeight;
   color?: 'primary' | 'secondary' | 'muted' | 'error' | 'success' | 'accent' | 'inherit';
@@ -20,7 +30,13 @@ const variantStyles = StyleSheet.create({
   body: { fontSize: 15, lineHeight: 24, fontFamily: fontFamily.regular },
   bodySmall: { fontSize: 13, lineHeight: 20, fontFamily: fontFamily.regular },
   caption: { fontSize: 11, lineHeight: 16, letterSpacing: 0.2, fontFamily: fontFamily.regular },
-  label: { fontSize: 11, lineHeight: 16, letterSpacing: 1.2, textTransform: 'uppercase', fontFamily: fontFamily.bold },
+  label: {
+    fontSize: 11,
+    lineHeight: 16,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    fontFamily: fontFamily.bold,
+  },
   mono: { fontSize: 14, lineHeight: 22, fontFamily: fontFamily.regular },
   code: { fontSize: 13, lineHeight: 20, fontFamily: fontFamily.regular, letterSpacing: -0.3 },
 });
@@ -94,7 +110,10 @@ export function Text({
   );
 }
 
-export function Heading({ variant = 'h2', ...props }: Omit<TextProps, 'variant'> & { variant?: 'h1' | 'h2' | 'h3' | 'h4' }) {
+export function Heading({
+  variant = 'h2',
+  ...props
+}: Omit<TextProps, 'variant'> & { variant?: 'h1' | 'h2' | 'h3' | 'h4' }) {
   return <Text variant={variant} {...props} />;
 }
 

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { DreamListItem, PaginatedResponse } from '@/types/database';
-import { getDreams, getFeaturedDreams, searchDreams, type DreamListOptions } from '@/services/dreams';
+import { getDreams, searchDreams, type DreamListOptions } from '@/services/dreams';
 
 interface UseDreamsState {
   dreams: DreamListItem[];
@@ -28,35 +28,38 @@ export function useDreams(options: DreamListOptions = {}): UseDreamsReturn {
     totalCount: 0,
   });
 
-  const fetchDreams = useCallback(async (page = 1, append = false) => {
-    try {
-      setState((prev) => ({
-        ...prev,
-        isLoading: page === 1 && !append,
-        isLoadingMore: page > 1 || append,
-        error: null,
-      }));
+  const fetchDreams = useCallback(
+    async (page = 1, append = false) => {
+      try {
+        setState((prev) => ({
+          ...prev,
+          isLoading: page === 1 && !append,
+          isLoadingMore: page > 1 || append,
+          error: null,
+        }));
 
-      const result = await getDreams({ ...options, page });
+        const result = await getDreams({ ...options, page });
 
-      setState((prev) => ({
-        ...prev,
-        dreams: append ? [...prev.dreams, ...result.data] : result.data,
-        isLoading: false,
-        isLoadingMore: false,
-        hasMore: result.hasMore,
-        page: result.page,
-        totalCount: result.count,
-      }));
-    } catch (err) {
-      setState((prev) => ({
-        ...prev,
-        isLoading: false,
-        isLoadingMore: false,
-        error: err instanceof Error ? err : new Error('Failed to fetch dreams'),
-      }));
-    }
-  }, [JSON.stringify(options)]);
+        setState((prev) => ({
+          ...prev,
+          dreams: append ? [...prev.dreams, ...result.data] : result.data,
+          isLoading: false,
+          isLoadingMore: false,
+          hasMore: result.hasMore,
+          page: result.page,
+          totalCount: result.count,
+        }));
+      } catch (err) {
+        setState((prev) => ({
+          ...prev,
+          isLoading: false,
+          isLoadingMore: false,
+          error: err instanceof Error ? err : new Error('Failed to fetch dreams'),
+        }));
+      }
+    },
+    [JSON.stringify(options)]
+  );
 
   useEffect(() => {
     fetchDreams(1, false);
@@ -76,38 +79,6 @@ export function useDreams(options: DreamListOptions = {}): UseDreamsReturn {
     refresh,
     loadMore,
   };
-}
-
-interface UseFeaturedDreamsReturn {
-  dreams: DreamListItem[];
-  isLoading: boolean;
-  error: Error | null;
-  refresh: () => Promise<void>;
-}
-
-export function useFeaturedDreams(limit = 5): UseFeaturedDreamsReturn {
-  const [dreams, setDreams] = useState<DreamListItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-
-  const fetchFeatured = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const data = await getFeaturedDreams(limit);
-      setDreams(data);
-    } catch (err) {
-      setError(err instanceof Error ? err : new Error('Failed to fetch featured dreams'));
-    } finally {
-      setIsLoading(false);
-    }
-  }, [limit]);
-
-  useEffect(() => {
-    fetchFeatured();
-  }, [fetchFeatured]);
-
-  return { dreams, isLoading, error, refresh: fetchFeatured };
 }
 
 interface UseSearchDreamsReturn {

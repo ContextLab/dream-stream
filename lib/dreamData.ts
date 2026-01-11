@@ -1,14 +1,49 @@
 import type { Category, DreamListItem, Dream, MusicStyle } from '@/types/database';
 
 export const CATEGORIES: Category[] = [
-  { id: 'cat-1', name: 'Adventure', slug: 'adventure', color: '#F59E0B', icon: '⚔️', sort_order: 1 },
+  {
+    id: 'cat-1',
+    name: 'Adventure',
+    slug: 'adventure',
+    color: '#F59E0B',
+    icon: '⚔️',
+    sort_order: 1,
+  },
   { id: 'cat-2', name: 'Joy', slug: 'joy', color: '#EC4899', icon: '✨', sort_order: 2 },
-  { id: 'cat-3', name: 'Creativity', slug: 'creativity', color: '#8B5CF6', icon: '🎨', sort_order: 3 },
+  {
+    id: 'cat-3',
+    name: 'Creativity',
+    slug: 'creativity',
+    color: '#8B5CF6',
+    icon: '🎨',
+    sort_order: 3,
+  },
   { id: 'cat-4', name: 'Calming', slug: 'calming', color: '#06B6D4', icon: '🌊', sort_order: 4 },
-  { id: 'cat-5', name: 'Relaxation', slug: 'relaxation', color: '#22C55E', icon: '🧘', sort_order: 5 },
-  { id: 'cat-6', name: 'Self-Esteem', slug: 'self-esteem', color: '#EF4444', icon: '💪', sort_order: 6 },
+  {
+    id: 'cat-5',
+    name: 'Relaxation',
+    slug: 'relaxation',
+    color: '#22C55E',
+    icon: '🧘',
+    sort_order: 5,
+  },
+  {
+    id: 'cat-6',
+    name: 'Self-Esteem',
+    slug: 'self-esteem',
+    color: '#EF4444',
+    icon: '💪',
+    sort_order: 6,
+  },
   { id: 'cat-7', name: 'Healing', slug: 'healing', color: '#3B82F6', icon: '💚', sort_order: 7 },
-  { id: 'cat-8', name: 'Mental Clarity', slug: 'mental-clarity', color: '#6366F1', icon: '🧠', sort_order: 8 },
+  {
+    id: 'cat-8',
+    name: 'Mental Clarity',
+    slug: 'mental-clarity',
+    color: '#6366F1',
+    icon: '🧠',
+    sort_order: 8,
+  },
   { id: 'cat-9', name: 'Renewal', slug: 'renewal', color: '#14B8A6', icon: '🌱', sort_order: 9 },
 ];
 
@@ -1312,7 +1347,7 @@ Sleep well, dreamer. Dream deep. And remember: the garden is always here, waitin
 Rest now. Let the garden hold you. Let the seasons turn. And know that spring always comes again.`,
   },
   {
-    title: 'The Lighthouse at World\'s End',
+    title: "The Lighthouse at World's End",
     music: 'ambient',
     content: `The lighthouse stands at the edge of everything. You find yourself on a narrow peninsula of dark stone, where the land itself seems to fade into mist and memory. The sea surrounds you on three sides, not the familiar ocean of waking life, but something older, something that existed before water had a name. Its surface is perfectly still, reflecting a sky that holds both stars and sunset simultaneously. The lighthouse rises before you, ancient white stone weathered by winds that blow from places beyond the maps of any world.
 
@@ -1669,7 +1704,7 @@ Sleep now, dreamer. Sleep deeply. Your memories are safe. Your palace stands ete
 Rest well. Dream deep. Remember always.`,
   },
   {
-    title: 'The Weaver\'s Workshop',
+    title: "The Weaver's Workshop",
     music: 'ambient',
     content: `You find yourself standing at the entrance of a vast workshop that seems to exist outside of time itself. The air hums with a frequency you can feel in your bones, a vibration that speaks of creation and possibility. Before you stands an enormous loom, ancient beyond measure, its wooden frame carved with symbols that shift and change as you watch them. The threads that stretch across this great instrument extend in all directions, not just left and right but up and down and into dimensions your waking mind cannot name. Some threads glow with inner light. Others pulse with shadow. All of them are alive with purpose.
 
@@ -2801,7 +2836,7 @@ function generateDreams(): DreamListItem[] {
   return DREAM_SCRIPTS.map((dream, index) => {
     const category = CATEGORIES[index % CATEGORIES.length];
     const summaryText = dream.content.split('\n\n')[0];
-    
+
     return {
       id: `dream-${index + 1}`,
       title: dream.title,
@@ -2851,9 +2886,11 @@ export function getDreamById(id: string): Dream | null {
 
 export function searchDreams(query: string): DreamListItem[] {
   const lowerQuery = query.toLowerCase();
-  return DREAMS.filter(
-    (dream) =>
-      dream.title.toLowerCase().includes(lowerQuery) ||
-      dream.category?.name.toLowerCase().includes(lowerQuery)
-  );
+  return DREAMS.filter((dream, index) => {
+    if (dream.title.toLowerCase().includes(lowerQuery)) return true;
+    if (dream.category?.name.toLowerCase().includes(lowerQuery)) return true;
+    const script = DREAM_SCRIPTS[index];
+    if (script?.content.toLowerCase().includes(lowerQuery)) return true;
+    return false;
+  });
 }
