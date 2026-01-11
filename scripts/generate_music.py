@@ -2,462 +2,929 @@
 """
 Ambient Music Generation Script for Dream Stream
 
-Generates ambient background music for dream playback using:
-1. MusicGen-Small (AI-generated, ~2GB model)
-2. Procedural fallback (sine waves, noise, no ML dependencies)
-
-The generated music is designed to:
-- Loop seamlessly
-- Not interfere with dream narration
-- Create a relaxing sleep environment
-- Support 432Hz tuning (optional)
-
-Requirements:
-    pip install numpy scipy soundfile
-
-    For MusicGen (optional, better quality):
-    pip install torch transformers
-
-Usage:
-    python scripts/generate_music.py
-    python scripts/generate_music.py --style ambient
-    python scripts/generate_music.py --procedural-only
-    python scripts/generate_music.py --list-styles
+Generates evolving ambient background music for dream playback using procedural
+synthesis with musical structure: chord progressions, unique instruments per theme,
+and dynamic volume that responds to narration pauses.
 """
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import NamedTuple
 
-# Check for required dependencies
 try:
     import numpy as np
 except ImportError:
-    print("Installing numpy...")
-    subprocess.run([sys.executable, "-m", "pip", "install", "numpy"])
+    subprocess.run([sys.executable, "-m", "pip", "install", "numpy"], check=True)
     import numpy as np
 
 try:
     import soundfile as sf
 except ImportError:
-    print("Installing soundfile...")
-    subprocess.run([sys.executable, "-m", "pip", "install", "soundfile"])
+    subprocess.run([sys.executable, "-m", "pip", "install", "soundfile"], check=True)
     import soundfile as sf
-
-try:
-    from scipy import signal
-    from scipy.io import wavfile
-except ImportError:
-    print("Installing scipy...")
-    subprocess.run([sys.executable, "-m", "pip", "install", "scipy"])
-    from scipy import signal
-    from scipy.io import wavfile
 
 PROJECT_ROOT = Path(__file__).parent.parent
 OUTPUT_DIR = PROJECT_ROOT / "public" / "audio" / "music"
-
-# Music styles with generation parameters
-MUSIC_STYLES = {
-    "ambient": {
-        "description": "Soft ambient pads, perfect for deep relaxation",
-        "prompt": "soft ambient pad, peaceful, dreamy, no drums, no vocals, meditation music",
-        "base_freq": 432,  # 432Hz tuning
-        "layers": ["pad", "shimmer", "breath"],
-        "duration_seconds": 120,
-    },
-    "nature": {
-        "description": "Gentle nature sounds - rain, wind, soft water",
-        "prompt": "gentle rain sounds, soft wind, nature ambient, peaceful forest",
-        "base_freq": 440,
-        "layers": ["rain", "wind", "crickets"],
-        "duration_seconds": 120,
-    },
-    "binaural": {
-        "description": "Binaural beats for theta/delta brainwave entrainment",
-        "prompt": None,  # Always procedural
-        "base_freq": 200,  # Carrier frequency
-        "beat_freq": 4,  # Theta (4Hz) for lucid dreaming
-        "layers": ["binaural", "pad"],
-        "duration_seconds": 120,
-    },
-    "cosmic": {
-        "description": "Space-themed ambient with deep bass and shimmering highs",
-        "prompt": "cosmic ambient, space music, ethereal, deep bass drone, shimmering pads",
-        "base_freq": 432,
-        "layers": ["drone", "shimmer", "sweep"],
-        "duration_seconds": 120,
-    },
-    "silence": {
-        "description": "Near-silence with very subtle tones",
-        "prompt": None,
-        "base_freq": 432,
-        "layers": ["whisper"],
-        "duration_seconds": 60,
-    },
-}
+DREAMS_DIR = PROJECT_ROOT / "public" / "audio" / "dreams"
+DREAM_DATA_PATH = PROJECT_ROOT / "lib" / "dreamData.ts"
 
 SAMPLE_RATE = 44100
 
+MUSIC_VOLUME_BASE = 0.22
+MUSIC_VOLUME_PAUSE = 0.30
+FADE_DURATION = 15.0
+PAUSE_DURATION_MS = 45000
 
-class MusicResult(NamedTuple):
-    style: str
-    path: str
-    duration_seconds: float
-    size_bytes: int
-    method: str  # "musicgen" or "procedural"
+MUSIC_THEMES = {
+    "ambient": {
+        "description": "Ethereal floating pads - airy, dreamlike",
+        "base_freq": 432,
+        "chord_progression": [
+            "Cmaj9",
+            "Am11",
+            "Fmaj9",
+            "Gsus4",
+            "Em9",
+            "Dm11",
+            "Bbmaj7",
+            "Gsus2",
+        ],
+        "tempo_bpm": 50,
+        "instrument": "ethereal_pad",
+        "add_shimmer": True,
+        "add_sub_bass": True,
+    },
+    "piano": {
+        "description": "Gentle piano with soft mallets and bells",
+        "base_freq": 440,
+        "chord_progression": [
+            "Am9",
+            "Fmaj7",
+            "C",
+            "G6",
+            "Dm9",
+            "Am7",
+            "Fmaj9",
+            "E7sus4",
+        ],
+        "tempo_bpm": 65,
+        "instrument": "soft_piano",
+        "add_bells": True,
+        "add_pad_layer": True,
+    },
+    "nature": {
+        "description": "Organic textures with wind, water, and earth tones",
+        "base_freq": 432,
+        "chord_progression": [
+            "Em11",
+            "Cmaj9",
+            "G6",
+            "D",
+            "Am9",
+            "Em7",
+            "Bm7",
+            "Cmaj7",
+        ],
+        "tempo_bpm": 45,
+        "instrument": "organic_tone",
+        "add_nature_sounds": True,
+        "add_breath": True,
+    },
+    "cosmic": {
+        "description": "Deep space drones with vast reverberant textures",
+        "base_freq": 432,
+        "chord_progression": [
+            "Dm9",
+            "Bbmaj9",
+            "Gm11",
+            "Asus4",
+            "Fm9",
+            "Dbmaj7",
+            "Abmaj9",
+            "Eb6",
+        ],
+        "tempo_bpm": 35,
+        "instrument": "space_drone",
+        "add_cosmic_sweep": True,
+        "add_deep_pulse": True,
+    },
+    "binaural": {
+        "description": "Theta-wave entrainment with gentle carriers",
+        "base_freq": 432,
+        "chord_progression": [
+            "C",
+            "Am",
+            "F",
+            "G",
+            "Dm",
+            "Am",
+            "E",
+            "Am",
+        ],
+        "tempo_bpm": 40,
+        "instrument": "binaural_carrier",
+        "beat_frequency": 6.0,
+        "add_theta_pulse": True,
+    },
+    "silence": {
+        "description": "Near-silence with barely perceptible tones",
+        "base_freq": 432,
+        "chord_progression": ["C", "Am"],
+        "tempo_bpm": 30,
+        "instrument": "whisper_tone",
+    },
+}
+
+CHORD_FREQUENCIES = {
+    "C": [130.81, 164.81, 196.00],
+    "Cmaj7": [130.81, 164.81, 196.00, 246.94],
+    "Cmaj9": [130.81, 164.81, 196.00, 246.94, 293.66],
+    "Dm": [146.83, 174.61, 220.00],
+    "Dm7": [146.83, 174.61, 220.00, 261.63],
+    "Dm9": [146.83, 174.61, 220.00, 261.63, 329.63],
+    "Dm11": [146.83, 174.61, 220.00, 261.63, 329.63, 392.00],
+    "Em": [164.81, 196.00, 246.94],
+    "Em7": [164.81, 196.00, 246.94, 293.66],
+    "Em9": [164.81, 196.00, 246.94, 293.66, 369.99],
+    "Em11": [164.81, 196.00, 246.94, 293.66, 369.99, 440.00],
+    "F": [174.61, 220.00, 261.63],
+    "Fmaj7": [174.61, 220.00, 261.63, 329.63],
+    "Fmaj9": [174.61, 220.00, 261.63, 329.63, 392.00],
+    "Fm9": [174.61, 207.65, 261.63, 311.13, 392.00],
+    "G": [196.00, 246.94, 293.66],
+    "G6": [196.00, 246.94, 293.66, 329.63],
+    "G7": [196.00, 246.94, 293.66, 174.61],
+    "Gsus2": [196.00, 220.00, 293.66],
+    "Gsus4": [196.00, 261.63, 293.66],
+    "Am": [220.00, 261.63, 329.63],
+    "Am7": [220.00, 261.63, 329.63, 196.00],
+    "Am9": [220.00, 261.63, 329.63, 196.00, 246.94],
+    "Am11": [220.00, 261.63, 329.63, 196.00, 246.94, 293.66],
+    "Bbmaj7": [233.08, 293.66, 349.23, 220.00],
+    "Bbmaj9": [233.08, 293.66, 349.23, 220.00, 261.63],
+    "Bm7": [246.94, 293.66, 369.99, 220.00],
+    "Dbmaj7": [138.59, 174.61, 207.65, 261.63],
+    "Abmaj9": [207.65, 261.63, 311.13, 196.00, 233.08],
+    "Eb6": [155.56, 196.00, 233.08, 261.63],
+    "Gm11": [196.00, 233.08, 293.66, 174.61, 220.00, 261.63],
+    "Asus4": [220.00, 293.66, 329.63],
+    "E": [164.81, 207.65, 246.94],
+    "E7sus4": [164.81, 220.00, 246.94, 293.66],
+    "D": [146.83, 185.00, 220.00],
+}
 
 
-def check_musicgen_available() -> bool:
-    """Check if MusicGen dependencies are available"""
-    try:
-        import torch
-        from transformers import AutoProcessor, MusicgenForConditionalGeneration
-
-        return True
-    except ImportError:
-        return False
+def scale_frequencies(freqs: list, base_freq: float) -> list:
+    ratio = base_freq / 440.0
+    return [f * ratio for f in freqs]
 
 
-def generate_with_musicgen(style: str, config: dict, output_path: Path) -> bool:
-    """Generate music using MusicGen-Small"""
-    try:
-        import torch
-        from transformers import AutoProcessor, MusicgenForConditionalGeneration
-
-        print(f"  Loading MusicGen-Small model...")
-        processor = AutoProcessor.from_pretrained("facebook/musicgen-small")
-        model = MusicgenForConditionalGeneration.from_pretrained(
-            "facebook/musicgen-small"
-        )
-
-        # Use CPU to avoid memory issues
-        device = "cpu"
-        model = model.to(device)
-
-        prompt = config["prompt"]
-        duration = config["duration_seconds"]
-
-        print(f"  Generating {duration}s of audio...")
-        print(f"  Prompt: {prompt}")
-
-        inputs = processor(
-            text=[prompt],
-            padding=True,
-            return_tensors="pt",
-        ).to(device)
-
-        # MusicGen generates ~256 tokens per second at 32kHz
-        max_new_tokens = int(duration * 50)  # Approximate tokens needed
-
-        audio_values = model.generate(
-            **inputs,
-            max_new_tokens=max_new_tokens,
-            do_sample=True,
-            guidance_scale=3,
-        )
-
-        # Convert to numpy and save
-        audio_array = audio_values[0, 0].cpu().numpy()
-        sampling_rate = model.config.audio_encoder.sampling_rate
-
-        # Normalize
-        audio_array = audio_array / np.max(np.abs(audio_array)) * 0.8
-
-        # Save as WAV first
-        wav_path = output_path.with_suffix(".wav")
-        sf.write(str(wav_path), audio_array, sampling_rate)
-
-        return True
-
-    except Exception as e:
-        print(f"  MusicGen failed: {e}")
-        return False
-
-
-def generate_sine_wave(
-    freq: float, duration: float, amplitude: float = 0.5
+def generate_adsr_envelope(
+    duration: float,
+    attack: float = 0.1,
+    decay: float = 0.2,
+    sustain: float = 0.7,
+    release: float = 0.3,
 ) -> np.ndarray:
-    """Generate a sine wave"""
+    samples = int(SAMPLE_RATE * duration)
+    envelope = np.zeros(samples)
+
+    attack_samples = int(SAMPLE_RATE * min(attack, duration * 0.25))
+    decay_samples = int(SAMPLE_RATE * min(decay, duration * 0.15))
+    release_samples = int(SAMPLE_RATE * min(release, duration * 0.25))
+    sustain_samples = max(0, samples - attack_samples - decay_samples - release_samples)
+
+    idx = 0
+    if attack_samples > 0:
+        envelope[idx : idx + attack_samples] = np.linspace(0, 1, attack_samples)
+        idx += attack_samples
+    if decay_samples > 0:
+        envelope[idx : idx + decay_samples] = np.linspace(1, sustain, decay_samples)
+        idx += decay_samples
+    if sustain_samples > 0:
+        envelope[idx : idx + sustain_samples] = sustain
+        idx += sustain_samples
+    if release_samples > 0 and idx < samples:
+        remaining = samples - idx
+        envelope[idx:] = np.linspace(sustain, 0, remaining)
+
+    return envelope
+
+
+def generate_ethereal_pad(freq: float, duration: float) -> np.ndarray:
+    """Airy, floating pad with chorus-like detuning"""
     t = np.linspace(0, duration, int(SAMPLE_RATE * duration), endpoint=False)
-    return amplitude * np.sin(2 * np.pi * freq * t)
+
+    tone = np.zeros_like(t)
+
+    for detune_cents in [-12, -5, 0, 5, 12]:
+        detune_ratio = 2 ** (detune_cents / 1200)
+        phase = np.random.uniform(0, 2 * np.pi)
+        tone += 0.2 * np.sin(2 * np.pi * freq * detune_ratio * t + phase)
+
+    tone += 0.08 * np.sin(2 * np.pi * freq * 2 * t)
+    tone += 0.04 * np.sin(2 * np.pi * freq * 3 * t)
+
+    lfo1 = 0.9 + 0.1 * np.sin(2 * np.pi * 0.13 * t)
+    lfo2 = 0.95 + 0.05 * np.sin(2 * np.pi * 0.07 * t + 1.5)
+    tone *= lfo1 * lfo2
+
+    envelope = generate_adsr_envelope(
+        duration, attack=3.0, decay=1.5, sustain=0.75, release=3.0
+    )
+
+    return tone * envelope
 
 
-def generate_pad(base_freq: float, duration: float) -> np.ndarray:
-    """Generate a soft ambient pad with harmonics"""
+def generate_soft_piano(freq: float, duration: float) -> np.ndarray:
+    """Soft felt piano with rounded attack"""
     t = np.linspace(0, duration, int(SAMPLE_RATE * duration), endpoint=False)
 
-    # Fundamental + harmonics with decreasing amplitude
+    tone = np.zeros_like(t)
+
+    harmonics = [1, 2, 3, 4, 5, 6, 7, 8]
+    amps = [1.0, 0.6, 0.3, 0.2, 0.1, 0.05, 0.025, 0.01]
+    decays = [0.8, 1.2, 1.8, 2.2, 2.8, 3.2, 3.5, 4.0]
+
+    for h, a, d in zip(harmonics, amps, decays):
+        decay_env = np.exp(-t * d)
+        slight_detune = 1 + np.random.uniform(-0.001, 0.001)
+        tone += a * np.sin(2 * np.pi * freq * h * slight_detune * t) * decay_env
+
+    envelope = generate_adsr_envelope(
+        duration, attack=0.08, decay=0.4, sustain=0.25, release=1.0
+    )
+
+    return tone * envelope * 0.5
+
+
+def generate_organic_tone(freq: float, duration: float) -> np.ndarray:
+    """Warm, breathy tone like a wooden flute"""
+    t = np.linspace(0, duration, int(SAMPLE_RATE * duration), endpoint=False)
+
+    tone = np.zeros_like(t)
+
+    tone += 0.5 * np.sin(2 * np.pi * freq * t)
+    tone += 0.25 * np.sin(2 * np.pi * freq * 2 * t)
+    tone += 0.1 * np.sin(2 * np.pi * freq * 3 * t)
+
+    breath = np.random.randn(len(t)) * 0.02
+    from scipy import signal
+
+    b, a = signal.butter(
+        2, [freq * 0.8, min(freq * 3, 8000)], btype="band", fs=SAMPLE_RATE
+    )
+    breath = signal.lfilter(b, a, breath)
+    tone += breath
+
+    vibrato_rate = 4.5 + np.random.uniform(-0.5, 0.5)
+    vibrato_depth = 0.003
+    vibrato = 1 + vibrato_depth * np.sin(2 * np.pi * vibrato_rate * t)
+    tone_with_vibrato = np.zeros_like(t)
+    for i, (samp, vib) in enumerate(zip(tone, vibrato)):
+        tone_with_vibrato[i] = samp * vib
+
+    envelope = generate_adsr_envelope(
+        duration, attack=0.5, decay=0.3, sustain=0.7, release=1.0
+    )
+
+    return tone_with_vibrato * envelope * 0.6
+
+
+def generate_space_drone(freq: float, duration: float) -> np.ndarray:
+    """Deep, vast space drone with slow evolution"""
+    t = np.linspace(0, duration, int(SAMPLE_RATE * duration), endpoint=False)
+
+    drone = np.zeros_like(t)
+
+    drone += 0.4 * np.sin(2 * np.pi * freq * t)
+    drone += 0.5 * np.sin(2 * np.pi * freq * 0.5 * t)
+    drone += 0.3 * np.sin(2 * np.pi * freq * 0.25 * t)
+
+    slow_wobble = 1.5 * np.sin(2 * np.pi * 0.02 * t)
+    drone += 0.15 * np.sin(2 * np.pi * (freq * 0.5 + slow_wobble) * t)
+
+    high_shimmer = 0.03 * np.sin(2 * np.pi * freq * 5 * t)
+    shimmer_mod = 0.5 + 0.5 * np.sin(2 * np.pi * 0.08 * t)
+    drone += high_shimmer * shimmer_mod
+
+    envelope = generate_adsr_envelope(
+        duration, attack=5.0, decay=2.0, sustain=0.85, release=5.0
+    )
+
+    return drone * envelope
+
+
+def generate_binaural_carrier(
+    freq: float, duration: float, beat_freq: float = 6.0
+) -> np.ndarray:
+    """Binaural beat carrier (returns stereo)"""
+    t = np.linspace(0, duration, int(SAMPLE_RATE * duration), endpoint=False)
+
+    left = 0.4 * np.sin(2 * np.pi * freq * t)
+    right = 0.4 * np.sin(2 * np.pi * (freq + beat_freq) * t)
+
     pad = np.zeros_like(t)
-    harmonics = [1, 2, 3, 4, 5]
-    amplitudes = [0.4, 0.2, 0.1, 0.05, 0.02]
+    pad += 0.15 * np.sin(2 * np.pi * freq * 0.5 * t)
+    pad += 0.1 * np.sin(2 * np.pi * freq * 0.25 * t)
 
-    for h, a in zip(harmonics, amplitudes):
-        # Add slight detuning for richness
-        detune = np.random.uniform(-2, 2)
-        pad += a * np.sin(2 * np.pi * (base_freq * h + detune) * t)
+    envelope = generate_adsr_envelope(
+        duration, attack=2.0, decay=1.0, sustain=0.8, release=2.0
+    )
 
-    # Apply slow amplitude modulation (tremolo)
-    mod_freq = 0.1  # Very slow
-    modulation = 0.7 + 0.3 * np.sin(2 * np.pi * mod_freq * t)
-    pad *= modulation
+    left = (left + pad) * envelope
+    right = (right + pad) * envelope
 
-    # Apply envelope (fade in/out)
-    envelope = np.ones_like(t)
-    fade_samples = int(SAMPLE_RATE * 3)  # 3-second fade
-    envelope[:fade_samples] = np.linspace(0, 1, fade_samples)
-    envelope[-fade_samples:] = np.linspace(1, 0, fade_samples)
-
-    return pad * envelope
+    return np.column_stack([left, right])
 
 
-def generate_shimmer(base_freq: float, duration: float) -> np.ndarray:
-    """Generate shimmering high frequencies"""
+def generate_whisper_tone(freq: float, duration: float) -> np.ndarray:
+    """Barely audible tone"""
+    t = np.linspace(0, duration, int(SAMPLE_RATE * duration), endpoint=False)
+
+    tone = 0.02 * np.sin(2 * np.pi * freq * t)
+
+    envelope = generate_adsr_envelope(
+        duration, attack=5.0, decay=2.0, sustain=0.5, release=5.0
+    )
+
+    return tone * envelope
+
+
+def generate_shimmer_for_chord(chord_freqs: list, duration: float) -> np.ndarray:
+    """High frequency shimmering texture based on chord tones"""
     t = np.linspace(0, duration, int(SAMPLE_RATE * duration), endpoint=False)
 
     shimmer = np.zeros_like(t)
 
-    # Multiple high-frequency components with random phase
-    for _ in range(5):
-        freq = base_freq * np.random.uniform(4, 8)
-        phase = np.random.uniform(0, 2 * np.pi)
-        amp = np.random.uniform(0.02, 0.05)
+    for base_freq in chord_freqs[:3]:
+        for octave_mult in [4, 5, 6]:
+            freq = base_freq * octave_mult + np.random.uniform(-5, 5)
+            phase = np.random.uniform(0, 2 * np.pi)
+            amp = np.random.uniform(0.005, 0.015)
+            mod_freq = np.random.uniform(0.03, 0.1)
+            mod = 0.5 + 0.5 * np.sin(2 * np.pi * mod_freq * t + phase)
+            shimmer += amp * np.sin(2 * np.pi * freq * t + phase) * mod
 
-        # Slow amplitude modulation
-        mod_freq = np.random.uniform(0.05, 0.2)
-        mod = 0.5 + 0.5 * np.sin(2 * np.pi * mod_freq * t + phase)
+    envelope = generate_adsr_envelope(
+        duration, attack=2.0, decay=1.0, sustain=0.7, release=2.0
+    )
 
-        shimmer += amp * np.sin(2 * np.pi * freq * t + phase) * mod
-
-    return shimmer
-
-
-def generate_breath(duration: float) -> np.ndarray:
-    """Generate soft breath-like noise"""
-    samples = int(SAMPLE_RATE * duration)
-
-    # Pink noise (1/f)
-    white = np.random.randn(samples)
-
-    # Simple 1/f filter approximation
-    b = [0.049922035, -0.095993537, 0.050612699, -0.004408786]
-    a = [1, -2.494956002, 2.017265875, -0.522189400]
-    pink = signal.lfilter(b, a, white)
-
-    # Very low amplitude
-    pink = pink / np.max(np.abs(pink)) * 0.03
-
-    # Slow modulation to sound like breathing
-    t = np.linspace(0, duration, samples, endpoint=False)
-    breath_rate = 0.15  # ~9 breaths per minute
-    modulation = 0.3 + 0.7 * (0.5 + 0.5 * np.sin(2 * np.pi * breath_rate * t))
-
-    return pink * modulation
+    return shimmer * envelope
 
 
-def generate_binaural(
-    carrier_freq: float, beat_freq: float, duration: float
+def generate_sub_bass_for_chord(root_freq: float, duration: float) -> np.ndarray:
+    """Deep sub-bass following chord root"""
+    t = np.linspace(0, duration, int(SAMPLE_RATE * duration), endpoint=False)
+
+    sub_freq = root_freq / 2
+    while sub_freq > 80:
+        sub_freq /= 2
+    while sub_freq < 40:
+        sub_freq *= 2
+
+    sub = 0.12 * np.sin(2 * np.pi * sub_freq * t)
+    sub += 0.04 * np.sin(2 * np.pi * sub_freq * 2 * t)
+
+    envelope = generate_adsr_envelope(
+        duration, attack=1.5, decay=0.5, sustain=0.85, release=1.5
+    )
+
+    return sub * envelope
+
+
+def generate_bells_layer(
+    chord_freqs: list, duration: float, tempo: float
 ) -> np.ndarray:
-    """Generate binaural beats (requires stereo output)"""
-    t = np.linspace(0, duration, int(SAMPLE_RATE * duration), endpoint=False)
-
-    # Left ear: carrier frequency
-    left = 0.3 * np.sin(2 * np.pi * carrier_freq * t)
-
-    # Right ear: carrier + beat frequency
-    right = 0.3 * np.sin(2 * np.pi * (carrier_freq + beat_freq) * t)
-
-    # Return stereo array
-    return np.column_stack([left, right])
-
-
-def generate_drone(base_freq: float, duration: float) -> np.ndarray:
-    """Generate a deep bass drone"""
-    t = np.linspace(0, duration, int(SAMPLE_RATE * duration), endpoint=False)
-
-    # Very low frequency drone
-    drone_freq = base_freq / 4  # Sub-bass
-
-    drone = 0.3 * np.sin(2 * np.pi * drone_freq * t)
-
-    # Add slight pitch wobble
-    wobble = 2 * np.sin(2 * np.pi * 0.05 * t)  # Very slow wobble
-    drone += 0.1 * np.sin(2 * np.pi * (drone_freq + wobble) * t)
-
-    return drone
-
-
-def generate_sweep(base_freq: float, duration: float) -> np.ndarray:
-    """Generate slow frequency sweeps"""
-    t = np.linspace(0, duration, int(SAMPLE_RATE * duration), endpoint=False)
-
-    sweep = np.zeros_like(t)
-
-    # Multiple slow sweeps
-    for _ in range(3):
-        start_freq = base_freq * np.random.uniform(2, 4)
-        end_freq = base_freq * np.random.uniform(2, 4)
-
-        # Frequency changes linearly over time
-        freq = np.linspace(start_freq, end_freq, len(t))
-        phase = np.cumsum(2 * np.pi * freq / SAMPLE_RATE)
-
-        amp = np.random.uniform(0.02, 0.05)
-        sweep += amp * np.sin(phase)
-
-    return sweep
-
-
-def generate_rain(duration: float) -> np.ndarray:
-    """Generate rain-like sound"""
+    """Gentle bell/chime accents"""
     samples = int(SAMPLE_RATE * duration)
+    bells = np.zeros(samples)
 
-    # Base: filtered noise
-    rain = np.random.randn(samples) * 0.1
+    note_interval = 60.0 / tempo * 2
+    num_notes = int(duration / note_interval)
 
-    # Bandpass filter for rain-like sound
-    b, a = signal.butter(4, [500, 8000], btype="band", fs=SAMPLE_RATE)
-    rain = signal.lfilter(b, a, rain)
+    for i in range(num_notes):
+        if np.random.random() > 0.4:
+            continue
 
-    # Add occasional "droplet" sounds
-    num_drops = int(duration * 5)  # 5 drops per second average
-    for _ in range(num_drops):
-        pos = np.random.randint(0, samples - 1000)
-        drop_len = np.random.randint(100, 500)
-        drop_freq = np.random.uniform(2000, 5000)
-        drop = 0.05 * np.sin(
-            2 * np.pi * drop_freq * np.linspace(0, drop_len / SAMPLE_RATE, drop_len)
-        )
-        drop *= np.exp(-np.linspace(0, 5, drop_len))  # Quick decay
-        rain[pos : pos + drop_len] += drop
+        freq = np.random.choice(chord_freqs) * 2
+        start = int(i * note_interval * SAMPLE_RATE)
+        bell_dur = min(3.0, (samples - start) / SAMPLE_RATE)
 
-    return rain
+        if bell_dur < 0.5:
+            continue
+
+        t = np.linspace(0, bell_dur, int(SAMPLE_RATE * bell_dur), endpoint=False)
+
+        bell = 0.03 * np.sin(2 * np.pi * freq * t) * np.exp(-t * 1.5)
+        bell += 0.02 * np.sin(2 * np.pi * freq * 2.4 * t) * np.exp(-t * 2.0)
+        bell += 0.01 * np.sin(2 * np.pi * freq * 5.2 * t) * np.exp(-t * 3.0)
+
+        end = min(start + len(bell), samples)
+        bells[start:end] += bell[: end - start]
+
+    return bells
 
 
-def generate_wind(duration: float) -> np.ndarray:
-    """Generate wind-like sound"""
+def generate_nature_sounds(duration: float) -> np.ndarray:
+    """Wind and subtle water textures"""
     samples = int(SAMPLE_RATE * duration)
+    t = np.linspace(0, duration, samples, endpoint=False)
 
-    # Low-frequency filtered noise
-    wind = np.random.randn(samples) * 0.1
+    from scipy import signal
 
-    # Low-pass filter
-    b, a = signal.butter(4, 500, btype="low", fs=SAMPLE_RATE)
+    wind = np.random.randn(samples) * 0.08
+    b, a = signal.butter(3, [80, 600], btype="band", fs=SAMPLE_RATE)
     wind = signal.lfilter(b, a, wind)
 
-    # Slow amplitude modulation (gusts)
+    gust1 = 0.4 + 0.6 * (0.5 + 0.5 * np.sin(2 * np.pi * 0.03 * t))
+    gust2 = 0.6 + 0.4 * (0.5 + 0.5 * np.sin(2 * np.pi * 0.017 * t + 1.2))
+    wind *= gust1 * gust2
+
+    water = np.zeros(samples)
+    num_drops = int(duration * 1.5)
+    for _ in range(num_drops):
+        pos = np.random.randint(0, samples - 8000)
+        drop_freq = np.random.uniform(1200, 2500)
+        drop_len = np.random.randint(3000, 8000)
+        drop_t = np.linspace(0, drop_len / SAMPLE_RATE, drop_len)
+        drop = 0.015 * np.sin(2 * np.pi * drop_freq * drop_t) * np.exp(-drop_t * 6)
+        water[pos : pos + drop_len] += drop
+
+    return wind * 0.25 + water
+
+
+def generate_breath_layer(duration: float) -> np.ndarray:
+    """Soft breathing texture"""
+    samples = int(SAMPLE_RATE * duration)
     t = np.linspace(0, duration, samples, endpoint=False)
-    gusts = 0.5 + 0.5 * np.sin(2 * np.pi * 0.05 * t) * np.sin(2 * np.pi * 0.13 * t)
 
-    return wind * gusts
+    from scipy import signal
+
+    breath = np.random.randn(samples) * 0.03
+    b, a = signal.butter(2, 800, btype="low", fs=SAMPLE_RATE)
+    breath = signal.lfilter(b, a, breath)
+
+    breath_rate = 0.12
+    mod = 0.3 + 0.7 * (0.5 + 0.5 * np.sin(2 * np.pi * breath_rate * t))
+
+    return breath * mod
 
 
-def generate_crickets(duration: float) -> np.ndarray:
-    """Generate cricket-like chirps"""
+def generate_cosmic_sweep(duration: float, base_freq: float) -> np.ndarray:
+    """Slow frequency sweeps through space"""
     samples = int(SAMPLE_RATE * duration)
-    crickets = np.zeros(samples)
+    t = np.linspace(0, duration, samples, endpoint=False)
 
-    # Multiple crickets at different frequencies
-    num_crickets = 5
-    for _ in range(num_crickets):
-        freq = np.random.uniform(3000, 5000)
-        chirp_rate = np.random.uniform(5, 10)  # Chirps per second
-        chirp_duration = int(SAMPLE_RATE * 0.05)  # 50ms chirp
+    sweep = np.zeros(samples)
 
-        t_chirp = np.linspace(0, 0.05, chirp_duration, endpoint=False)
-        chirp = 0.02 * np.sin(2 * np.pi * freq * t_chirp)
-        chirp *= np.exp(-t_chirp * 50)  # Quick decay
+    for _ in range(4):
+        start_mult = np.random.uniform(1, 3)
+        end_mult = np.random.uniform(1, 3)
+        start_freq = base_freq * start_mult
+        end_freq = base_freq * end_mult
 
-        # Place chirps randomly
-        num_chirps = int(duration * chirp_rate)
-        for _ in range(num_chirps):
-            pos = np.random.randint(0, samples - chirp_duration)
-            crickets[pos : pos + chirp_duration] += chirp
+        freq_curve = np.linspace(start_freq, end_freq, samples)
+        phase = np.cumsum(2 * np.pi * freq_curve / SAMPLE_RATE)
 
-    return crickets
+        amp = np.random.uniform(0.02, 0.04)
+        sweep += amp * np.sin(phase)
 
+    envelope = generate_adsr_envelope(
+        duration, attack=3.0, decay=1.0, sustain=0.8, release=3.0
+    )
 
-def generate_whisper(base_freq: float, duration: float) -> np.ndarray:
-    """Generate barely audible tones"""
-    t = np.linspace(0, duration, int(SAMPLE_RATE * duration), endpoint=False)
-
-    # Very quiet single tone
-    whisper = 0.01 * np.sin(2 * np.pi * base_freq * t)
-
-    # Very slow fade in/out
-    envelope = np.ones_like(t)
-    fade_samples = int(SAMPLE_RATE * 10)  # 10-second fade
-    if len(envelope) > 2 * fade_samples:
-        envelope[:fade_samples] = np.linspace(0, 1, fade_samples)
-        envelope[-fade_samples:] = np.linspace(1, 0, fade_samples)
-
-    return whisper * envelope
+    return sweep * envelope
 
 
-def generate_procedural(style: str, config: dict, output_path: Path) -> bool:
-    """Generate music using procedural synthesis"""
-    print(f"  Generating procedurally...")
-
-    duration = config["duration_seconds"]
-    base_freq = config["base_freq"]
-    layers = config["layers"]
-
-    # Start with silence
+def generate_deep_pulse(duration: float, base_freq: float) -> np.ndarray:
+    """Deep rhythmic pulse"""
     samples = int(SAMPLE_RATE * duration)
-    is_stereo = "binaural" in layers
+    t = np.linspace(0, duration, samples, endpoint=False)
 
-    if is_stereo:
-        audio = np.zeros((samples, 2))
-    else:
-        audio = np.zeros(samples)
+    pulse_freq = base_freq / 8
+    pulse = 0.1 * np.sin(2 * np.pi * pulse_freq * t)
 
-    # Generate each layer
-    layer_generators = {
-        "pad": lambda: generate_pad(base_freq, duration),
-        "shimmer": lambda: generate_shimmer(base_freq, duration),
-        "breath": lambda: generate_breath(duration),
-        "drone": lambda: generate_drone(base_freq, duration),
-        "sweep": lambda: generate_sweep(base_freq, duration),
-        "rain": lambda: generate_rain(duration),
-        "wind": lambda: generate_wind(duration),
-        "crickets": lambda: generate_crickets(duration),
-        "whisper": lambda: generate_whisper(base_freq, duration),
-        "binaural": lambda: generate_binaural(
-            config["base_freq"], config.get("beat_freq", 4), duration
-        ),
+    mod = 0.5 + 0.5 * np.sin(2 * np.pi * 0.1 * t)
+
+    return pulse * mod
+
+
+def generate_theta_pulse(duration: float) -> np.ndarray:
+    """Subtle theta rhythm pulse"""
+    samples = int(SAMPLE_RATE * duration)
+    t = np.linspace(0, duration, samples, endpoint=False)
+
+    theta_freq = 6.0
+    pulse = 0.03 * np.sin(2 * np.pi * theta_freq * t)
+
+    envelope = 0.7 + 0.3 * np.sin(2 * np.pi * 0.05 * t)
+
+    return pulse * envelope
+
+
+def generate_chord(
+    chord_name: str,
+    duration: float,
+    base_freq: float,
+    config: dict,
+) -> np.ndarray:
+    """Generate a full chord with the theme's instrument"""
+    if chord_name not in CHORD_FREQUENCIES:
+        chord_name = list(CHORD_FREQUENCIES.keys())[0]
+
+    freqs = scale_frequencies(CHORD_FREQUENCIES[chord_name], base_freq)
+    samples = int(SAMPLE_RATE * duration)
+
+    instrument = config.get("instrument", "ethereal_pad")
+    beat_freq = config.get("beat_frequency", 6.0)
+
+    instruments = {
+        "ethereal_pad": generate_ethereal_pad,
+        "soft_piano": generate_soft_piano,
+        "organic_tone": generate_organic_tone,
+        "space_drone": generate_space_drone,
+        "whisper_tone": generate_whisper_tone,
     }
 
-    for layer in layers:
-        if layer in layer_generators:
-            print(f"    Adding layer: {layer}")
-            layer_audio = layer_generators[layer]()
+    is_binaural = instrument == "binaural_carrier"
 
-            if is_stereo and layer_audio.ndim == 1:
-                # Convert mono to stereo
-                layer_audio = np.column_stack([layer_audio, layer_audio])
-            elif not is_stereo and layer_audio.ndim == 2:
-                # This shouldn't happen, but handle it
-                audio = np.column_stack([audio, audio])
-                is_stereo = True
+    if is_binaural:
+        chord = np.zeros((samples, 2))
+        for freq in freqs[:2]:
+            tone = generate_binaural_carrier(freq, duration, beat_freq)
+            if len(tone) < samples:
+                tone = np.pad(tone, ((0, samples - len(tone)), (0, 0)))
+            elif len(tone) > samples:
+                tone = tone[:samples]
+            chord += tone / 2
+    else:
+        chord = np.zeros(samples)
+        gen_func = instruments.get(instrument, generate_ethereal_pad)
 
-            audio += layer_audio
+        for freq in freqs:
+            tone = gen_func(freq, duration)
+            if len(tone) < samples:
+                tone = np.pad(tone, (0, samples - len(tone)))
+            elif len(tone) > samples:
+                tone = tone[:samples]
+            chord += tone
 
-    # Normalize
-    max_val = np.max(np.abs(audio))
+        chord /= len(freqs)
+
+    return chord
+
+
+def generate_music_track(
+    theme: str,
+    duration_seconds: float,
+) -> np.ndarray:
+    """Generate a complete music track with evolving structure"""
+    if theme not in MUSIC_THEMES:
+        theme = "ambient"
+
+    config = MUSIC_THEMES[theme]
+    base_freq = config["base_freq"]
+    progression = config["chord_progression"]
+    tempo = config["tempo_bpm"]
+
+    samples = int(SAMPLE_RATE * duration_seconds)
+
+    is_binaural = config.get("instrument") == "binaural_carrier"
+    if is_binaural:
+        track = np.zeros((samples, 2))
+    else:
+        track = np.zeros(samples)
+
+    chord_duration = 60.0 / tempo * 8
+    total_chords = int(duration_seconds / chord_duration) + 1
+
+    print(f"    Chord progression: {' -> '.join(progression[:4])}...")
+    print(f"    Generating {total_chords} chord changes...")
+
+    for i in range(total_chords):
+        chord_name = progression[i % len(progression)]
+        start_sample = int(i * chord_duration * SAMPLE_RATE)
+
+        if start_sample >= samples:
+            break
+
+        remaining_duration = min(
+            chord_duration * 1.3, (samples - start_sample) / SAMPLE_RATE
+        )
+
+        chord = generate_chord(chord_name, remaining_duration, base_freq, config)
+
+        if is_binaural:
+            end_sample = min(start_sample + len(chord), samples)
+            chord_len = end_sample - start_sample
+            track[start_sample:end_sample] += chord[:chord_len]
+        else:
+            end_sample = min(start_sample + len(chord), samples)
+            chord_len = end_sample - start_sample
+            track[start_sample:end_sample] += chord[:chord_len]
+
+    if not is_binaural:
+        if config.get("add_shimmer") or config.get("add_sub_bass"):
+            print("    Adding chord-following shimmer/sub-bass...")
+            for i in range(total_chords):
+                chord_name = progression[i % len(progression)]
+                start_sample = int(i * chord_duration * SAMPLE_RATE)
+
+                if start_sample >= samples:
+                    break
+
+                remaining_duration = min(
+                    chord_duration * 1.3, (samples - start_sample) / SAMPLE_RATE
+                )
+                chord_freqs = scale_frequencies(
+                    CHORD_FREQUENCIES.get(chord_name, [220, 261, 329]), base_freq
+                )
+
+                if config.get("add_shimmer"):
+                    shimmer = generate_shimmer_for_chord(
+                        chord_freqs, remaining_duration
+                    )
+                    end_sample = min(start_sample + len(shimmer), samples)
+                    track[start_sample:end_sample] += shimmer[
+                        : end_sample - start_sample
+                    ]
+
+                if config.get("add_sub_bass"):
+                    root_freq = chord_freqs[0]
+                    sub = generate_sub_bass_for_chord(root_freq, remaining_duration)
+                    end_sample = min(start_sample + len(sub), samples)
+                    track[start_sample:end_sample] += sub[: end_sample - start_sample]
+
+        if config.get("add_bells"):
+            print("    Adding bell accents...")
+            chord_freqs = CHORD_FREQUENCIES.get(progression[0], [220, 261, 329])
+            bells = generate_bells_layer(
+                scale_frequencies(chord_freqs, base_freq), duration_seconds, tempo
+            )
+            track += bells[: len(track)]
+
+        if config.get("add_pad_layer"):
+            print("    Adding chord-following pad layer...")
+            for i in range(total_chords):
+                chord_name = progression[i % len(progression)]
+                start_sample = int(i * chord_duration * SAMPLE_RATE)
+
+                if start_sample >= samples:
+                    break
+
+                remaining_duration = min(
+                    chord_duration * 1.3, (samples - start_sample) / SAMPLE_RATE
+                )
+                chord_freqs = scale_frequencies(
+                    CHORD_FREQUENCIES.get(chord_name, [220, 261, 329]), base_freq
+                )
+
+                pad_freq = chord_freqs[0] * 0.5
+                pad = generate_ethereal_pad(pad_freq, remaining_duration) * 0.25
+                end_sample = min(start_sample + len(pad), samples)
+                track[start_sample:end_sample] += pad[: end_sample - start_sample]
+
+        if config.get("add_nature_sounds"):
+            print("    Adding nature sounds...")
+            nature = generate_nature_sounds(duration_seconds)
+            track += nature[: len(track)]
+
+        if config.get("add_breath"):
+            print("    Adding breath texture...")
+            breath = generate_breath_layer(duration_seconds)
+            track += breath[: len(track)]
+
+        if config.get("add_cosmic_sweep"):
+            print("    Adding cosmic sweeps...")
+            sweep = generate_cosmic_sweep(duration_seconds, base_freq)
+            track += sweep[: len(track)]
+
+        if config.get("add_deep_pulse"):
+            print("    Adding deep pulse...")
+            pulse = generate_deep_pulse(duration_seconds, base_freq)
+            track += pulse[: len(track)]
+
+        if config.get("add_theta_pulse"):
+            print("    Adding theta pulse...")
+            theta = generate_theta_pulse(duration_seconds)
+            track += theta[: len(track)]
+
+    if is_binaural:
+        evolution = 0.7 + 0.3 * np.sin(
+            2
+            * np.pi
+            * (0.5 / duration_seconds)
+            * np.linspace(0, duration_seconds, samples)
+        )
+        track[:, 0] *= evolution
+        track[:, 1] *= evolution
+    else:
+        evolution = 0.7 + 0.3 * np.sin(
+            2
+            * np.pi
+            * (0.5 / duration_seconds)
+            * np.linspace(0, duration_seconds, samples)
+        )
+        track *= evolution
+
+    if is_binaural:
+        max_val = np.max(np.abs(track))
+    else:
+        max_val = np.max(np.abs(track))
+
     if max_val > 0:
-        audio = audio / max_val * 0.8
+        track = track / max_val * 0.85
 
-    # Save as WAV
-    wav_path = output_path.with_suffix(".wav")
-    sf.write(str(wav_path), audio, SAMPLE_RATE)
-
-    return True
+    return track
 
 
-def convert_to_opus(wav_path: Path, opus_path: Path) -> bool:
-    """Convert WAV to Opus format"""
+def detect_pause_regions(narration_path: Path) -> list:
+    """Detect pause regions in narration (where audio is silent)"""
+    try:
+        data, sr = sf.read(str(narration_path))
+        if data.ndim > 1:
+            data = np.mean(data, axis=1)
+
+        window_size = int(sr * 0.5)
+        hop_size = int(sr * 0.1)
+
+        pauses = []
+        silence_threshold = 0.01
+
+        i = 0
+        in_pause = False
+        pause_start = 0
+
+        while i < len(data) - window_size:
+            window_rms = np.sqrt(np.mean(data[i : i + window_size] ** 2))
+
+            if window_rms < silence_threshold:
+                if not in_pause:
+                    in_pause = True
+                    pause_start = i / sr
+            else:
+                if in_pause:
+                    pause_end = i / sr
+                    if pause_end - pause_start > 5.0:
+                        pauses.append((pause_start, pause_end))
+                    in_pause = False
+
+            i += hop_size
+
+        if in_pause:
+            pause_end = len(data) / sr
+            if pause_end - pause_start > 5.0:
+                pauses.append((pause_start, pause_end))
+
+        return pauses
+    except Exception as e:
+        print(f"  Warning: Could not detect pauses: {e}")
+        return []
+
+
+def create_volume_envelope(
+    duration_seconds: float,
+    pause_regions: list,
+    fade_in: float = FADE_DURATION,
+    fade_out: float = FADE_DURATION,
+) -> np.ndarray:
+    """Create volume envelope with fade in/out and pause boosts"""
+    samples = int(SAMPLE_RATE * duration_seconds)
+    envelope = np.ones(samples) * MUSIC_VOLUME_BASE
+
+    fade_in_samples = int(SAMPLE_RATE * fade_in)
+    fade_out_samples = int(SAMPLE_RATE * fade_out)
+
+    if fade_in_samples > 0 and fade_in_samples < samples:
+        envelope[:fade_in_samples] = np.linspace(0, MUSIC_VOLUME_BASE, fade_in_samples)
+
+    if fade_out_samples > 0 and fade_out_samples < samples:
+        envelope[-fade_out_samples:] = np.linspace(
+            MUSIC_VOLUME_BASE, 0, fade_out_samples
+        )
+
+    transition_time = 2.0
+    transition_samples = int(SAMPLE_RATE * transition_time)
+
+    for pause_start, pause_end in pause_regions:
+        start_sample = int(pause_start * SAMPLE_RATE)
+        end_sample = int(pause_end * SAMPLE_RATE)
+
+        fade_up_start = max(0, start_sample - transition_samples)
+        fade_up_end = min(samples, start_sample + transition_samples)
+        if fade_up_end > fade_up_start:
+            envelope[fade_up_start:fade_up_end] = np.linspace(
+                MUSIC_VOLUME_BASE, MUSIC_VOLUME_PAUSE, fade_up_end - fade_up_start
+            )
+
+        envelope[start_sample:end_sample] = MUSIC_VOLUME_PAUSE
+
+        fade_down_start = end_sample
+        fade_down_end = min(samples, end_sample + transition_samples)
+        if fade_down_end > fade_down_start:
+            envelope[fade_down_start:fade_down_end] = np.linspace(
+                MUSIC_VOLUME_PAUSE, MUSIC_VOLUME_BASE, fade_down_end - fade_down_start
+            )
+
+    return envelope
+
+
+def mix_narration_with_music(
+    narration_path: Path,
+    music: np.ndarray,
+    volume_envelope: np.ndarray,
+) -> np.ndarray:
+    """Mix narration with background music using dynamic volume envelope"""
+    narration_data, narration_sr = sf.read(str(narration_path))
+
+    if narration_sr != SAMPLE_RATE:
+        from scipy import signal
+
+        num_samples = int(len(narration_data) * SAMPLE_RATE / narration_sr)
+        narration_data = signal.resample(narration_data, num_samples)
+
+    if narration_data.ndim > 1:
+        narration_data = np.mean(narration_data, axis=1)
+
+    is_stereo_music = music.ndim > 1
+
+    narration_samples = len(narration_data)
+
+    lead_samples = int(FADE_DURATION * SAMPLE_RATE)
+    tail_samples = int(FADE_DURATION * SAMPLE_RATE)
+    total_samples = lead_samples + narration_samples + tail_samples
+
+    if is_stereo_music:
+        if len(music) < total_samples:
+            repeats = (total_samples // len(music)) + 1
+            music = np.tile(music, (repeats, 1))[:total_samples]
+        else:
+            music = music[:total_samples]
+
+        if len(volume_envelope) < total_samples:
+            volume_envelope = np.pad(
+                volume_envelope,
+                (0, total_samples - len(volume_envelope)),
+                constant_values=0,
+            )
+        else:
+            volume_envelope = volume_envelope[:total_samples]
+
+        music[:, 0] *= volume_envelope
+        music[:, 1] *= volume_envelope
+
+        narration_stereo = np.column_stack(
+            [
+                np.concatenate(
+                    [np.zeros(lead_samples), narration_data, np.zeros(tail_samples)]
+                ),
+                np.concatenate(
+                    [np.zeros(lead_samples), narration_data, np.zeros(tail_samples)]
+                ),
+            ]
+        )
+
+        mixed = narration_stereo + music
+    else:
+        if len(music) < total_samples:
+            repeats = (total_samples // len(music)) + 1
+            music = np.tile(music, repeats)[:total_samples]
+        else:
+            music = music[:total_samples]
+
+        if len(volume_envelope) < total_samples:
+            volume_envelope = np.pad(
+                volume_envelope,
+                (0, total_samples - len(volume_envelope)),
+                constant_values=0,
+            )
+        else:
+            volume_envelope = volume_envelope[:total_samples]
+
+        music *= volume_envelope
+
+        narration_padded = np.concatenate(
+            [
+                np.zeros(lead_samples),
+                narration_data,
+                np.zeros(tail_samples),
+            ]
+        )
+
+        mixed = narration_padded + music
+
+    max_val = np.max(np.abs(mixed))
+    if max_val > 0.95:
+        mixed = mixed / max_val * 0.95
+
+    return mixed
+
+
+def convert_to_opus(wav_path: Path, opus_path: Path, bitrate: str = "96k") -> bool:
     try:
         subprocess.run(
             [
@@ -468,7 +935,7 @@ def convert_to_opus(wav_path: Path, opus_path: Path) -> bool:
                 "-c:a",
                 "libopus",
                 "-b:a",
-                "96k",  # Higher bitrate for music
+                bitrate,
                 str(opus_path),
             ],
             check=True,
@@ -476,183 +943,290 @@ def convert_to_opus(wav_path: Path, opus_path: Path) -> bool:
         )
         return True
     except subprocess.CalledProcessError as e:
-        print(f"  FFmpeg error: {e}")
+        print(f"  FFmpeg error: {e.stderr.decode()}")
         return False
 
 
-def make_loopable(audio_path: Path) -> bool:
-    """Add crossfade to make audio loop seamlessly"""
+def get_audio_duration(path: Path) -> float:
     try:
-        # Read audio
-        data, sr = sf.read(str(audio_path))
-
-        # Crossfade duration (2 seconds)
-        fade_samples = int(sr * 2)
-
-        if len(data) < fade_samples * 2:
-            return True  # Too short to crossfade
-
-        # Apply crossfade
-        if data.ndim == 1:
-            # Mono
-            fade_out = np.linspace(1, 0, fade_samples)
-            fade_in = np.linspace(0, 1, fade_samples)
-
-            # Blend end with beginning
-            data[-fade_samples:] = (
-                data[-fade_samples:] * fade_out + data[:fade_samples] * fade_in
-            )
-        else:
-            # Stereo
-            for ch in range(data.shape[1]):
-                fade_out = np.linspace(1, 0, fade_samples)
-                fade_in = np.linspace(0, 1, fade_samples)
-                data[-fade_samples:, ch] = (
-                    data[-fade_samples:, ch] * fade_out
-                    + data[:fade_samples, ch] * fade_in
-                )
-
-        # Save
-        sf.write(str(audio_path), data, sr)
-        return True
-
-    except Exception as e:
-        print(f"  Crossfade error: {e}")
-        return False
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "quiet",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "csv=p=0",
+                str(path),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        return float(result.stdout.strip())
+    except Exception:
+        return 0.0
 
 
-def generate_music(style: str, use_musicgen: bool = True) -> MusicResult | None:
-    """Generate music for a given style"""
-    if style not in MUSIC_STYLES:
-        print(f"Unknown style: {style}")
+def get_dream_theme(dream_id: str) -> str:
+    """Get the music theme for a dream from dreamData.ts"""
+    try:
+        content = DREAM_DATA_PATH.read_text()
+
+        dreams = re.findall(
+            r"\{\s*title:\s*['\"]([^'\"]+)['\"],\s*music:\s*['\"]([^'\"]+)['\"]",
+            content,
+        )
+
+        dream_num = int(dream_id.replace("dream-", ""))
+        if 1 <= dream_num <= len(dreams):
+            return dreams[dream_num - 1][1]
+    except Exception:
+        pass
+
+    return "ambient"
+
+
+def generate_for_dream(dream_id: str, theme=None):
+    """Generate music and combined audio for a specific dream"""
+    narration_path = DREAMS_DIR / f"{dream_id}_full.opus"
+
+    if not narration_path.exists():
+        print(f"  Error: Narration not found: {narration_path}")
         return None
 
-    config = MUSIC_STYLES[style]
-    print(f"\n  Style: {style}")
-    print(f"  Description: {config['description']}")
+    if theme is None:
+        theme = get_dream_theme(dream_id)
+
+    if theme not in MUSIC_THEMES:
+        print(f"  Warning: Unknown theme '{theme}', using 'ambient'")
+        theme = "ambient"
+
+    narration_duration = get_audio_duration(narration_path)
+    if narration_duration <= 0:
+        print(f"  Error: Could not get duration for {narration_path}")
+        return None
+
+    total_duration = narration_duration + (2 * FADE_DURATION)
+
+    print(f"  Narration: {narration_duration:.1f}s ({narration_duration / 60:.1f} min)")
+    print(f"  Total with fades: {total_duration:.1f}s")
+    print(f"  Theme: {theme} - {MUSIC_THEMES[theme]['description']}")
+
+    print(f"  Detecting pause regions...")
+    pauses = detect_pause_regions(narration_path)
+    print(f"  Found {len(pauses)} pause regions")
+
+    adjusted_pauses = [
+        (start + FADE_DURATION, end + FADE_DURATION) for start, end in pauses
+    ]
+
+    print(f"  Generating music track...")
+    music = generate_music_track(theme, total_duration)
+
+    print(f"  Creating volume envelope...")
+    volume_envelope = create_volume_envelope(total_duration, adjusted_pauses)
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    wav_path = OUTPUT_DIR / f"{style}.wav"
-    opus_path = OUTPUT_DIR / f"{style}.opus"
+    music_wav = OUTPUT_DIR / f"{dream_id}_music.wav"
+    sf.write(str(music_wav), music, SAMPLE_RATE)
 
-    method = "procedural"
+    music_opus = OUTPUT_DIR / f"{dream_id}_music.opus"
+    print(f"  Converting music to Opus...")
+    convert_to_opus(music_wav, music_opus)
+    music_wav.unlink(missing_ok=True)
 
-    # Try MusicGen first if available and style has a prompt
-    if use_musicgen and config["prompt"] and check_musicgen_available():
-        print("  Attempting MusicGen generation...")
-        if generate_with_musicgen(style, config, wav_path):
-            method = "musicgen"
-        else:
-            print("  Falling back to procedural generation...")
-            generate_procedural(style, config, wav_path)
-    else:
-        generate_procedural(style, config, wav_path)
-
-    # Make loopable
-    print("  Adding crossfade for seamless looping...")
-    make_loopable(wav_path)
-
-    # Convert to Opus
-    print("  Converting to Opus...")
-    if not convert_to_opus(wav_path, opus_path):
-        return None
-
-    # Clean up WAV
-    wav_path.unlink(missing_ok=True)
-
-    # Get file info
-    duration = config["duration_seconds"]
-    size = opus_path.stat().st_size if opus_path.exists() else 0
-
-    return MusicResult(
-        style=style,
-        path=f"audio/music/{style}.opus",
-        duration_seconds=duration,
-        size_bytes=size,
-        method=method,
+    print(
+        f"  Mixing narration with music (base {MUSIC_VOLUME_BASE * 100:.0f}%, pause {MUSIC_VOLUME_PAUSE * 100:.0f}%)..."
     )
+    mixed = mix_narration_with_music(narration_path, music, volume_envelope)
+
+    combined_wav = DREAMS_DIR / f"{dream_id}_combined.wav"
+    sf.write(str(combined_wav), mixed, SAMPLE_RATE)
+
+    combined_opus = DREAMS_DIR / f"{dream_id}_combined.opus"
+    print(f"  Converting combined audio to Opus...")
+    convert_to_opus(combined_wav, combined_opus, bitrate="80k")
+    combined_wav.unlink(missing_ok=True)
+
+    preview_duration = 120.0
+    print(f"  Creating 2-minute preview with music...")
+    preview_opus = DREAMS_DIR / f"{dream_id}_preview.opus"
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(combined_opus),
+            "-t",
+            str(preview_duration),
+            "-c:a",
+            "libopus",
+            "-b:a",
+            "64k",
+            str(preview_opus),
+        ],
+        check=True,
+        capture_output=True,
+    )
+
+    music_size = music_opus.stat().st_size if music_opus.exists() else 0
+    combined_size = combined_opus.stat().st_size if combined_opus.exists() else 0
+    preview_size = preview_opus.stat().st_size if preview_opus.exists() else 0
+
+    return {
+        "dream_id": dream_id,
+        "theme": theme,
+        "narration_duration": narration_duration,
+        "total_duration": total_duration,
+        "pause_count": len(pauses),
+        "music_path": f"audio/music/{dream_id}_music.opus",
+        "music_size_bytes": music_size,
+        "combined_path": f"audio/dreams/{dream_id}_combined.opus",
+        "combined_size_bytes": combined_size,
+        "preview_path": f"audio/dreams/{dream_id}_preview.opus",
+        "preview_size_bytes": preview_size,
+    }
+
+
+def get_all_dream_ids() -> list:
+    """Get list of all dream IDs from dreamData.ts"""
+    try:
+        content = DREAM_DATA_PATH.read_text()
+        dreams = re.findall(
+            r"\{\s*title:\s*['\"]([^'\"]+)['\"],\s*music:\s*['\"]([^'\"]+)['\"]",
+            content,
+        )
+        return [f"dream-{i + 1}" for i in range(len(dreams))]
+    except Exception:
+        return []
 
 
 def main():
     parser = argparse.ArgumentParser(
         description="Generate ambient music for Dream Stream"
     )
-    parser.add_argument("--style", help="Generate only this style")
     parser.add_argument(
-        "--procedural-only",
-        action="store_true",
-        help="Use only procedural generation (no ML)",
+        "--dream", help="Generate music for this dream ID (e.g., dream-1)"
     )
     parser.add_argument(
-        "--list-styles", action="store_true", help="List available music styles"
+        "--all", action="store_true", help="Generate music for all dreams"
+    )
+    parser.add_argument("--theme", help="Override music theme")
+    parser.add_argument(
+        "--list-themes", action="store_true", help="List available themes"
+    )
+    parser.add_argument(
+        "--duration", type=float, help="Override duration in seconds (standalone mode)"
     )
     args = parser.parse_args()
 
-    if args.list_styles:
-        print("\nAvailable music styles:\n")
-        for name, config in MUSIC_STYLES.items():
+    if args.list_themes:
+        print("\nAvailable music themes:\n")
+        for name, config in MUSIC_THEMES.items():
             print(f"  {name:<12} {config['description']}")
+            print(
+                f"              Chords: {' -> '.join(config['chord_progression'][:4])}"
+            )
+            print(f"              Instrument: {config['instrument']}")
+            print()
         return
 
     print("=" * 60)
     print("Dream Stream Music Generator")
     print("=" * 60)
+    print(f"\nSettings:")
+    print(f"  Base volume: {MUSIC_VOLUME_BASE * 100:.0f}%")
+    print(f"  Pause volume: {MUSIC_VOLUME_PAUSE * 100:.0f}%")
+    print(f"  Fade duration: {FADE_DURATION}s")
 
-    use_musicgen = not args.procedural_only
+    if args.all:
+        dream_ids = get_all_dream_ids()
+        print(f"\nGenerating music for all {len(dream_ids)} dreams...")
+        print("=" * 60)
 
-    if use_musicgen and check_musicgen_available():
-        print("\nMusicGen: Available")
-    else:
-        print("\nMusicGen: Not available (using procedural only)")
-        use_musicgen = False
+        results = []
+        total_size = 0
 
-    styles = [args.style] if args.style else list(MUSIC_STYLES.keys())
+        for i, dream_id in enumerate(dream_ids, 1):
+            print(f"\n[{i}/{len(dream_ids)}] {dream_id}")
+            print("-" * 40)
 
-    results = []
-    total_size = 0
-    total_duration = 0
+            narration_path = DREAMS_DIR / f"{dream_id}_full.opus"
+            if not narration_path.exists():
+                print(f"  Skipping: narration not found")
+                continue
 
-    for i, style in enumerate(styles, 1):
-        if style not in MUSIC_STYLES:
-            print(f"\nUnknown style: {style}")
-            continue
+            result = generate_for_dream(dream_id, args.theme)
+            if result:
+                results.append(result)
+                total_size += result["combined_size_bytes"] + result["music_size_bytes"]
+                print(f"  Done: {result['combined_size_bytes'] / 1024 / 1024:.1f} MB")
 
-        print(f"\n[{i}/{len(styles)}] Generating: {style}")
+        print("\n" + "=" * 60)
+        print(f"Generated {len(results)} dreams")
+        print(f"Total size: {total_size / 1024 / 1024:.1f} MB")
+
+        manifest_path = OUTPUT_DIR / "manifest.json"
+        with open(manifest_path, "w") as f:
+            json.dump(
+                {
+                    "generated_at": __import__("datetime").datetime.now().isoformat(),
+                    "total_dreams": len(results),
+                    "total_size_bytes": total_size,
+                    "settings": {
+                        "base_volume": MUSIC_VOLUME_BASE,
+                        "pause_volume": MUSIC_VOLUME_PAUSE,
+                        "fade_duration": FADE_DURATION,
+                    },
+                    "dreams": results,
+                },
+                f,
+                indent=2,
+            )
+        print(f"Manifest: {manifest_path}")
+
+    elif args.dream:
+        print(f"\nGenerating for: {args.dream}")
         print("-" * 40)
 
-        result = generate_music(style, use_musicgen)
-        if result:
-            results.append(result._asdict())
-            total_size += result.size_bytes
-            total_duration += result.duration_seconds
-            print(f"  Duration: {result.duration_seconds:.1f}s")
-            print(f"  Size: {result.size_bytes / 1024:.1f} KB")
-            print(f"  Method: {result.method}")
+        result = generate_for_dream(args.dream, args.theme)
 
-    # Write manifest
-    manifest_path = OUTPUT_DIR / "manifest.json"
-    with open(manifest_path, "w") as f:
-        json.dump(
-            {
-                "generated_at": __import__("datetime").datetime.now().isoformat(),
-                "musicgen_used": use_musicgen and check_musicgen_available(),
-                "total_styles": len(results),
-                "total_duration_seconds": total_duration,
-                "total_size_bytes": total_size,
-                "styles": results,
-            },
-            f,
-            indent=2,
-        )
+        if result:
+            print(
+                f"\n  Music: {result['music_path']} ({result['music_size_bytes'] / 1024:.1f} KB)"
+            )
+            print(
+                f"  Combined: {result['combined_path']} ({result['combined_size_bytes'] / 1024 / 1024:.1f} MB)"
+            )
+            print(
+                f"  Preview: {result['preview_path']} ({result['preview_size_bytes'] / 1024:.1f} KB)"
+            )
+            print(f"  Pauses detected: {result['pause_count']}")
+    else:
+        theme = args.theme or "ambient"
+        duration = args.duration or 120
+
+        print(f"\nGenerating standalone {theme} music ({duration}s)")
+        print("-" * 40)
+
+        music = generate_music_track(theme, duration)
+
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        wav_path = OUTPUT_DIR / f"{theme}.wav"
+        opus_path = OUTPUT_DIR / f"{theme}.opus"
+
+        sf.write(str(wav_path), music, SAMPLE_RATE)
+        convert_to_opus(wav_path, opus_path)
+        wav_path.unlink(missing_ok=True)
+
+        size = opus_path.stat().st_size
+        print(f"\n  Output: {opus_path} ({size / 1024:.1f} KB)")
 
     print("\n" + "=" * 60)
     print("Generation Complete!")
     print("=" * 60)
-    print(f"Styles generated: {len(results)}")
-    print(f"Total duration: {total_duration / 60:.1f} minutes")
-    print(f"Total size: {total_size / 1024 / 1024:.2f} MB")
-    print(f"Manifest: {manifest_path}")
 
 
 if __name__ == "__main__":

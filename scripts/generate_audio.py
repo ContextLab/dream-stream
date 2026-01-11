@@ -3,18 +3,12 @@
 Audio Generation Script for Dream Stream
 
 Generates high-quality TTS audio from dream narratives using Edge TTS.
-Edge TTS is free, requires no API keys, and works perfectly in CI environments.
-
 Outputs Opus-encoded audio files optimized for web streaming.
-
-Requirements:
-    pip install edge-tts
 
 Usage:
     python scripts/generate_audio.py
     python scripts/generate_audio.py --dream "dream-1"
     python scripts/generate_audio.py --limit 3
-    python scripts/generate_audio.py --list-voices
 """
 
 import argparse
@@ -30,21 +24,20 @@ try:
     import edge_tts
 except ImportError:
     print("Installing edge-tts...")
-    subprocess.run([sys.executable, "-m", "pip", "install", "edge-tts"])
+    subprocess.run([sys.executable, "-m", "pip", "install", "edge-tts"], check=True)
     import edge_tts
 
 PROJECT_ROOT = Path(__file__).parent.parent
 DREAM_DATA_PATH = PROJECT_ROOT / "lib" / "dreamData.ts"
 OUTPUT_DIR = PROJECT_ROOT / "public" / "audio" / "dreams"
+CACHE_DIR = PROJECT_ROOT / ".audio_cache"
 
-# Voice settings - Sonia is a calm, soothing British English voice
 VOICE = "en-GB-SoniaNeural"
-RATE = "-30%"  # Slower for dream narration
-PITCH = "-15Hz"  # Lower pitch for calming effect
+RATE = "-30%"
+PITCH = "-15Hz"
 
-# Pause durations
-PAUSE_DURATION_MS = 45000  # Long pause for lucid exploration
-SILENCE_BETWEEN_SEGMENTS_MS = 2000  # Short pause between segments
+PAUSE_DURATION_MS = 45000
+SILENCE_BETWEEN_SEGMENTS_MS = 2000
 
 
 class DreamContent(NamedTuple):
@@ -54,10 +47,63 @@ class DreamContent(NamedTuple):
     content: str
 
 
+def ensure_silence_files():
+    """Pre-generate reusable silence files"""
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+    pause_file = CACHE_DIR / "pause_45s.mp3"
+    gap_file = CACHE_DIR / "gap_2s.mp3"
+
+    if not pause_file.exists():
+        print("  Generating 45s pause file...")
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "anullsrc=r=24000:cl=mono",
+                "-t",
+                str(PAUSE_DURATION_MS / 1000),
+                "-c:a",
+                "libmp3lame",
+                "-q:a",
+                "9",
+                str(pause_file),
+            ],
+            check=True,
+            capture_output=True,
+        )
+
+    if not gap_file.exists():
+        print("  Generating 2s gap file...")
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "anullsrc=r=24000:cl=mono",
+                "-t",
+                str(SILENCE_BETWEEN_SEGMENTS_MS / 1000),
+                "-c:a",
+                "libmp3lame",
+                "-q:a",
+                "9",
+                str(gap_file),
+            ],
+            check=True,
+            capture_output=True,
+        )
+
+    return pause_file, gap_file
+
+
 def parse_dream_data() -> list[DreamContent]:
     """Extract dream content from dreamData.ts"""
     content = DREAM_DATA_PATH.read_text()
-
     pattern = r"\{\s*title:\s*['\"]([^'\"]+)['\"],\s*music:\s*['\"]([^'\"]+)['\"],\s*content:\s*`([^`]+)`"
     matches = re.findall(pattern, content, re.DOTALL)
 
@@ -78,139 +124,99 @@ def split_by_pauses(content: str) -> list[dict]:
     for i, part in enumerate(parts):
         text = part.strip()
         if text:
-            segments.append({"type": "narration", "text": text, "index": len(segments)})
-
+            segments.append({"type": "narration", "text": text})
         if i < len(parts) - 1:
-            segments.append(
-                {
-                    "type": "pause",
-                    "duration_ms": PAUSE_DURATION_MS,
-                    "index": len(segments),
-                }
-            )
+            segments.append({"type": "pause"})
 
     return segments
 
 
-def generate_silence(duration_ms: int, output_path: Path) -> bool:
-    """Generate a silent audio file using ffmpeg"""
-    try:
-        subprocess.run(
-            [
-                "ffmpeg",
-                "-y",
-                "-f",
-                "lavfi",
-                "-i",
-                "anullsrc=r=24000:cl=mono",
-                "-t",
-                str(duration_ms / 1000),
-                "-c:a",
-                "libmp3lame",
-                "-q:a",
-                "9",
-                str(output_path),
-            ],
-            check=True,
-            capture_output=True,
-        )
-        return True
-    except subprocess.CalledProcessError as e:
-        print(f"Error generating silence: {e}")
-        return False
-
-
-def concatenate_audio_files(input_files: list[Path], output_path: Path) -> bool:
-    """Concatenate multiple audio files using ffmpeg"""
-    list_file = output_path.parent / "concat_list.txt"
-
-    with open(list_file, "w") as f:
-        for file in input_files:
-            f.write(f"file '{file.absolute()}'\n")
-
-    try:
-        subprocess.run(
-            [
-                "ffmpeg",
-                "-y",
-                "-f",
-                "concat",
-                "-safe",
-                "0",
-                "-i",
-                str(list_file),
-                "-c:a",
-                "libmp3lame",
-                "-q:a",
-                "4",
-                str(output_path),
-            ],
-            check=True,
-            capture_output=True,
-        )
-        list_file.unlink()
-        return True
-    except subprocess.CalledProcessError as e:
-        print(f"Error concatenating audio: {e}")
-        list_file.unlink(missing_ok=True)
-        return False
-
-
-async def generate_segment_audio(
-    text: str, output_path: Path, voice: str, rate: str, pitch: str
-):
-    """Generate audio for a single text segment using Edge TTS"""
+async def generate_tts(text: str, output_path: Path, voice: str, rate: str, pitch: str):
+    """Generate TTS audio for text"""
     communicate = edge_tts.Communicate(text, voice, rate=rate, pitch=pitch)
     await communicate.save(str(output_path))
 
 
 async def generate_dream_audio(
-    dream: DreamContent, output_dir: Path, voice: str = VOICE
-) -> dict | None:
+    dream: DreamContent,
+    output_dir: Path,
+    pause_file: Path,
+    gap_file: Path,
+    voice: str = VOICE,
+):
     """Generate audio for a single dream"""
     dream_dir = output_dir / dream.id
     dream_dir.mkdir(parents=True, exist_ok=True)
 
     segments = split_by_pauses(dream.content)
-    segment_files = []
+    narration_count = sum(1 for s in segments if s["type"] == "narration")
+    pause_count = sum(1 for s in segments if s["type"] == "pause")
 
-    print(f"\n  Generating {len(segments)} segments...")
+    print(f"  {narration_count} narrations, {pause_count} pauses")
 
+    concat_list = []
+    narration_files = []
+
+    narration_idx = 0
     for seg in segments:
-        seg_file = dream_dir / f"segment_{seg['index']:03d}.mp3"
-
         if seg["type"] == "pause":
-            print(f"    Segment {seg['index']}: [PAUSE] ({seg['duration_ms']}ms)")
-            generate_silence(seg["duration_ms"], seg_file)
+            concat_list.append(pause_file)
         else:
+            narration_idx += 1
+            narration_file = dream_dir / f"narration_{narration_idx:02d}.mp3"
+
             word_count = len(seg["text"].split())
-            print(f"    Segment {seg['index']}: {word_count} words")
+            print(
+                f"    Narration {narration_idx}/{narration_count}: {word_count} words"
+            )
 
             try:
-                await generate_segment_audio(seg["text"], seg_file, voice, RATE, PITCH)
+                await generate_tts(seg["text"], narration_file, voice, RATE, PITCH)
+                concat_list.append(narration_file)
+                narration_files.append(narration_file)
+
+                if narration_idx < narration_count:
+                    concat_list.append(gap_file)
             except Exception as e:
-                print(f"      Warning: Failed to generate segment: {e}")
+                print(f"      Error: {e}")
                 continue
 
-        segment_files.append(seg_file)
-
-        # Add short silence after narration segments
-        if seg["type"] == "narration":
-            short_silence = dream_dir / f"silence_{seg['index']:03d}.mp3"
-            generate_silence(SILENCE_BETWEEN_SEGMENTS_MS, short_silence)
-            segment_files.append(short_silence)
-
-    if not segment_files:
-        print(f"  Error: No audio generated for {dream.title}")
+    if not narration_files:
+        print(f"  Error: No audio generated")
         return None
 
-    # Concatenate all segments into full audio
-    full_mp3 = output_dir / f"{dream.id}_full.mp3"
-    print(f"  Concatenating into {full_mp3.name}...")
-    concatenate_audio_files(segment_files, full_mp3)
+    list_file = dream_dir / "concat_list.txt"
+    with open(list_file, "w") as f:
+        for file in concat_list:
+            f.write(f"file '{file.absolute()}'\n")
 
-    # Convert to Opus
-    full_audio = output_dir / f"{dream.id}_full.opus"
+    full_mp3 = dream_dir / "full.mp3"
+    print(f"  Concatenating {len(concat_list)} segments...")
+
+    result = subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            str(list_file),
+            "-c:a",
+            "libmp3lame",
+            "-q:a",
+            "4",
+            str(full_mp3),
+        ],
+        capture_output=True,
+    )
+
+    if result.returncode != 0:
+        print(f"  Concat error: {result.stderr.decode()[:200]}")
+        return None
+
+    full_opus = output_dir / f"{dream.id}_full.opus"
     print(f"  Converting to Opus...")
     subprocess.run(
         [
@@ -222,45 +228,42 @@ async def generate_dream_audio(
             "libopus",
             "-b:a",
             "64k",
-            str(full_audio),
+            str(full_opus),
         ],
         check=True,
         capture_output=True,
     )
 
-    # Create 2-minute preview
-    preview_audio = output_dir / f"{dream.id}_preview.opus"
-    print(f"  Creating 2-minute preview...")
+    preview_opus = output_dir / f"{dream.id}_preview.opus"
+    print(f"  Creating preview...")
     subprocess.run(
         [
             "ffmpeg",
             "-y",
             "-i",
-            str(full_audio),
+            str(full_opus),
             "-t",
             "120",
             "-c:a",
             "libopus",
             "-b:a",
             "64k",
-            str(preview_audio),
+            str(preview_opus),
         ],
         check=True,
         capture_output=True,
     )
 
-    # Cleanup temp files
+    for f in narration_files:
+        f.unlink(missing_ok=True)
     full_mp3.unlink(missing_ok=True)
-    for f in segment_files:
-        f.unlink(missing_ok=True)
-    for f in dream_dir.glob("silence_*.mp3"):
-        f.unlink(missing_ok=True)
+    list_file.unlink(missing_ok=True)
+
     try:
         dream_dir.rmdir()
     except OSError:
         pass
 
-    # Get duration
     result = subprocess.run(
         [
             "ffprobe",
@@ -270,15 +273,12 @@ async def generate_dream_audio(
             "format=duration",
             "-of",
             "csv=p=0",
-            str(full_audio),
+            str(full_opus),
         ],
         capture_output=True,
         text=True,
     )
     duration = float(result.stdout.strip()) if result.stdout.strip() else 0
-
-    full_size = full_audio.stat().st_size if full_audio.exists() else 0
-    preview_size = preview_audio.stat().st_size if preview_audio.exists() else 0
 
     return {
         "id": dream.id,
@@ -287,46 +287,32 @@ async def generate_dream_audio(
         "full_audio": f"audio/dreams/{dream.id}_full.opus",
         "preview_audio": f"audio/dreams/{dream.id}_preview.opus",
         "duration_seconds": duration,
-        "full_size_bytes": full_size,
-        "preview_size_bytes": preview_size,
-        "segment_count": len([s for s in segments if s["type"] == "narration"]),
-        "pause_count": len([s for s in segments if s["type"] == "pause"]),
+        "full_size_bytes": full_opus.stat().st_size if full_opus.exists() else 0,
+        "preview_size_bytes": preview_opus.stat().st_size
+        if preview_opus.exists()
+        else 0,
+        "narration_count": narration_count,
+        "pause_count": pause_count,
     }
-
-
-async def list_voices():
-    """List available Edge TTS voices"""
-    voices = await edge_tts.list_voices()
-    print("\nAvailable English voices:\n")
-    for v in sorted(voices, key=lambda x: x["ShortName"]):
-        if v["Locale"].startswith("en-"):
-            print(f"  {v['ShortName']:<30} {v['Gender']:<8} {v['Locale']}")
 
 
 async def main():
     parser = argparse.ArgumentParser(description="Generate TTS audio for Dream Stream")
-    parser.add_argument("--dream", help="Generate only this dream ID (e.g., dream-1)")
-    parser.add_argument("--limit", type=int, help="Limit number of dreams to generate")
-    parser.add_argument(
-        "--voice", default=VOICE, help=f"Voice to use (default: {VOICE})"
-    )
-    parser.add_argument(
-        "--list-voices", action="store_true", help="List available voices"
-    )
+    parser.add_argument("--dream", help="Generate only this dream ID")
+    parser.add_argument("--limit", type=int, help="Limit number of dreams")
+    parser.add_argument("--voice", default=VOICE, help=f"Voice (default: {VOICE})")
     args = parser.parse_args()
 
-    if args.list_voices:
-        await list_voices()
-        return
-
     print("=" * 60)
-    print("Dream Stream Audio Generator (Edge TTS)")
+    print("Dream Stream Audio Generator")
     print("=" * 60)
+    print(f"\nVoice: {args.voice}")
+    print(f"Rate: {RATE}, Pitch: {PITCH}")
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    print(f"\nVoice: {args.voice}")
-    print(f"Rate: {RATE}, Pitch: {PITCH}")
+    print("\nPreparing silence files...")
+    pause_file, gap_file = ensure_silence_files()
 
     print("\nParsing dream narratives...")
     dreams = parse_dream_data()
@@ -346,18 +332,20 @@ async def main():
     total_duration = 0
 
     for i, dream in enumerate(dreams, 1):
-        print(f"\n[{i}/{len(dreams)}] Processing: {dream.title}")
+        print(f"\n[{i}/{len(dreams)}] {dream.title}")
         print("-" * 40)
 
-        result = await generate_dream_audio(dream, OUTPUT_DIR, args.voice)
+        result = await generate_dream_audio(
+            dream, OUTPUT_DIR, pause_file, gap_file, args.voice
+        )
+
         if result:
             results.append(result)
             total_size += result["full_size_bytes"] + result["preview_size_bytes"]
             total_duration += result["duration_seconds"]
-            print(f"  Duration: {result['duration_seconds']:.1f}s")
+            print(f"  Duration: {result['duration_seconds'] / 60:.1f} min")
             print(f"  Size: {result['full_size_bytes'] / 1024 / 1024:.1f} MB")
 
-    # Write manifest
     manifest_path = OUTPUT_DIR / "manifest.json"
     with open(manifest_path, "w") as f:
         json.dump(
@@ -376,12 +364,11 @@ async def main():
         )
 
     print("\n" + "=" * 60)
-    print("Generation Complete!")
+    print("Complete!")
     print("=" * 60)
-    print(f"Dreams processed: {len(results)}")
-    print(f"Total duration: {total_duration / 60:.1f} minutes")
-    print(f"Total size: {total_size / 1024 / 1024:.1f} MB")
-    print(f"Manifest: {manifest_path}")
+    print(f"Dreams: {len(results)}")
+    print(f"Duration: {total_duration / 60:.1f} minutes")
+    print(f"Size: {total_size / 1024 / 1024:.1f} MB")
 
 
 if __name__ == "__main__":

@@ -260,3 +260,14 @@ __marimo__/
 # Ignore Kokoro model files (too large for git)
 kokoro-v1.0.onnx
 voices-v1.0.bin
+
+# Audio generation cache (silence files)
+.audio_cache/
+
+# Audio intermediate files (only combined files are committed)
+public/audio/dreams/*_full.opus
+public/audio/dreams/*_preview.opus
+public/audio/music/
+
+# macOS
+.DS_Store

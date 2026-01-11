@@ -1,14 +1,17 @@
+import { useState } from 'react';
 import { View, StyleSheet, ScrollView, Pressable, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text, Heading } from '@/components/ui/Text';
 import { useTheme } from '@/components/ThemeProvider';
+import { SleepDebugPanel } from '@/components/SleepDebugPanel';
 import { colors, spacing } from '@/theme/tokens';
 
 export default function SettingsScreen() {
   const router = useRouter();
   const { isDark, toggleTheme } = useTheme();
+  const [showSleepDebug, setShowSleepDebug] = useState(false);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -49,6 +52,15 @@ export default function SettingsScreen() {
               <Ionicons name="chevron-forward" size={20} color={colors.gray[500]} />
             </Pressable>
           </Link>
+        </View>
+
+        <View style={styles.debugSection}>
+          <MenuRow
+            icon="bug-outline"
+            label="Sleep Detection Debug"
+            onPress={() => setShowSleepDebug(!showSleepDebug)}
+          />
+          {showSleepDebug && <SleepDebugPanel />}
         </View>
 
         <View style={styles.versionSection}>
@@ -117,5 +129,11 @@ const styles = StyleSheet.create({
   versionSection: {
     padding: spacing.xl,
     alignItems: 'center',
+  },
+  debugSection: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: '#252542',
   },
 });
