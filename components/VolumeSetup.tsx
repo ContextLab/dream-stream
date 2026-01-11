@@ -57,10 +57,14 @@ function VolumeSlider({
   );
 }
 
-const AUDIO_BASE_URL =
-  Platform.OS === 'web'
-    ? '/dream-stream/audio/dreams'
-    : 'https://context-lab.com/dream-stream/audio/dreams';
+function getAudioBaseUrl(): string {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    const origin = window.location.origin;
+    const basePath = window.location.pathname.includes('/dream-stream') ? '/dream-stream' : '';
+    return `${origin}${basePath}/audio/dreams`;
+  }
+  return 'https://context-lab.com/dream-stream/audio/dreams';
+}
 
 export function VolumeSetup({ onComplete, onSkip, testAudioUrl }: VolumeSetupProps) {
   const [volume, setVolume] = useState(0.3);
@@ -71,7 +75,7 @@ export function VolumeSetup({ onComplete, onSkip, testAudioUrl }: VolumeSetupPro
   const [volumeWarning, setVolumeWarning] = useState<string | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
 
-  const effectiveTestUrl = testAudioUrl || `${AUDIO_BASE_URL}/dream-1_combined.opus`;
+  const effectiveTestUrl = testAudioUrl || `${getAudioBaseUrl()}/dream-1_combined.opus`;
 
   useEffect(() => {
     loadSavedVolume();

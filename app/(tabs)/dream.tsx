@@ -110,10 +110,16 @@ export default function DreamScreen() {
         shouldDuckAndroid: true,
       });
 
-      const baseUrl =
-        Platform.OS === 'web'
-          ? '/dream-stream/audio/dreams'
-          : 'https://context-lab.com/dream-stream/audio/dreams';
+      const baseUrl = (() => {
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          const origin = window.location.origin;
+          const basePath = window.location.pathname.includes('/dream-stream')
+            ? '/dream-stream'
+            : '';
+          return `${origin}${basePath}/audio/dreams`;
+        }
+        return 'https://context-lab.com/dream-stream/audio/dreams';
+      })();
       const audioUrl = `${baseUrl}/${dream.id}_combined.opus`;
 
       const { sound, status } = await Audio.Sound.createAsync(
