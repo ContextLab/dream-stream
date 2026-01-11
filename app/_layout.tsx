@@ -8,6 +8,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider } from '@/components/AuthProvider';
 import { ThemeProvider, useTheme } from '@/components/ThemeProvider';
+import { DarkOverlayProvider } from '@/components/DarkOverlayProvider';
 import {
   useFonts,
   CourierPrime_400Regular,
@@ -58,7 +59,9 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <ThemeProvider>
           <AuthProvider>
-            <RootLayoutContent />
+            <DarkOverlayProvider>
+              <RootLayoutContent />
+            </DarkOverlayProvider>
           </AuthProvider>
         </ThemeProvider>
       </SafeAreaProvider>

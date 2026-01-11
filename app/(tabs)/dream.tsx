@@ -7,6 +7,9 @@ import { Audio, AVPlaybackStatus } from 'expo-av';
 import { Text, Heading } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
 import { VolumeSetup } from '@/components/VolumeSetup';
+import { MicrophoneTest } from '@/components/MicrophoneTest';
+import { SleepStageGraph } from '@/components/SleepStageGraph';
+import { useDarkOverlay } from '@/components/DarkOverlayProvider';
 import { useSleepTracking } from '@/hooks/useSleepTracking';
 import { useLaunchQueue } from '@/hooks/useLaunchQueue';
 import {
@@ -14,9 +17,11 @@ import {
   getSleepStageColor,
   onRemStart,
   onRemEnd,
+  onStageHistoryChange,
+  type StageHistoryEntry,
 } from '@/services/sleep';
 import { storage } from '@/lib/storage';
-import { fadeOut } from '@/services/volume';
+import { fadeOut, configureSleepAudioSession } from '@/services/volume';
 import { colors, spacing, borderRadius } from '@/theme/tokens';
 import type { Dream } from '@/types/database';
 
@@ -26,19 +31,27 @@ export default function DreamScreen() {
   const { queue, getNext, complete } = useLaunchQueue();
 
   const [showVolumeSetup, setShowVolumeSetup] = useState(false);
+  const [showMicTest, setShowMicTest] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentDream, setCurrentDream] = useState<Dream | null>(null);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [stageHistory, setStageHistory] = useState<StageHistoryEntry[]>([]);
+  const { showDarkOverlay } = useDarkOverlay();
+  const [helpMeFallAsleep, setHelpMeFallAsleep] = useState(false);
+  const [isMeditating, setIsMeditating] = useState(false);
+  const [isMeditationPaused, setIsMeditationPaused] = useState(false);
+  const [meditationProgress, setMeditationProgress] = useState(0);
+  const [meditationDuration, setMeditationDuration] = useState(0);
+  const meditationSoundRef = useRef<Audio.Sound | null>(null);
 
   const soundRef = useRef<Audio.Sound | null>(null);
   const remUnsubscribeRef = useRef<(() => void) | null>(null);
   const remEndUnsubscribeRef = useRef<(() => void) | null>(null);
+  const stageHistoryUnsubscribeRef = useRef<(() => void) | null>(null);
   const currentQueueIdRef = useRef<string | null>(null);
-  const volumeRef = useRef(0.3);
 
   useEffect(() => {
-    loadVolume();
     return () => {
       cleanup();
     };
@@ -48,6 +61,7 @@ export default function DreamScreen() {
     if (isTracking) {
       remUnsubscribeRef.current = onRemStart(handleRemStart);
       remEndUnsubscribeRef.current = onRemEnd(handleRemEnd);
+      stageHistoryUnsubscribeRef.current = onStageHistoryChange(setStageHistory);
     }
 
     return () => {
@@ -59,13 +73,12 @@ export default function DreamScreen() {
         remEndUnsubscribeRef.current();
         remEndUnsubscribeRef.current = null;
       }
+      if (stageHistoryUnsubscribeRef.current) {
+        stageHistoryUnsubscribeRef.current();
+        stageHistoryUnsubscribeRef.current = null;
+      }
     };
   }, [isTracking, queue]);
-
-  const loadVolume = async () => {
-    const prefs = await storage.getPreferences();
-    volumeRef.current = prefs.voiceVolume;
-  };
 
   const cleanup = async () => {
     if (soundRef.current) {
@@ -73,6 +86,12 @@ export default function DreamScreen() {
         await soundRef.current.unloadAsync();
       } catch {}
       soundRef.current = null;
+    }
+    if (meditationSoundRef.current) {
+      try {
+        await meditationSoundRef.current.unloadAsync();
+      } catch {}
+      meditationSoundRef.current = null;
     }
   };
 
@@ -91,7 +110,7 @@ export default function DreamScreen() {
     console.log('[Dream] REM ended - stopping playback');
     if (soundRef.current && isPlaying) {
       try {
-        await fadeOut(soundRef.current, volumeRef.current, 3000);
+        await fadeOut(soundRef.current, 1.0, 3000);
         await soundRef.current.pauseAsync();
         setIsPlaying(false);
       } catch (err) {
@@ -103,12 +122,7 @@ export default function DreamScreen() {
   const playDream = async (dream: Dream) => {
     try {
       await cleanup();
-
-      await Audio.setAudioModeAsync({
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: true,
-        shouldDuckAndroid: true,
-      });
+      await configureSleepAudioSession();
 
       const baseUrl = (() => {
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -124,7 +138,7 @@ export default function DreamScreen() {
 
       const { sound, status } = await Audio.Sound.createAsync(
         { uri: audioUrl },
-        { shouldPlay: true, volume: volumeRef.current },
+        { shouldPlay: true, volume: 1.0 },
         onPlaybackStatusUpdate
       );
 
@@ -177,10 +191,136 @@ export default function DreamScreen() {
     setShowVolumeSetup(true);
   }, [queue.length, router]);
 
-  const handleVolumeComplete = useCallback(
-    async (volume: number) => {
-      volumeRef.current = volume;
-      setShowVolumeSetup(false);
+  const getMeditationUrl = () => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const origin = window.location.origin;
+      const basePath = window.location.pathname.includes('/dream-stream') ? '/dream-stream' : '';
+      return `${origin}${basePath}/audio/meditation/sleep-meditation_full.opus`;
+    }
+    return 'https://context-lab.com/dream-stream/audio/meditation/sleep-meditation_full.opus';
+  };
+
+  const playMeditation = useCallback(
+    async (fromPosition?: number) => {
+      try {
+        await configureSleepAudioSession();
+
+        const { sound, status } = await Audio.Sound.createAsync(
+          { uri: getMeditationUrl() },
+          {
+            shouldPlay: true,
+            volume: 1.0,
+            positionMillis: fromPosition ?? 0,
+          },
+          (playbackStatus) => {
+            if (!playbackStatus.isLoaded) return;
+
+            if (playbackStatus.durationMillis) {
+              setMeditationDuration(playbackStatus.durationMillis / 1000);
+            }
+            if (playbackStatus.positionMillis && playbackStatus.durationMillis) {
+              setMeditationProgress(playbackStatus.positionMillis / playbackStatus.durationMillis);
+            }
+
+            if (playbackStatus.didJustFinish) {
+              setIsMeditating(false);
+              setIsMeditationPaused(false);
+              setMeditationProgress(0);
+              meditationSoundRef.current = null;
+              start('audio').catch(() => {
+                Alert.alert('Error', 'Failed to start sleep tracking.');
+              });
+            }
+          }
+        );
+
+        meditationSoundRef.current = sound;
+        setIsMeditating(true);
+        setIsMeditationPaused(false);
+      } catch (err) {
+        console.warn('Failed to play meditation:', err);
+        start('audio').catch(() => {
+          Alert.alert('Error', 'Failed to start sleep tracking.');
+        });
+      }
+    },
+    [start]
+  );
+
+  const skipMeditation = useCallback(async () => {
+    if (meditationSoundRef.current) {
+      try {
+        await meditationSoundRef.current.stopAsync();
+        await meditationSoundRef.current.unloadAsync();
+      } catch {}
+      meditationSoundRef.current = null;
+    }
+    setIsMeditating(false);
+    setIsMeditationPaused(false);
+    setMeditationProgress(0);
+    try {
+      await start('audio');
+    } catch {
+      Alert.alert('Error', 'Failed to start sleep tracking.');
+    }
+  }, [start]);
+
+  const toggleMeditationPause = useCallback(async () => {
+    if (!meditationSoundRef.current) return;
+
+    try {
+      const status = await meditationSoundRef.current.getStatusAsync();
+      if (!status.isLoaded) return;
+
+      if (status.isPlaying) {
+        await meditationSoundRef.current.pauseAsync();
+        setIsMeditationPaused(true);
+      } else {
+        await meditationSoundRef.current.playAsync();
+        setIsMeditationPaused(false);
+      }
+    } catch (err) {
+      console.warn('Failed to toggle meditation pause:', err);
+    }
+  }, []);
+
+  const restartMeditation = useCallback(async () => {
+    if (meditationSoundRef.current) {
+      try {
+        await meditationSoundRef.current.stopAsync();
+        await meditationSoundRef.current.unloadAsync();
+      } catch {}
+      meditationSoundRef.current = null;
+    }
+    setMeditationProgress(0);
+    setIsMeditationPaused(false);
+    await playMeditation();
+  }, [playMeditation]);
+
+  const stopMeditation = useCallback(async () => {
+    if (meditationSoundRef.current) {
+      try {
+        await meditationSoundRef.current.stopAsync();
+        await meditationSoundRef.current.unloadAsync();
+      } catch {}
+      meditationSoundRef.current = null;
+    }
+    setIsMeditating(false);
+    setIsMeditationPaused(false);
+    setMeditationProgress(0);
+  }, []);
+
+  const handleVolumeComplete = useCallback(() => {
+    setShowVolumeSetup(false);
+    setShowMicTest(true);
+  }, []);
+
+  const handleMicTestComplete = useCallback(async () => {
+    setShowMicTest(false);
+
+    if (helpMeFallAsleep) {
+      await playMeditation();
+    } else {
       try {
         await start('audio');
       } catch {
@@ -189,9 +329,25 @@ export default function DreamScreen() {
           'Failed to start sleep tracking. Please ensure microphone access is enabled.'
         );
       }
-    },
-    [start]
-  );
+    }
+  }, [start, helpMeFallAsleep, playMeditation]);
+
+  const handleMicTestSkip = useCallback(async () => {
+    setShowMicTest(false);
+
+    if (helpMeFallAsleep) {
+      await playMeditation();
+    } else {
+      try {
+        await start('audio');
+      } catch {
+        Alert.alert(
+          'Error',
+          'Failed to start sleep tracking. Please ensure microphone access is enabled.'
+        );
+      }
+    }
+  }, [start, helpMeFallAsleep, playMeditation]);
 
   const handleStopTracking = useCallback(async () => {
     const doStop = async () => {
@@ -224,23 +380,6 @@ export default function DreamScreen() {
     }
   }, [stop, cleanup]);
 
-  const handleManualPlay = async () => {
-    if (isPlaying) {
-      if (soundRef.current) {
-        await soundRef.current.pauseAsync();
-        setIsPlaying(false);
-      }
-    } else {
-      const nextItem = await getNext();
-      if (nextItem) {
-        currentQueueIdRef.current = nextItem.id;
-        await playDream(nextItem.dream);
-      } else {
-        Alert.alert('Queue Empty', 'Add dreams to your queue first.');
-      }
-    }
-  };
-
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
@@ -260,7 +399,71 @@ export default function DreamScreen() {
         </View>
 
         <View style={styles.mainSection}>
-          {isTracking ? (
+          {isMeditating ? (
+            <View style={styles.trackingActive}>
+              <View style={styles.statusRow}>
+                <View style={[styles.pulsingDot, { backgroundColor: colors.primary[400] }]} />
+                <Text variant="body" weight="medium" color="primary">
+                  Sleep Meditation
+                </Text>
+              </View>
+
+              <View style={styles.meditationContent}>
+                <Ionicons name="sparkles" size={48} color={colors.primary[400]} />
+                <Text variant="h4" weight="semibold" color="primary" align="center">
+                  Gentle Journey to Sleep
+                </Text>
+                <Text variant="body" color="secondary" align="center" style={styles.meditationDesc}>
+                  Relax and breathe... Sleep tracking will begin automatically when the meditation
+                  ends.
+                </Text>
+              </View>
+
+              <View style={styles.progressContainer}>
+                <View style={styles.progressBar}>
+                  <View style={[styles.progressFill, { width: `${meditationProgress * 100}%` }]} />
+                </View>
+                <Text variant="caption" color="muted">
+                  {formatTime(meditationProgress * meditationDuration)} /{' '}
+                  {formatTime(meditationDuration)}
+                </Text>
+              </View>
+
+              <View style={styles.meditationControls}>
+                <Pressable style={styles.meditationControlButton} onPress={restartMeditation}>
+                  <Ionicons name="refresh" size={24} color={colors.gray[400]} />
+                </Pressable>
+
+                <Pressable style={styles.meditationPlayButton} onPress={toggleMeditationPause}>
+                  <Ionicons
+                    name={isMeditationPaused ? 'play' : 'pause'}
+                    size={32}
+                    color={colors.primary[400]}
+                  />
+                </Pressable>
+
+                <Pressable style={styles.meditationControlButton} onPress={skipMeditation}>
+                  <Ionicons name="play-skip-forward" size={24} color={colors.gray[400]} />
+                </Pressable>
+              </View>
+
+              <View style={styles.actionRow}>
+                <Pressable style={styles.darkModeButton} onPress={showDarkOverlay}>
+                  <Ionicons name="moon" size={20} color={colors.gray[400]} />
+                  <Text variant="caption" color="muted">
+                    Dark Screen
+                  </Text>
+                </Pressable>
+
+                <Pressable style={styles.stopMeditationButton} onPress={stopMeditation}>
+                  <Ionicons name="stop" size={20} color={colors.error} />
+                  <Text variant="caption" style={{ color: colors.error }}>
+                    Stop
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : isTracking ? (
             <View style={styles.trackingActive}>
               <View style={styles.statusRow}>
                 <View style={styles.pulsingDot} />
@@ -316,25 +519,37 @@ export default function DreamScreen() {
                 </View>
               )}
 
-              <View style={styles.controlsRow}>
-                <Pressable style={styles.playButton} onPress={handleManualPlay}>
-                  <Ionicons name={isPlaying ? 'pause' : 'play'} size={32} color="#ffffff" />
-                </Pressable>
-              </View>
-
               <Text variant="caption" color="muted" align="center" style={styles.hint}>
                 {currentStage === 'rem'
                   ? 'REM detected - dream audio playing'
                   : 'Waiting for REM sleep to play dreams...'}
               </Text>
 
-              <Button variant="outline" onPress={handleStopTracking} style={styles.stopButton}>
-                Stop Tracking
-              </Button>
+              <SleepStageGraph
+                stages={stageHistory}
+                currentStage={currentStage}
+                isTracking={isTracking}
+              />
+
+              <View style={styles.actionRow}>
+                <Pressable style={styles.darkModeButton} onPress={showDarkOverlay}>
+                  <Ionicons name="moon" size={20} color={colors.gray[400]} />
+                  <Text variant="caption" color="muted">
+                    Dark Screen
+                  </Text>
+                </Pressable>
+
+                <Pressable style={styles.stopTrackingButton} onPress={handleStopTracking}>
+                  <Ionicons name="stop" size={20} color={colors.error} />
+                  <Text variant="caption" style={{ color: colors.error }}>
+                    Stop
+                  </Text>
+                </Pressable>
+              </View>
             </View>
           ) : (
             <View style={styles.trackingInactive}>
-              <Ionicons name="moon" size={80} color={colors.primary[500]} />
+              <Ionicons name="bed" size={80} color={colors.primary[500]} />
               <Text variant="h3" weight="bold" color="primary" style={styles.inactiveTitle}>
                 Ready to Dream
               </Text>
@@ -350,7 +565,7 @@ export default function DreamScreen() {
                   </Text>
                 </View>
                 <View style={styles.featureItem}>
-                  <Ionicons name="moon-outline" size={20} color={colors.primary[400]} />
+                  <Ionicons name="play-outline" size={20} color={colors.primary[400]} />
                   <Text variant="bodySmall" color="secondary">
                     Plays dreams during REM sleep
                   </Text>
@@ -362,6 +577,24 @@ export default function DreamScreen() {
                   </Text>
                 </View>
               </View>
+
+              <Pressable
+                style={styles.checkboxRow}
+                onPress={() => setHelpMeFallAsleep(!helpMeFallAsleep)}
+              >
+                <View style={[styles.checkbox, helpMeFallAsleep && styles.checkboxChecked]}>
+                  {helpMeFallAsleep && <Ionicons name="checkmark" size={14} color="#ffffff" />}
+                </View>
+                <Text variant="body" color="secondary">
+                  Help me fall asleep
+                </Text>
+                <View style={styles.meditationBadge}>
+                  <Ionicons name="sparkles" size={12} color={colors.primary[400]} />
+                  <Text variant="caption" color="primary">
+                    ~10 min meditation
+                  </Text>
+                </View>
+              </Pressable>
 
               <Button variant="primary" onPress={handleStartTracking} style={styles.startButton}>
                 Start Sleep Tracking
@@ -395,14 +628,25 @@ export default function DreamScreen() {
             onComplete={handleVolumeComplete}
             onSkip={() => {
               setShowVolumeSetup(false);
-              start('audio').catch(() => {
-                Alert.alert(
-                  'Error',
-                  'Failed to start sleep tracking. Please ensure microphone access is enabled.'
-                );
-              });
+              setShowMicTest(true);
             }}
           />
+        </SafeAreaView>
+      </Modal>
+
+      <Modal
+        visible={showMicTest}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowMicTest(false)}
+      >
+        <SafeAreaView style={styles.modalContainer} edges={['top', 'bottom']}>
+          <View style={styles.modalHeader}>
+            <Pressable onPress={() => setShowMicTest(false)} style={styles.closeButton}>
+              <Ionicons name="close" size={24} color={colors.gray[400]} />
+            </Pressable>
+          </View>
+          <MicrophoneTest onComplete={handleMicTestComplete} onSkip={handleMicTestSkip} />
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
@@ -470,6 +714,14 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.gray[800],
   },
+  meditationContent: {
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.lg,
+  },
+  meditationDesc: {
+    maxWidth: 280,
+  },
   progressContainer: {
     width: '100%',
     gap: spacing.xs,
@@ -485,23 +737,75 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: colors.primary[500],
   },
-  controlsRow: {
-    alignItems: 'center',
-  },
-  playButton: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: colors.primary[600],
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   hint: {
     maxWidth: 280,
     alignSelf: 'center',
   },
-  stopButton: {
-    marginTop: spacing.md,
+
+  actionRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: spacing.md,
+  },
+  darkModeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.gray[800],
+    borderRadius: borderRadius.lg,
+  },
+  stopTrackingButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderRadius: borderRadius.lg,
+  },
+  skipMeditationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.gray[800],
+    borderRadius: borderRadius.lg,
+  },
+  meditationControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xl,
+  },
+  meditationControlButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.gray[800],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  meditationPlayButton: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(139, 92, 246, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: colors.primary[400],
+  },
+  stopMeditationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderRadius: borderRadius.lg,
   },
   trackingInactive: {
     flex: 1,
@@ -528,6 +832,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+  },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: colors.gray[500],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: colors.primary[500],
+    borderColor: colors.primary[500],
+  },
+  meditationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginLeft: 'auto',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    borderRadius: borderRadius.full,
   },
   startButton: {
     minWidth: 200,

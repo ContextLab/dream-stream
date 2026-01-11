@@ -89,12 +89,28 @@ export function getVolumeWarningMessage(volume: number): string | null {
   return null;
 }
 
+const INTERRUPTION_MODE_DO_NOT_MIX = 1;
+
 export async function configureAudioSession(): Promise<void> {
   await Audio.setAudioModeAsync({
     playsInSilentModeIOS: true,
     staysActiveInBackground: true,
-    shouldDuckAndroid: true,
+    shouldDuckAndroid: false,
     playThroughEarpieceAndroid: false,
+    interruptionModeIOS: INTERRUPTION_MODE_DO_NOT_MIX,
+    interruptionModeAndroid: INTERRUPTION_MODE_DO_NOT_MIX,
+  });
+}
+
+export async function configureSleepAudioSession(): Promise<void> {
+  await Audio.setAudioModeAsync({
+    playsInSilentModeIOS: true,
+    staysActiveInBackground: true,
+    shouldDuckAndroid: false,
+    playThroughEarpieceAndroid: false,
+    interruptionModeIOS: INTERRUPTION_MODE_DO_NOT_MIX,
+    interruptionModeAndroid: INTERRUPTION_MODE_DO_NOT_MIX,
+    allowsRecordingIOS: false,
   });
 }
 

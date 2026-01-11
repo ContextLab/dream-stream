@@ -1,166 +1,43 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { View, StyleSheet, Pressable, Platform, LayoutChangeEvent } from 'react-native';
+import { useState, useRef, useCallback } from 'react';
+import { View, StyleSheet, Pressable, Platform } from 'react-native';
 import { Audio, AVPlaybackStatus } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
 import { colors, spacing, borderRadius } from '@/theme/tokens';
-import { storage } from '@/lib/storage';
-import { getVolumeWarningMessage, configureAudioSession } from '@/services/volume';
+import { configureAudioSession } from '@/services/volume';
 
 interface VolumeSetupProps {
-  onComplete: (volume: number) => void;
+  onComplete: () => void;
   onSkip?: () => void;
-  /** Optional URL to a test audio file. If not provided, uses first available dream audio */
-  testAudioUrl?: string;
 }
 
-const TEST_AUDIO_DESCRIPTION = 'Sample dream audio (10 sec preview)';
-
-function VolumeSlider({
-  value,
-  onValueChange,
-  minimumValue = 0,
-  maximumValue = 1,
-}: {
-  value: number;
-  onValueChange: (value: number) => void;
-  minimumValue?: number;
-  maximumValue?: number;
-}) {
-  const [trackWidth, setTrackWidth] = useState(0);
-  const [trackLeft, setTrackLeft] = useState(0);
-  const trackRef = useRef<View>(null);
-
-  const measureTrackPosition = useCallback(() => {
-    if (trackRef.current && Platform.OS === 'web') {
-      const element = trackRef.current as unknown as HTMLElement;
-      if (element.getBoundingClientRect) {
-        const rect = element.getBoundingClientRect();
-        setTrackLeft(rect.left);
-      }
-    }
-  }, []);
-
-  const handleLayout = (e: LayoutChangeEvent) => {
-    setTrackWidth(e.nativeEvent.layout.width);
-    measureTrackPosition();
-  };
-
-  const calculateValueFromX = useCallback(
-    (x: number) => {
-      if (trackWidth === 0) return minimumValue;
-      const percentage = Math.max(0, Math.min(1, x / trackWidth));
-      return minimumValue + percentage * (maximumValue - minimumValue);
-    },
-    [trackWidth, minimumValue, maximumValue]
-  );
-
-  const handlePress = (e: { nativeEvent: { locationX: number } }) => {
-    if (trackWidth === 0) return;
-    const newValue = calculateValueFromX(e.nativeEvent.locationX);
-    onValueChange(newValue);
-  };
-
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      measureTrackPosition();
-
-      const element = trackRef.current as unknown as HTMLElement;
-      const rect = element?.getBoundingClientRect?.();
-      const currentTrackLeft = rect?.left ?? trackLeft;
-
-      const startX = e.clientX - currentTrackLeft;
-      onValueChange(calculateValueFromX(startX));
-
-      const handleMouseMove = (moveEvent: MouseEvent) => {
-        const x = moveEvent.clientX - currentTrackLeft;
-        onValueChange(calculateValueFromX(x));
-      };
-
-      const handleMouseUp = () => {
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-      };
-
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-    },
-    [calculateValueFromX, measureTrackPosition, onValueChange, trackLeft]
-  );
-
-  const safeValue = Number.isNaN(value) ? minimumValue : value;
-  const fillPercentage = ((safeValue - minimumValue) / (maximumValue - minimumValue)) * 100;
-
-  const webProps =
-    Platform.OS === 'web'
-      ? {
-          onMouseDown: handleMouseDown as unknown as undefined,
-        }
-      : {};
-
-  return (
-    <View ref={trackRef} onLayout={handleLayout} style={styles.sliderTrack} {...webProps}>
-      <Pressable onPress={handlePress} style={StyleSheet.absoluteFill} />
-      <View style={[styles.sliderFill, { width: `${fillPercentage}%` }]} pointerEvents="none" />
-      <View style={[styles.sliderThumb, { left: `${fillPercentage}%` }]} pointerEvents="none" />
-    </View>
-  );
-}
-
-function getAudioBaseUrl(): string {
+function getTestAudioUrl(): string {
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
     const origin = window.location.origin;
     const basePath = window.location.pathname.includes('/dream-stream') ? '/dream-stream' : '';
-    return `${origin}${basePath}/audio/dreams`;
+    return `${origin}${basePath}/audio/test/volume_test.opus`;
   }
-  return 'https://context-lab.com/dream-stream/audio/dreams';
+  return 'https://context-lab.com/dream-stream/audio/test/volume_test.opus';
 }
 
-export function VolumeSetup({ onComplete, onSkip, testAudioUrl }: VolumeSetupProps) {
-  const [volume, setVolume] = useState(0.8);
+export function VolumeSetup({ onComplete, onSkip }: VolumeSetupProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [volumeWarning, setVolumeWarning] = useState<string | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
 
-  const effectiveTestUrl = testAudioUrl || `${getAudioBaseUrl()}/dream-1_combined.opus`;
-
-  useEffect(() => {
-    loadSavedVolume();
-    return () => {
-      cleanup();
-    };
-  }, []);
-
-  const loadSavedVolume = async () => {
-    try {
-      const prefs = await storage.getPreferences();
-      setVolume(prefs.voiceVolume);
-    } catch (e) {
-      console.warn('Failed to load saved volume:', e);
-    }
-  };
-
-  const cleanup = async () => {
-    if (autoStopTimeoutRef.current) {
-      clearTimeout(autoStopTimeoutRef.current);
-      autoStopTimeoutRef.current = null;
-    }
+  const cleanup = useCallback(async () => {
     if (soundRef.current) {
       try {
         await soundRef.current.unloadAsync();
-      } catch (e) {
+      } catch {
         // Ignore cleanup errors
       }
       soundRef.current = null;
     }
     setIsPlaying(false);
-  };
-
-  const autoStopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  }, []);
 
   const playTestAudio = useCallback(async () => {
     setError(null);
@@ -175,106 +52,65 @@ export function VolumeSetup({ onComplete, onSkip, testAudioUrl }: VolumeSetupPro
       }
 
       const { sound } = await Audio.Sound.createAsync(
-        { uri: effectiveTestUrl },
+        { uri: getTestAudioUrl() },
         {
-          volume,
+          volume: 1.0,
           shouldPlay: true,
           positionMillis: 0,
         },
-        onPlaybackStatusUpdate
+        (status: AVPlaybackStatus) => {
+          if (status.isLoaded && status.didJustFinish) {
+            setIsPlaying(false);
+          }
+        }
       );
 
       soundRef.current = sound;
       setIsPlaying(true);
       setIsLoading(false);
-
-      if (autoStopTimeoutRef.current) {
-        clearTimeout(autoStopTimeoutRef.current);
-      }
-      autoStopTimeoutRef.current = setTimeout(async () => {
-        if (soundRef.current) {
-          try {
-            await soundRef.current.pauseAsync();
-            setIsPlaying(false);
-          } catch (e) {
-            // Ignore
-          }
-        }
-      }, 10000);
     } catch (e) {
       console.warn('Failed to play test audio:', e);
       setError('Could not load test audio. Check your connection.');
       setIsPlaying(false);
       setIsLoading(false);
     }
-  }, [volume, effectiveTestUrl]);
+  }, []);
 
-  const onPlaybackStatusUpdate = (status: AVPlaybackStatus) => {
-    if (status.isLoaded && status.didJustFinish) {
-      setIsPlaying(false);
-    }
-  };
-
-  const stopTestAudio = async () => {
-    if (autoStopTimeoutRef.current) {
-      clearTimeout(autoStopTimeoutRef.current);
-      autoStopTimeoutRef.current = null;
-    }
+  const stopTestAudio = useCallback(async () => {
     if (soundRef.current) {
       try {
         await soundRef.current.pauseAsync();
-      } catch (e) {
+      } catch {
         // Ignore
       }
       setIsPlaying(false);
     }
-  };
+  }, []);
 
-  const handleVolumeChange = async (value: number) => {
-    setVolume(value);
-    setVolumeWarning(getVolumeWarningMessage(value));
-    if (soundRef.current) {
-      try {
-        await soundRef.current.setVolumeAsync(value);
-      } catch (e) {
-        // Ignore
-      }
-    }
-  };
-
-  const handleComplete = async () => {
+  const handleComplete = useCallback(async () => {
     await cleanup();
-    try {
-      await storage.setPreferences({ voiceVolume: volume });
-    } catch (e) {
-      console.warn('Failed to save volume preference:', e);
-    }
-    onComplete(volume);
-  };
+    onComplete();
+  }, [cleanup, onComplete]);
 
-  const handleSkip = async () => {
+  const handleSkip = useCallback(async () => {
     await cleanup();
     onSkip?.();
-  };
+  }, [cleanup, onSkip]);
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Ionicons name="volume-medium" size={48} color={colors.primary[400]} />
         <Text variant="h3" weight="bold" color="primary" style={styles.title}>
-          Set Your Dream Volume
+          Adjust Your Volume
         </Text>
         <Text variant="body" color="secondary" align="center" style={styles.description}>
-          Adjust the volume so it's audible but won't wake you. This volume will be locked during
-          playback.
+          Use your device's volume buttons to set a comfortable level for sleep. This is how loud
+          your dreams will play.
         </Text>
       </View>
 
       <View style={styles.testSection}>
-        <Text variant="bodySmall" color="muted" align="center" style={styles.phrase}>
-          {TEST_AUDIO_DESCRIPTION}
-        </Text>
-
         <Pressable
           style={[
             styles.playButton,
@@ -295,41 +131,48 @@ export function VolumeSetup({ onComplete, onSkip, testAudioUrl }: VolumeSetupPro
           {isLoading
             ? 'Loading audio...'
             : isPlaying
-              ? 'Playing test audio...'
-              : 'Tap to test volume'}
+              ? 'Adjust your device volume now'
+              : 'Tap to play test audio'}
         </Text>
 
         {error && (
-          <Text variant="caption" color="primary" style={styles.errorText}>
+          <Text variant="caption" style={styles.errorText}>
             {error}
           </Text>
         )}
       </View>
 
-      <View style={styles.sliderSection}>
-        <View style={styles.sliderRow}>
-          <Ionicons name="volume-low" size={20} color={colors.gray[500]} />
-          <View style={styles.sliderContainer}>
-            <VolumeSlider
-              value={volume}
-              onValueChange={handleVolumeChange}
-              minimumValue={0.05}
-              maximumValue={1}
-            />
-          </View>
-          <Ionicons name="volume-high" size={20} color={colors.gray[500]} />
-        </View>
-        <Text variant="bodySmall" color="secondary" align="center">
-          Volume: {Math.round((Number.isNaN(volume) ? 0.3 : volume) * 100)}%
-        </Text>
-        {volumeWarning && (
-          <View style={styles.warningBanner}>
-            <Ionicons name="warning" size={16} color={colors.warning} />
-            <Text variant="caption" style={{ color: colors.warning }}>
-              {volumeWarning}
+      <View style={styles.instructions}>
+        <View style={styles.instruction}>
+          <View style={styles.instructionNumber}>
+            <Text variant="body" weight="bold" color="primary">
+              1
             </Text>
           </View>
-        )}
+          <Text variant="body" color="secondary">
+            Tap play to hear the test audio
+          </Text>
+        </View>
+        <View style={styles.instruction}>
+          <View style={styles.instructionNumber}>
+            <Text variant="body" weight="bold" color="primary">
+              2
+            </Text>
+          </View>
+          <Text variant="body" color="secondary">
+            Use your device's volume buttons to adjust
+          </Text>
+        </View>
+        <View style={styles.instruction}>
+          <View style={styles.instructionNumber}>
+            <Text variant="body" weight="bold" color="primary">
+              3
+            </Text>
+          </View>
+          <Text variant="body" color="secondary">
+            Set to a level that's audible but won't wake you
+          </Text>
+        </View>
       </View>
 
       <View style={styles.tips}>
@@ -345,17 +188,11 @@ export function VolumeSetup({ onComplete, onSkip, testAudioUrl }: VolumeSetupPro
             Test with your pillow speaker or headphones
           </Text>
         </View>
-        <View style={styles.tip}>
-          <Ionicons name="warning" size={16} color={colors.warning} />
-          <Text variant="caption" color="secondary">
-            Volume will be locked during sleep playback
-          </Text>
-        </View>
       </View>
 
       <View style={styles.buttons}>
         <Button variant="primary" onPress={handleComplete} style={styles.confirmButton}>
-          Confirm Volume
+          Volume is Set
         </Button>
         {onSkip && (
           <Pressable onPress={handleSkip} style={styles.skipButton}>
@@ -391,20 +228,16 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
     gap: spacing.md,
   },
-  phrase: {
-    fontStyle: 'italic',
-    maxWidth: 280,
-  },
   playButton: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: colors.primary[600],
     alignItems: 'center',
     justifyContent: 'center',
   },
   playButtonActive: {
-    backgroundColor: colors.error,
+    backgroundColor: colors.success,
   },
   playButtonLoading: {
     backgroundColor: colors.gray[600],
@@ -413,58 +246,25 @@ const styles = StyleSheet.create({
     color: colors.error,
     marginTop: spacing.xs,
   },
-  sliderSection: {
-    marginBottom: spacing.xl,
+  instructions: {
+    backgroundColor: colors.gray[900],
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    gap: spacing.md,
   },
-  warningBanner: {
+  instruction: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.sm,
-    padding: spacing.sm,
-    backgroundColor: 'rgba(251, 191, 36, 0.1)',
-    borderRadius: borderRadius.md,
+    gap: spacing.md,
   },
-  sliderRow: {
-    flexDirection: 'row',
+  instructionNumber: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.primary[900],
     alignItems: 'center',
-    gap: spacing.sm,
-  },
-  sliderContainer: {
-    flex: 1,
-    height: 40,
     justifyContent: 'center',
-  },
-  sliderTrack: {
-    height: 8,
-    backgroundColor: colors.gray[700],
-    borderRadius: 4,
-    position: 'relative',
-  },
-  sliderFill: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    backgroundColor: colors.primary[500],
-    borderRadius: 4,
-  },
-  sliderThumb: {
-    position: 'absolute',
-    top: -8,
-    marginLeft: -12,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.primary[400],
-    borderWidth: 2,
-    borderColor: '#ffffff',
-    ...Platform.select({
-      web: {
-        cursor: 'pointer',
-      },
-    }),
   },
   tips: {
     backgroundColor: colors.gray[900],

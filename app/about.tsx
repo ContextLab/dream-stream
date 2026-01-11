@@ -35,10 +35,10 @@ export default function AboutScreen() {
 
         <View style={styles.section}>
           <Heading variant="h3" color="primary" style={styles.sectionTitle}>
-            What is DreamStream?
+            What is dream_stream?
           </Heading>
           <Text variant="body" color="secondary" style={styles.paragraph}>
-            DreamStream guides you into vivid, conscious dreams through immersive audio journeys.
+            dream_stream guides you into vivid, conscious dreams through immersive audio journeys.
             Each experience weaves gentle narration with peaceful silences, creating space for your
             imagination to awaken within your dreams.
           </Text>
@@ -169,7 +169,7 @@ export default function AboutScreen() {
             Credits
           </Heading>
           <Text variant="body" color="secondary" style={styles.paragraph}>
-            DreamStream is an open-source project from the Contextual Dynamics Lab at Dartmouth
+            dream_stream is an open-source project from the Contextual Dynamics Lab at Dartmouth
             College.
           </Text>
           <Pressable

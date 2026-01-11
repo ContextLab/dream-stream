@@ -1,4 +1,4 @@
-# DreamStream Development Guidelines
+# dream_stream Development Guidelines
 
 Lucid dream induction app via sleep-aware audio prompting. Expo/React Native cross-platform.
 

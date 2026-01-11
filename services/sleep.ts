@@ -40,6 +40,7 @@ export interface BreathingAnalysis {
   respiratoryRateVariability: number;
   movementIntensity: number;
   confidenceScore: number;
+  estimatedStage: SleepStage;
 }
 
 interface MeydaAnalyzerInstance {
@@ -339,6 +340,8 @@ function processAudioFeatures(features: Partial<MeydaFeaturesObject>): void {
   const now = Date.now();
   const rms = features.rms ?? 0;
 
+  notifyRawAudioLevel(rms);
+
   rmsHistory.push({ value: rms, timestamp: now });
   rmsHistory = rmsHistory.filter((entry) => now - entry.timestamp < ANALYSIS_WINDOW_MS);
 
@@ -353,12 +356,16 @@ function processAudioFeatures(features: Partial<MeydaFeaturesObject>): void {
 
   if (rmsHistory.length > 20) {
     const analysis = analyzeBreathing();
-    const stage = inferSleepStage(analysis);
 
-    if (currentSession && stage !== currentSession.currentStage) {
-      const previousStage = currentSession.currentStage;
-      updateSleepStage(stage);
-      handleStageTransition(previousStage, stage);
+    notifyBreathingAnalysis(analysis);
+
+    if (!calibrationMode && currentSession && currentSession.currentStage) {
+      const stage = inferSleepStage(analysis);
+      if (stage !== currentSession.currentStage) {
+        const previousStage = currentSession.currentStage;
+        updateSleepStage(stage);
+        handleStageTransition(previousStage, stage);
+      }
     }
   }
 }
@@ -402,6 +409,7 @@ function analyzeBreathing(): BreathingAnalysis {
       respiratoryRateVariability: 0,
       movementIntensity: 0,
       confidenceScore: 0,
+      estimatedStage: 'awake',
     };
   }
 
@@ -436,7 +444,7 @@ function analyzeBreathing(): BreathingAnalysis {
     ? Math.min(1, (peakTimestamps.length / 10) * regularity)
     : 0;
 
-  return {
+  const partialAnalysis = {
     isBreathingDetected,
     breathsPerMinute: isBreathingDetected ? breathsPerMinute : 0,
     regularity,
@@ -444,7 +452,12 @@ function analyzeBreathing(): BreathingAnalysis {
     respiratoryRateVariability: rrv,
     movementIntensity,
     confidenceScore,
+    estimatedStage: 'awake' as SleepStage,
   };
+
+  partialAnalysis.estimatedStage = inferSleepStage(partialAnalysis);
+
+  return partialAnalysis;
 }
 
 function inferSleepStage(analysis: BreathingAnalysis): SleepStage {
@@ -488,6 +501,8 @@ function handleStageTransition(previousStage: SleepStage, newStage: SleepStage):
   stageHistory.push({ stage: newStage, timestamp: now });
   stageHistory = stageHistory.filter((s) => now - s.timestamp < 3600000);
 
+  notifyStageHistoryChange();
+
   if (newStage === 'rem' && previousStage !== 'rem') {
     remCallbacks.forEach((cb) => cb());
   }
@@ -501,6 +516,66 @@ export function shouldTriggerDream(stage: SleepStage): boolean {
   return stage === 'light' || stage === 'rem';
 }
 
+export interface StageHistoryEntry {
+  stage: SleepStage;
+  timestamp: number;
+}
+
+export function getStageHistory(): StageHistoryEntry[] {
+  return [...stageHistory];
+}
+
+type StageHistoryCallback = (history: StageHistoryEntry[]) => void;
+const stageHistoryCallbacks: Set<StageHistoryCallback> = new Set();
+
+type BreathingAnalysisCallback = (analysis: BreathingAnalysis) => void;
+const breathingCallbacks: Set<BreathingAnalysisCallback> = new Set();
+let calibrationMode = false;
+
+export function onStageHistoryChange(callback: StageHistoryCallback): () => void {
+  stageHistoryCallbacks.add(callback);
+  callback(getStageHistory());
+  return () => stageHistoryCallbacks.delete(callback);
+}
+
+function notifyStageHistoryChange(): void {
+  const history = getStageHistory();
+  stageHistoryCallbacks.forEach((cb) => cb(history));
+}
+
+export function onBreathingAnalysis(callback: BreathingAnalysisCallback): () => void {
+  breathingCallbacks.add(callback);
+  return () => breathingCallbacks.delete(callback);
+}
+
+type RawAudioCallback = (rms: number) => void;
+const rawAudioCallbacks: Set<RawAudioCallback> = new Set();
+
+export function onRawAudioLevel(callback: RawAudioCallback): () => void {
+  rawAudioCallbacks.add(callback);
+  return () => rawAudioCallbacks.delete(callback);
+}
+
+function notifyRawAudioLevel(rms: number): void {
+  rawAudioCallbacks.forEach((cb) => cb(rms));
+}
+
+function notifyBreathingAnalysis(analysis: BreathingAnalysis): void {
+  breathingCallbacks.forEach((cb) => cb(analysis));
+}
+
+export async function startCalibrationTest(): Promise<boolean> {
+  if (isAudioRunning) return true;
+
+  calibrationMode = true;
+  return startAudioDetection();
+}
+
+export function stopCalibrationTest(): void {
+  calibrationMode = false;
+  stopAudioDetection();
+}
+
 export const sleepService = {
   startSession: startSleepSession,
   endSession: endSleepSession,
@@ -512,6 +587,8 @@ export const sleepService = {
   onRemStart,
   onRemEnd,
   getHistory: getSleepHistory,
+  getStageHistory,
+  onStageHistoryChange,
   calculateSummary: calculateSleepSummary,
   getSleepStageDisplayName,
   getSleepStageColor,

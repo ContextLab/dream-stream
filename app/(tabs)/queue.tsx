@@ -1,11 +1,11 @@
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 import { View, StyleSheet, ScrollView, Alert, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text, Heading } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
-import { LaunchQueueCard } from '@/components/LaunchQueueCard';
+import { DraggableQueueList } from '@/components/DraggableQueueList';
 import { useLaunchQueue } from '@/hooks/useLaunchQueue';
 import { colors, spacing, borderRadius } from '@/theme/tokens';
 import type { RepeatMode } from '@/types/database';
@@ -21,42 +21,14 @@ function formatQueueDuration(totalSeconds: number): string {
 
 export default function QueueScreen() {
   const router = useRouter();
-  const {
-    queue,
-    activeItem,
-    setReady,
-    launch,
-    remove,
-    moveUp,
-    moveDown,
-    reorderByIndex,
-    clear,
-    shuffle,
-    repeatMode,
-    setRepeatMode,
-  } = useLaunchQueue();
+  const { queue, activeItem, remove, reorderByIndex, clear, shuffle, repeatMode, setRepeatMode } =
+    useLaunchQueue();
 
-  const handleSetReady = useCallback(
-    async (queueId: string) => {
-      try {
-        await setReady(queueId);
-      } catch {
-        Alert.alert('Error', 'Failed to update queue item');
-      }
+  const handlePlay = useCallback(
+    (dreamId: string) => {
+      router.push(`/dream/${dreamId}`);
     },
-    [setReady]
-  );
-
-  const handleLaunch = useCallback(
-    async (queueId: string) => {
-      try {
-        await launch(queueId);
-        router.push('/dream/launch');
-      } catch {
-        Alert.alert('Error', 'Failed to launch dream');
-      }
-    },
-    [launch, router]
+    [router]
   );
 
   const handleRemove = useCallback(
@@ -68,28 +40,6 @@ export default function QueueScreen() {
       }
     },
     [remove]
-  );
-
-  const handleMoveUp = useCallback(
-    async (queueId: string) => {
-      try {
-        await moveUp(queueId);
-      } catch {
-        Alert.alert('Error', 'Failed to reorder queue');
-      }
-    },
-    [moveUp]
-  );
-
-  const handleMoveDown = useCallback(
-    async (queueId: string) => {
-      try {
-        await moveDown(queueId);
-      } catch {
-        Alert.alert('Error', 'Failed to reorder queue');
-      }
-    },
-    [moveDown]
   );
 
   const handleDragEnd = useCallback(
@@ -129,37 +79,13 @@ export default function QueueScreen() {
   }, [shuffle]);
 
   const handleToggleRepeat = useCallback(async () => {
-    const modes: RepeatMode[] = ['off', 'all', 'one'];
-    const currentIndex = modes.indexOf(repeatMode);
-    const nextMode = modes[(currentIndex + 1) % modes.length];
+    const nextMode = repeatMode === 'off' ? 'all' : 'off';
     try {
       await setRepeatMode(nextMode);
     } catch {
       Alert.alert('Error', 'Failed to change repeat mode');
     }
   }, [repeatMode, setRepeatMode]);
-
-  const getRepeatIcon = (): keyof typeof Ionicons.glyphMap => {
-    switch (repeatMode) {
-      case 'one':
-        return 'repeat';
-      case 'all':
-        return 'repeat';
-      default:
-        return 'repeat-outline';
-    }
-  };
-
-  const getRepeatLabel = (): string => {
-    switch (repeatMode) {
-      case 'one':
-        return 'Repeat One';
-      case 'all':
-        return 'Repeat All';
-      default:
-        return 'No Repeat';
-    }
-  };
 
   const totalDuration = queue.reduce((acc, item) => acc + item.dream.full_duration_seconds, 0);
 
@@ -192,19 +118,12 @@ export default function QueueScreen() {
 
               <Pressable style={styles.controlButton} onPress={handleToggleRepeat}>
                 <Ionicons
-                  name={getRepeatIcon()}
+                  name={repeatMode === 'off' ? 'repeat-outline' : 'repeat'}
                   size={20}
                   color={repeatMode === 'off' ? colors.gray[400] : colors.primary[400]}
                 />
-                {repeatMode === 'one' && (
-                  <View style={styles.repeatOneBadge}>
-                    <Text variant="caption" color="primary" style={styles.repeatOneText}>
-                      1
-                    </Text>
-                  </View>
-                )}
                 <Text variant="caption" color={repeatMode === 'off' ? 'secondary' : 'primary'}>
-                  {getRepeatLabel()}
+                  {repeatMode === 'off' ? 'Repeat Off' : 'Repeat All'}
                 </Text>
               </Pressable>
 
@@ -240,26 +159,18 @@ export default function QueueScreen() {
                 leftIcon={<Ionicons name="play" size={20} color="#ffffff" />}
                 style={styles.playQueueButton}
               >
-                Start Sleep Mode
+                Start Dream Mode
               </Button>
               <Text variant="caption" color="muted" style={styles.dragHint}>
                 Drag to reorder
               </Text>
-              {queue.map((item, index) => (
-                <LaunchQueueCard
-                  key={item.id}
-                  item={item}
-                  index={index}
-                  totalCount={queue.length}
-                  isActive={activeItem?.id === item.id}
-                  onSetReady={() => handleSetReady(item.id)}
-                  onLaunch={() => handleLaunch(item.id)}
-                  onRemove={() => handleRemove(item.id)}
-                  onMoveUp={() => handleMoveUp(item.id)}
-                  onMoveDown={() => handleMoveDown(item.id)}
-                  onDragEnd={handleDragEnd}
-                />
-              ))}
+              <DraggableQueueList
+                items={queue}
+                activeItemId={activeItem?.id}
+                onReorder={handleDragEnd}
+                onRemove={handleRemove}
+                onPlay={handlePlay}
+              />
             </View>
           )}
         </View>
@@ -303,15 +214,6 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     padding: spacing.sm,
     minWidth: 80,
-  },
-  repeatOneBadge: {
-    position: 'absolute',
-    top: 4,
-    right: 20,
-  },
-  repeatOneText: {
-    fontSize: 10,
-    fontWeight: '700',
   },
   queueSection: {
     paddingHorizontal: spacing.md,

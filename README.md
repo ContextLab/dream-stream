@@ -1,14 +1,14 @@
-# DreamStream
+# dream_stream
 
 **Lucid Dream Induction Through Intelligent Sleep-Aware Audio Prompting**
 
-DreamStream is a cross-platform application that delivers personalized audio "dream prompts" at optimal moments during your sleep cycle. By integrating with fitness trackers and wearables, the app detects sleep stages in real-time and plays soothing, AI-generated audio cues designed to enhance dream recall and induce lucid dreaming.
+dream_stream is a cross-platform application that delivers personalized audio "dream prompts" at optimal moments during your sleep cycle. By integrating with fitness trackers and wearables, the app detects sleep stages in real-time and plays soothing, AI-generated audio cues designed to enhance dream recall and induce lucid dreaming.
 
 ---
 
 ## Overview
 
-DreamStream combines sleep science, wearable technology, and AI-generated audio to create a seamless lucid dreaming experience:
+dream_stream combines sleep science, wearable technology, and AI-generated audio to create a seamless lucid dreaming experience:
 
 1. **Select Your Prompts** - Choose from curated text/audio prompts or create your own
 2. **Sleep with Your Wearable** - The app monitors your sleep stages via fitness trackers
@@ -20,16 +20,16 @@ DreamStream combines sleep science, wearable technology, and AI-generated audio 
 
 ## Platforms
 
-| Platform | Status | Notes |
-|----------|--------|-------|
-| **Web** | **Live** | PWA at [context-lab.com/dream-stream](https://context-lab.com/dream-stream/) |
-| **Android** | In Progress | Expo-based companion app |
-| **iOS** | In Progress | Expo-based companion app |
-| **WearOS** | Planned | Primary sleep detection device |
-| **watchOS** | Planned | Primary sleep detection device |
-| **macOS** | Planned | Desktop companion |
-| **Windows** | Planned | Desktop companion |
-| **Linux (Ubuntu)** | Planned | Desktop companion |
+| Platform           | Status      | Notes                                                                        |
+| ------------------ | ----------- | ---------------------------------------------------------------------------- |
+| **Web**            | **Live**    | PWA at [context-lab.com/dream-stream](https://context-lab.com/dream-stream/) |
+| **Android**        | In Progress | Expo-based companion app                                                     |
+| **iOS**            | In Progress | Expo-based companion app                                                     |
+| **WearOS**         | Planned     | Primary sleep detection device                                               |
+| **watchOS**        | Planned     | Primary sleep detection device                                               |
+| **macOS**          | Planned     | Desktop companion                                                            |
+| **Windows**        | Planned     | Desktop companion                                                            |
+| **Linux (Ubuntu)** | Planned     | Desktop companion                                                            |
 
 ---
 
@@ -37,16 +37,16 @@ DreamStream combines sleep science, wearable technology, and AI-generated audio 
 
 ### Sleep Stage Detection
 
-DreamStream integrates with multiple sleep tracking sources:
+dream_stream integrates with multiple sleep tracking sources:
 
-| Source | Sleep Stages | Real-Time Capability | Integration Method |
-|--------|--------------|---------------------|-------------------|
-| **WearOS (Local)** | Yes (via HRV analysis) | High | Health Services SDK |
-| **Apple Watch** | Yes | Near Real-Time | HealthKit Background Delivery |
-| **Fitbit** | Yes | Batch (post-sync) | Web API + Webhooks |
-| **Garmin** | Yes | High (via SDK) | Connect IQ SDK |
-| **Oura Ring** | Yes (5-min intervals) | Batch | REST API + Webhooks |
-| **Asleep.ai** | Yes | 5-min intervals | Audio-based SDK (no wearable) |
+| Source             | Sleep Stages           | Real-Time Capability | Integration Method            |
+| ------------------ | ---------------------- | -------------------- | ----------------------------- |
+| **WearOS (Local)** | Yes (via HRV analysis) | High                 | Health Services SDK           |
+| **Apple Watch**    | Yes                    | Near Real-Time       | HealthKit Background Delivery |
+| **Fitbit**         | Yes                    | Batch (post-sync)    | Web API + Webhooks            |
+| **Garmin**         | Yes                    | High (via SDK)       | Connect IQ SDK                |
+| **Oura Ring**      | Yes (5-min intervals)  | Batch                | REST API + Webhooks           |
+| **Asleep.ai**      | Yes                    | 5-min intervals      | Audio-based SDK (no wearable) |
 
 **Primary Strategy**: Local WearOS/watchOS app using heart rate variability (HRV) analysis for low-latency REM detection.
 
@@ -92,6 +92,7 @@ Audio is generated automatically in CI using Edge TTS:
 **Current Voice**: `en-US-JennyNeural` - calm, soothing US English voice
 
 **Music Styles**:
+
 - Ambient pads (432Hz tuning)
 - Nature sounds (rain, ocean, forest)
 - Binaural beats (configurable frequency)
@@ -149,6 +150,7 @@ Audio is generated automatically in CI using Edge TTS:
 ### Framework Choice: Kotlin Multiplatform (KMP)
 
 **Why KMP?**
+
 - **Native WearOS Support**: Uses official Jetpack Compose for Wear OS
 - **Background Reliability**: Native foreground services survive 8-hour sleep sessions
 - **Sensor Access**: Direct access to Health Services API for HRV monitoring
@@ -156,17 +158,17 @@ Audio is generated automatically in CI using Edge TTS:
 
 ### Key Dependencies
 
-| Component | Technology | Purpose |
-|-----------|------------|---------|
-| **UI Framework** | Compose Multiplatform | Shared UI across platforms |
-| **Local Database** | SQLDelight | Offline-first prompt storage |
-| **Networking** | Ktor | API communication |
-| **Audio Playback** | Media3 (ExoPlayer) | Background audio with media session |
-| **Sleep Detection** | Health Services API | WearOS sensor access |
-| **TTS** | ElevenLabs / Kokoro-82M | Voice synthesis |
-| **Music Gen** | Mubert API | Procedural ambient music |
-| **Backend** | Supabase | Auth, database, storage |
-| **LLM** | Claude / GPT-4 | Dream-to-prompt transformation |
+| Component           | Technology              | Purpose                             |
+| ------------------- | ----------------------- | ----------------------------------- |
+| **UI Framework**    | Compose Multiplatform   | Shared UI across platforms          |
+| **Local Database**  | SQLDelight              | Offline-first prompt storage        |
+| **Networking**      | Ktor                    | API communication                   |
+| **Audio Playback**  | Media3 (ExoPlayer)      | Background audio with media session |
+| **Sleep Detection** | Health Services API     | WearOS sensor access                |
+| **TTS**             | ElevenLabs / Kokoro-82M | Voice synthesis                     |
+| **Music Gen**       | Mubert API              | Procedural ambient music            |
+| **Backend**         | Supabase                | Auth, database, storage             |
+| **LLM**             | Claude / GPT-4          | Dream-to-prompt transformation      |
 
 ---
 
@@ -174,15 +176,16 @@ Audio is generated automatically in CI using Edge TTS:
 
 ### Optimal Timing for Dream Prompts
 
-DreamStream targets specific sleep stages for maximum effectiveness:
+dream_stream targets specific sleep stages for maximum effectiveness:
 
-| Sleep Stage | Brain Waves | Dream Activity | Prompt Strategy |
-|-------------|-------------|----------------|-----------------|
-| **Light (N1/N2)** | Theta (4-8 Hz) | Hypnagogic imagery | Gentle awareness cues |
-| **REM** | Mixed (like waking) | Vivid dreams | Reality check prompts |
-| **Deep (N3)** | Delta (0.5-4 Hz) | Minimal | Avoid interruption |
+| Sleep Stage       | Brain Waves         | Dream Activity     | Prompt Strategy       |
+| ----------------- | ------------------- | ------------------ | --------------------- |
+| **Light (N1/N2)** | Theta (4-8 Hz)      | Hypnagogic imagery | Gentle awareness cues |
+| **REM**           | Mixed (like waking) | Vivid dreams       | Reality check prompts |
+| **Deep (N3)**     | Delta (0.5-4 Hz)    | Minimal            | Avoid interruption    |
 
 **Timing Algorithm**:
+
 1. Detect transition from Deep → Light sleep
 2. Wait 5-10 minutes into REM phase
 3. Play prompt at low volume, gradually increasing
@@ -192,11 +195,11 @@ DreamStream targets specific sleep stages for maximum effectiveness:
 
 Optional frequency entrainment to support lucid dreaming:
 
-| Frequency | Brain State | Use Case |
-|-----------|-------------|----------|
-| 4 Hz (Theta) | Light sleep, meditation | Pre-sleep relaxation |
-| 40 Hz (Gamma) | Lucid dreaming state | During REM prompts |
-| 2 Hz (Delta) | Deep sleep | Avoid during prompts |
+| Frequency     | Brain State             | Use Case             |
+| ------------- | ----------------------- | -------------------- |
+| 4 Hz (Theta)  | Light sleep, meditation | Pre-sleep relaxation |
+| 40 Hz (Gamma) | Lucid dreaming state    | During REM prompts   |
+| 2 Hz (Delta)  | Deep sleep              | Avoid during prompts |
 
 ---
 
@@ -300,6 +303,7 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
 ## Roadmap
 
 ### Phase 1: Foundation (MVP) - **In Progress**
+
 - [x] Core dream browsing and search
 - [x] Audio playback with progress persistence
 - [x] CI-based audio generation (Edge TTS)
@@ -310,6 +314,7 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
 - [ ] HealthKit/Health Connect integration
 
 ### Phase 2: Full Mobile
+
 - [ ] iOS companion app (Expo)
 - [ ] Android companion app (Expo)
 - [ ] watchOS sleep detection
@@ -317,12 +322,14 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
 - [ ] Push notifications for sleep reminders
 
 ### Phase 3: Intelligence
+
 - [ ] LLM dream-to-prompt transformation
 - [ ] Personalized prompt recommendations
 - [ ] Sleep quality analytics
 - [ ] Community dream sharing
 
 ### Phase 4: Expansion
+
 - [ ] Desktop apps (macOS, Windows, Linux)
 - [ ] Web app
 - [ ] Community prompt sharing
@@ -365,4 +372,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-*Sweet dreams are made of code.* 
+_Sweet dreams are made of code._

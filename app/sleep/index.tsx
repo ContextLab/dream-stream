@@ -82,20 +82,17 @@ export default function SleepScreen() {
     };
   }, [isTracking, queue]);
 
-  const handleVolumeComplete = useCallback(
-    async (volume: number) => {
-      setShowVolumeSetup(false);
-      try {
-        await start('audio');
-      } catch {
-        Alert.alert(
-          'Error',
-          'Failed to start sleep tracking. Please ensure microphone access is enabled.'
-        );
-      }
-    },
-    [start]
-  );
+  const handleVolumeComplete = useCallback(async () => {
+    setShowVolumeSetup(false);
+    try {
+      await start('audio');
+    } catch {
+      Alert.alert(
+        'Error',
+        'Failed to start sleep tracking. Please ensure microphone access is enabled.'
+      );
+    }
+  }, [start]);
 
   const handleStartTracking = useCallback(() => {
     setSetupTab('volume');

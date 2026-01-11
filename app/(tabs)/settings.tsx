@@ -32,7 +32,7 @@ export default function SettingsScreen() {
             <Pressable style={styles.menuRow}>
               <Ionicons name="information-circle-outline" size={24} color={colors.gray[400]} />
               <Text variant="body" color="primary" style={styles.menuLabel}>
-                About DreamStream
+                About dream_stream
               </Text>
               <Ionicons name="chevron-forward" size={20} color={colors.gray[500]} />
             </Pressable>

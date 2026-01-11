@@ -29,17 +29,14 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "permissions": [
-        "android.permission.INTERNET",
-        "android.permission.VIBRATE"
-      ]
+      "permissions": ["android.permission.INTERNET", "android.permission.VIBRATE"]
     },
     "web": {
       "favicon": "./assets/favicon.png",
       "bundler": "metro",
       "output": "static",
-      "name": "Dream Stream",
-      "shortName": "DreamStream",
+      "name": "dream_stream",
+      "shortName": "dream_stream",
       "description": "Lucid dream induction through intelligent sleep-aware audio prompting",
       "themeColor": "#09090b",
       "backgroundColor": "#09090b"
