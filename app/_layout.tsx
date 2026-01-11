@@ -9,6 +9,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider } from '@/components/AuthProvider';
 import { ThemeProvider, useTheme } from '@/components/ThemeProvider';
 import { DarkOverlayProvider } from '@/components/DarkOverlayProvider';
+import { FavoritesProvider } from '@/components/FavoritesProvider';
 import {
   useFonts,
   CourierPrime_400Regular,
@@ -59,9 +60,11 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <ThemeProvider>
           <AuthProvider>
-            <DarkOverlayProvider>
-              <RootLayoutContent />
-            </DarkOverlayProvider>
+            <FavoritesProvider>
+              <DarkOverlayProvider>
+                <RootLayoutContent />
+              </DarkOverlayProvider>
+            </FavoritesProvider>
           </AuthProvider>
         </ThemeProvider>
       </SafeAreaProvider>

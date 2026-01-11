@@ -29,8 +29,8 @@ function TabBarIcon({
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
-  const bottomPadding = Platform.OS === 'web' ? 8 : Math.max(insets.bottom, 8);
-  const tabBarHeight = 60 + (Platform.OS === 'web' ? 0 : Math.max(insets.bottom - 8, 0));
+  const bottomPadding = Platform.OS === 'web' ? 10 : Math.max(insets.bottom, 10);
+  const tabBarHeight = 64 + (Platform.OS === 'web' ? 0 : Math.max(insets.bottom - 8, 0));
 
   return (
     <Tabs
@@ -46,11 +46,12 @@ export default function TabLayout() {
           height: tabBarHeight,
         },
         tabBarLabelStyle: {
-          fontSize: 10,
+          fontSize: 9,
           fontWeight: '500',
           fontFamily: fontFamily.regular,
-          letterSpacing: 0.5,
+          letterSpacing: 0.3,
           textTransform: 'uppercase',
+          marginBottom: 2,
         },
         headerShown: false,
       }}

@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { Pressable, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { useAnimatedStyle, withSpring, useSharedValue } from 'react-native-reanimated';
-import { useFavoriteStatus } from '@/hooks/useFavorites';
+import { useFavoritesContext } from '@/components/FavoritesProvider';
 import { colors, touchTargetMinSize } from '@/theme/tokens';
 
 interface FavoriteButtonProps {
@@ -16,7 +16,9 @@ export function FavoriteButton({
   size = 24,
   showBackground = false,
 }: FavoriteButtonProps) {
-  const { isFavorited, isLoading, toggle } = useFavoriteStatus(dreamId);
+  const { isFavorited: checkFavorited, isLoading, toggleFavorite } = useFavoritesContext();
+  const isFavorited = checkFavorited(dreamId);
+  const toggle = useCallback(() => toggleFavorite(dreamId), [toggleFavorite, dreamId]);
   const scale = useSharedValue(1);
 
   const handlePress = useCallback(async () => {

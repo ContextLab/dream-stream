@@ -6,12 +6,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { Text, Heading } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
 import { DreamCard } from '@/components/DreamCard';
-import { useFavorites } from '@/hooks/useFavorites';
+import { useFavoritesContext } from '@/components/FavoritesProvider';
 import { colors, spacing } from '@/theme/tokens';
 import type { DreamListItem } from '@/types/database';
 
 export default function FavoritesScreen() {
-  const { favorites, isLoading, error, refresh } = useFavorites();
+  const { favorites, isLoading, refresh } = useFavoritesContext();
 
   const renderItem = useCallback(
     ({ item }: { item: DreamListItem }) => (
@@ -34,27 +34,6 @@ export default function FavoritesScreen() {
         </View>
         <View style={styles.centerContent}>
           <ActivityIndicator size="large" color={colors.primary[500]} />
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (error) {
-    return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.header}>
-          <Heading variant="h2" color="primary">
-            Favorites
-          </Heading>
-        </View>
-        <View style={styles.centerContent}>
-          <Ionicons name="alert-circle" size={64} color={colors.error} />
-          <Text variant="body" color="error" align="center" style={styles.errorText}>
-            {error.message}
-          </Text>
-          <Button variant="outline" onPress={refresh}>
-            Try Again
-          </Button>
         </View>
       </SafeAreaView>
     );

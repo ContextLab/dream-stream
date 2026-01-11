@@ -10,6 +10,7 @@ import Animated, {
   SharedValue,
 } from 'react-native-reanimated';
 import { Text } from '@/components/ui/Text';
+import { MarqueeText } from '@/components/ui/MarqueeText';
 import { type QueuedDream } from '@/services/launchQueue';
 import { getSleepStageDisplayName } from '@/services/sleep';
 import { colors, spacing, borderRadius, shadows, touchTargetMinSize } from '@/theme/tokens';
@@ -148,9 +149,15 @@ function DraggableCard({
         </View>
 
         <View style={styles.content}>
-          <Text variant="body" weight="semibold" numberOfLines={2} style={styles.title}>
+          <MarqueeText
+            variant="body"
+            weight="semibold"
+            style={styles.title}
+            speed={25}
+            pauseDuration={2000}
+          >
             {item.dream.title}
-          </Text>
+          </MarqueeText>
 
           <View style={styles.metaRow}>
             <View style={styles.triggerInfo}>
