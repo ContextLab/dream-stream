@@ -57,11 +57,11 @@ export default function AboutScreen() {
               </View>
               <View style={styles.stepContent}>
                 <Text variant="body" weight="semibold" color="primary">
-                  Browse & Preview
+                  Browse & Queue Dreams
                 </Text>
                 <Text variant="bodySmall" color="secondary">
-                  Explore dreams by category. Tap any dream to hear a preview and read the
-                  description.
+                  Explore dreams by category on the Home tab. Tap the moon icon to add dreams to
+                  your sleep queue.
                 </Text>
               </View>
             </View>
@@ -73,10 +73,11 @@ export default function AboutScreen() {
               </View>
               <View style={styles.stepContent}>
                 <Text variant="body" weight="semibold" color="primary">
-                  Prepare for Sleep
+                  Set Up for Sleep
                 </Text>
                 <Text variant="bodySmall" color="secondary">
-                  Get comfortable in bed. Set your phone nearby with the volume at a gentle level.
+                  Go to the Dream tab and tap "Start Sleep Tracking". Adjust your volume to a soft,
+                  soothing level using the test audio.
                 </Text>
               </View>
             </View>
@@ -88,11 +89,11 @@ export default function AboutScreen() {
               </View>
               <View style={styles.stepContent}>
                 <Text variant="body" weight="semibold" color="primary">
-                  Play Full Experience
+                  Fall Asleep Naturally
                 </Text>
                 <Text variant="bodySmall" color="secondary">
-                  Start the dream audio. The narration will guide you through imagery with pauses
-                  for your mind to wander and create.
+                  Place your phone nearby. The app uses your microphone to detect your sleep stages
+                  based on breathing patterns.
                 </Text>
               </View>
             </View>
@@ -104,11 +105,11 @@ export default function AboutScreen() {
               </View>
               <View style={styles.stepContent}>
                 <Text variant="body" weight="semibold" color="primary">
-                  Drift Off
+                  Dream During REM
                 </Text>
                 <Text variant="bodySmall" color="secondary">
-                  Let the audio fade as you fall asleep. The suggestions may carry into your dreams,
-                  enhancing awareness and creativity.
+                  When REM sleep is detected, your queued dreams will play automatically. Audio
+                  pauses when REM ends to avoid waking you.
                 </Text>
               </View>
             </View>
