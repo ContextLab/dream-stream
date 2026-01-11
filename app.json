@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Dream Stream",
+    "name": "dream_stream",
     "slug": "dream-stream",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -25,11 +25,17 @@
       "package": "com.dreamstream.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#09090b"
+        "backgroundColor": "transparent"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "permissions": ["android.permission.INTERNET", "android.permission.VIBRATE"]
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.VIBRATE",
+        "android.permission.health.READ_HEART_RATE",
+        "android.permission.health.READ_HEART_RATE_VARIABILITY",
+        "android.permission.health.READ_SLEEP"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -49,6 +55,17 @@
           "backgroundColor": "#09090b",
           "image": "./assets/splash-icon.png",
           "imageWidth": 200
+        }
+      ],
+      "expo-health-connect",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "minSdkVersion": 26
+          }
         }
       ]
     ],

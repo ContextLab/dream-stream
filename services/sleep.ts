@@ -2,6 +2,13 @@ import Meyda from 'meyda';
 import type { MeydaFeaturesObject } from 'meyda';
 import type { SleepStage } from '@/types/database';
 import { storage } from '@/lib/storage';
+import {
+  addVitalsSample,
+  analyzeVitals,
+  getCurrentVitalsStage,
+  resetVitalsWindow,
+} from './vitalsClassifier';
+import type { VitalsSnapshot } from './healthConnect';
 
 export type SleepTrackingSource = 'audio' | 'wearable' | 'manual';
 
@@ -576,6 +583,72 @@ export function stopCalibrationTest(): void {
   stopAudioDetection();
 }
 
+let vitalsPollingInterval: ReturnType<typeof setInterval> | null = null;
+let useVitalsForDetection = false;
+
+export function enableVitalsDetection(enabled: boolean): void {
+  useVitalsForDetection = enabled;
+  if (!enabled) {
+    resetVitalsWindow();
+  }
+}
+
+export function processVitalsUpdate(vitals: VitalsSnapshot): void {
+  if (!useVitalsForDetection) return;
+
+  addVitalsSample(vitals);
+
+  if (currentSession?.isActive) {
+    const vitalsAnalysis = analyzeVitals();
+
+    if (vitalsAnalysis.confidence > 0.5) {
+      const fusedStage = fuseDetectionSources(vitalsAnalysis.estimatedStage);
+      if (fusedStage !== currentSession.currentStage) {
+        const previousStage = currentSession.currentStage;
+        updateSleepStage(fusedStage);
+        handleStageTransition(previousStage, fusedStage);
+      }
+    }
+  }
+}
+
+function fuseDetectionSources(vitalsStage: SleepStage): SleepStage {
+  if (!isAudioRunning) {
+    return vitalsStage;
+  }
+
+  const audioStage = currentSession?.currentStage ?? 'awake';
+
+  if (vitalsStage === audioStage) {
+    return vitalsStage;
+  }
+
+  if (vitalsStage === 'rem' || audioStage === 'rem') {
+    return 'rem';
+  }
+
+  if (vitalsStage === 'deep' && audioStage !== 'awake') {
+    return 'deep';
+  }
+
+  if (audioStage === 'deep' && vitalsStage !== 'awake') {
+    return 'deep';
+  }
+
+  if (vitalsStage === 'awake' || audioStage === 'awake') {
+    return 'awake';
+  }
+
+  return vitalsStage;
+}
+
+export function getDetectionMode(): 'audio' | 'vitals' | 'fused' | 'none' {
+  if (isAudioRunning && useVitalsForDetection) return 'fused';
+  if (isAudioRunning) return 'audio';
+  if (useVitalsForDetection) return 'vitals';
+  return 'none';
+}
+
 export const sleepService = {
   startSession: startSleepSession,
   endSession: endSleepSession,
@@ -593,4 +666,7 @@ export const sleepService = {
   getSleepStageDisplayName,
   getSleepStageColor,
   shouldTriggerDream,
+  enableVitalsDetection,
+  processVitalsUpdate,
+  getDetectionMode,
 };
