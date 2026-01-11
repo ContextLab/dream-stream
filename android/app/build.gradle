@@ -152,6 +152,12 @@ android {
     }
 }
 
+configurations.all {
+    resolutionStrategy {
+        force 'com.google.android.material:material:1.10.0'
+    }
+}
+
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
