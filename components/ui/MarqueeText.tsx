@@ -1,20 +1,14 @@
 import { useEffect, useRef, useState, memo } from 'react';
-import { View, Animated, StyleSheet, LayoutChangeEvent, TextStyle } from 'react-native';
+import { View, Animated, StyleSheet, LayoutChangeEvent } from 'react-native';
 import { Text, TextProps } from './Text';
 
 interface MarqueeTextProps extends Omit<TextProps, 'children'> {
   children: string;
-  speed?: number; // pixels per second
-  pauseDuration?: number; // ms to pause at each end
+  speed?: number;
+  pauseDuration?: number;
   containerStyle?: object;
 }
 
-/**
- * MarqueeText - A text component that scrolls horizontally when text overflows.
- *
- * Scrolls left to reveal the end, pauses, then scrolls right back to the start.
- * Only animates if text is wider than container.
- */
 export const MarqueeText = memo(function MarqueeText({
   children,
   speed = 30,
@@ -28,11 +22,11 @@ export const MarqueeText = memo(function MarqueeText({
   const translateX = useRef(new Animated.Value(0)).current;
   const animationRef = useRef<Animated.CompositeAnimation | null>(null);
 
-  const shouldAnimate = textWidth > containerWidth && containerWidth > 0;
-  const overflow = textWidth - containerWidth;
+  const shouldAnimate = textWidth > containerWidth && containerWidth > 0 && textWidth > 0;
+  const overflow = Math.max(0, textWidth - containerWidth);
 
   useEffect(() => {
-    if (!shouldAnimate) {
+    if (!shouldAnimate || overflow <= 0) {
       translateX.setValue(0);
       return;
     }
@@ -41,17 +35,13 @@ export const MarqueeText = memo(function MarqueeText({
 
     const animate = () => {
       animationRef.current = Animated.sequence([
-        // Pause at start
         Animated.delay(pauseDuration),
-        // Scroll left to show end
         Animated.timing(translateX, {
           toValue: -overflow,
           duration,
           useNativeDriver: true,
         }),
-        // Pause at end
         Animated.delay(pauseDuration),
-        // Scroll right back to start
         Animated.timing(translateX, {
           toValue: 0,
           duration,
@@ -86,8 +76,8 @@ export const MarqueeText = memo(function MarqueeText({
 
   return (
     <View style={[styles.container, containerStyle]} onLayout={handleContainerLayout}>
-      <Animated.View style={[styles.textWrapper, shouldAnimate && { transform: [{ translateX }] }]}>
-        <Text {...textProps} style={style} numberOfLines={1} onLayout={handleTextLayout}>
+      <Animated.View style={[styles.textWrapper, { transform: [{ translateX }] }]}>
+        <Text {...textProps} style={[style, styles.text]} onLayout={handleTextLayout}>
           {children}
         </Text>
       </Animated.View>
@@ -101,5 +91,8 @@ const styles = StyleSheet.create({
   },
   textWrapper: {
     flexDirection: 'row',
+  },
+  text: {
+    flexShrink: 0,
   },
 });
