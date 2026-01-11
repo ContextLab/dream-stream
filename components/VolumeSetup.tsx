@@ -145,7 +145,7 @@ export function VolumeSetup({ onComplete, onSkip }: VolumeSetupProps) {
       <View style={styles.instructions}>
         <View style={styles.instruction}>
           <View style={styles.instructionNumber}>
-            <Text variant="body" weight="bold" color="primary">
+            <Text variant="body" weight="bold" style={styles.instructionNumberText}>
               1
             </Text>
           </View>
@@ -155,7 +155,7 @@ export function VolumeSetup({ onComplete, onSkip }: VolumeSetupProps) {
         </View>
         <View style={styles.instruction}>
           <View style={styles.instructionNumber}>
-            <Text variant="body" weight="bold" color="primary">
+            <Text variant="body" weight="bold" style={styles.instructionNumberText}>
               2
             </Text>
           </View>
@@ -165,7 +165,7 @@ export function VolumeSetup({ onComplete, onSkip }: VolumeSetupProps) {
         </View>
         <View style={styles.instruction}>
           <View style={styles.instructionNumber}>
-            <Text variant="body" weight="bold" color="primary">
+            <Text variant="body" weight="bold" style={styles.instructionNumberText}>
               3
             </Text>
           </View>
@@ -262,9 +262,12 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: colors.primary[900],
+    backgroundColor: colors.success,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  instructionNumberText: {
+    color: colors.gray[950],
   },
   tips: {
     backgroundColor: colors.gray[900],

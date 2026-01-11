@@ -274,10 +274,10 @@ export function MicrophoneTest({ onComplete, onSkip }: MicrophoneTestProps) {
             </View>
 
             <Text variant="caption" color="muted" align="center" style={styles.hint}>
-              {!micConfirmedWorking && audioLevel < 0.05
-                ? 'No audio detected. Check your microphone is not muted.'
-                : micConfirmedWorking
-                  ? 'Breathe naturally and watch the estimated sleep stage update.'
+              {micConfirmedWorking
+                ? 'Breathe naturally and watch the estimated sleep stage update.'
+                : audioLevel < 0.05
+                  ? 'No audio detected. Check your microphone is not muted.'
                   : 'Breathe slowly and steadily near your device.'}
             </Text>
 
