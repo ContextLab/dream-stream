@@ -1,0 +1,363 @@
+{
+  "dreams": [
+    {
+      "file": "floating_through_clouds.txt",
+      "title": "Floating Through Clouds",
+      "music": "ambient",
+      "categoryId": null
+    },
+    {
+      "file": "crystal_cave_discovery.txt",
+      "title": "Crystal Cave Discovery",
+      "music": "piano",
+      "categoryId": null
+    },
+    {
+      "file": "ocean_of_stars.txt",
+      "title": "Ocean of Stars",
+      "music": "cosmic",
+      "categoryId": null
+    },
+    {
+      "file": "forest_of_whispers.txt",
+      "title": "Forest of Whispers",
+      "music": "nature",
+      "categoryId": null
+    },
+    {
+      "file": "city_in_the_sky.txt",
+      "title": "City in the Sky",
+      "music": "ambient",
+      "categoryId": null
+    },
+    {
+      "file": "endless_staircase.txt",
+      "title": "Endless Staircase",
+      "music": "piano",
+      "categoryId": null
+    },
+    {
+      "file": "garden_of_light.txt",
+      "title": "Garden of Light",
+      "music": "binaural",
+      "categoryId": null
+    },
+    { "file": "mirror_world.txt", "title": "Mirror World", "music": "cosmic", "categoryId": null },
+    {
+      "file": "temple_of_moonlight.txt",
+      "title": "Temple of Moonlight",
+      "music": "ambient",
+      "categoryId": null
+    },
+    {
+      "file": "river_of_dreams.txt",
+      "title": "River of Dreams",
+      "music": "nature",
+      "categoryId": null
+    },
+    {
+      "file": "dreaming_library.txt",
+      "title": "The Dreaming Library",
+      "music": "piano",
+      "categoryId": null
+    },
+    {
+      "file": "garden_of_forgotten_seasons.txt",
+      "title": "Garden of Forgotten Seasons",
+      "music": "nature",
+      "categoryId": null
+    },
+    {
+      "file": "symphony_of_spheres.txt",
+      "title": "Symphony of the Spheres",
+      "music": "cosmic",
+      "categoryId": null
+    },
+    {
+      "file": "memory_palace.txt",
+      "title": "The Memory Palace",
+      "music": "piano",
+      "categoryId": null
+    },
+    {
+      "file": "hall_of_inner_mirrors.txt",
+      "title": "The Hall of Inner Mirrors",
+      "music": "piano",
+      "categoryId": null
+    },
+    {
+      "file": "healing_springs.txt",
+      "title": "The Healing Springs",
+      "music": "nature",
+      "categoryId": null
+    },
+    {
+      "file": "garden_of_letting_go.txt",
+      "title": "The Garden of Letting Go",
+      "music": "ambient",
+      "categoryId": null
+    },
+    {
+      "file": "mountain_of_clarity.txt",
+      "title": "The Mountain of Clarity",
+      "music": "binaural",
+      "categoryId": null
+    },
+    {
+      "file": "sanctuary_of_rest.txt",
+      "title": "The Sanctuary of Rest",
+      "music": "ambient",
+      "categoryId": null
+    },
+    {
+      "file": "celebration_of_being.txt",
+      "title": "The Celebration of Being",
+      "music": "piano",
+      "categoryId": null
+    },
+    {
+      "file": "island_of_new_beginnings.txt",
+      "title": "The Island of New Beginnings",
+      "music": "nature",
+      "categoryId": null
+    },
+    {
+      "file": "temple_of_inner_strength.txt",
+      "title": "The Temple of Inner Strength",
+      "music": "binaural",
+      "categoryId": null
+    },
+    {
+      "file": "river_of_renewal.txt",
+      "title": "The River of Renewal",
+      "music": "nature",
+      "categoryId": null
+    },
+    {
+      "file": "skill_public_speaking.txt",
+      "title": "The Stage of Confidence",
+      "music": "piano",
+      "categoryId": "cat-10"
+    },
+    {
+      "file": "skill_music.txt",
+      "title": "The Instrument of Dreams",
+      "music": "piano",
+      "categoryId": "cat-10"
+    },
+    {
+      "file": "skill_athletic.txt",
+      "title": "The Arena of Excellence",
+      "music": "ambient",
+      "categoryId": "cat-10"
+    },
+    {
+      "file": "nightmare_transform.txt",
+      "title": "Transforming the Shadow",
+      "music": "ambient",
+      "categoryId": "cat-11"
+    },
+    {
+      "file": "nightmare_sanctuary.txt",
+      "title": "The Unbreakable Sanctuary",
+      "music": "nature",
+      "categoryId": "cat-11"
+    },
+    {
+      "file": "problem_workshop.txt",
+      "title": "The Workshop of Solutions",
+      "music": "piano",
+      "categoryId": "cat-12"
+    },
+    {
+      "file": "problem_council.txt",
+      "title": "The Council of Perspectives",
+      "music": "ambient",
+      "categoryId": "cat-12"
+    },
+    {
+      "file": "anxiety_garden.txt",
+      "title": "The Garden of Infinite Calm",
+      "music": "nature",
+      "categoryId": "cat-13"
+    },
+    {
+      "file": "depression_light.txt",
+      "title": "The Light That Returns",
+      "music": "ambient",
+      "categoryId": "cat-13"
+    },
+    {
+      "file": "fantasy_flying.txt",
+      "title": "Wings of Freedom",
+      "music": "ambient",
+      "categoryId": "cat-14"
+    },
+    {
+      "file": "fantasy_underwater.txt",
+      "title": "The Ocean Kingdom",
+      "music": "nature",
+      "categoryId": "cat-14"
+    },
+    {
+      "file": "fantasy_hero.txt",
+      "title": "Meeting Your Hero",
+      "music": "piano",
+      "categoryId": "cat-14"
+    },
+    {
+      "file": "skill_physiological.txt",
+      "title": "The Temple of the Body",
+      "music": "ambient",
+      "categoryId": "cat-10"
+    },
+    {
+      "file": "healing_cellular.txt",
+      "title": "The Healing Light Within",
+      "music": "ambient",
+      "categoryId": "cat-15"
+    },
+    {
+      "file": "skill_mathematics.txt",
+      "title": "The Geometry of Dreams",
+      "music": "piano",
+      "categoryId": "cat-16"
+    },
+    {
+      "file": "skill_writing.txt",
+      "title": "The Writer's Sanctuary",
+      "music": "piano",
+      "categoryId": "cat-16"
+    }
+  ],
+  "categories": [
+    {
+      "id": "cat-1",
+      "name": "Adventure",
+      "slug": "adventure",
+      "color": "#F59E0B",
+      "icon": "⚔️",
+      "sort_order": 1
+    },
+    {
+      "id": "cat-2",
+      "name": "Joy",
+      "slug": "joy",
+      "color": "#EC4899",
+      "icon": "✨",
+      "sort_order": 2
+    },
+    {
+      "id": "cat-3",
+      "name": "Creativity",
+      "slug": "creativity",
+      "color": "#8B5CF6",
+      "icon": "🎨",
+      "sort_order": 3
+    },
+    {
+      "id": "cat-4",
+      "name": "Calming",
+      "slug": "calming",
+      "color": "#06B6D4",
+      "icon": "🌊",
+      "sort_order": 4
+    },
+    {
+      "id": "cat-5",
+      "name": "Relaxation",
+      "slug": "relaxation",
+      "color": "#22C55E",
+      "icon": "🧘",
+      "sort_order": 5
+    },
+    {
+      "id": "cat-6",
+      "name": "Self-Esteem",
+      "slug": "self-esteem",
+      "color": "#EF4444",
+      "icon": "💪",
+      "sort_order": 6
+    },
+    {
+      "id": "cat-7",
+      "name": "Healing",
+      "slug": "healing",
+      "color": "#3B82F6",
+      "icon": "💚",
+      "sort_order": 7
+    },
+    {
+      "id": "cat-8",
+      "name": "Mental Clarity",
+      "slug": "mental-clarity",
+      "color": "#6366F1",
+      "icon": "🧠",
+      "sort_order": 8
+    },
+    {
+      "id": "cat-9",
+      "name": "Renewal",
+      "slug": "renewal",
+      "color": "#14B8A6",
+      "icon": "🌱",
+      "sort_order": 9
+    },
+    {
+      "id": "cat-10",
+      "name": "Skill Building",
+      "slug": "skill-building",
+      "color": "#F97316",
+      "icon": "🎯",
+      "sort_order": 10
+    },
+    {
+      "id": "cat-11",
+      "name": "Nightmare Relief",
+      "slug": "nightmare-relief",
+      "color": "#7C3AED",
+      "icon": "🛡️",
+      "sort_order": 11
+    },
+    {
+      "id": "cat-12",
+      "name": "Problem Solving",
+      "slug": "problem-solving",
+      "color": "#0EA5E9",
+      "icon": "💡",
+      "sort_order": 12
+    },
+    {
+      "id": "cat-13",
+      "name": "Anxiety Relief",
+      "slug": "anxiety-relief",
+      "color": "#10B981",
+      "icon": "🌿",
+      "sort_order": 13
+    },
+    {
+      "id": "cat-14",
+      "name": "Fantasy",
+      "slug": "fantasy",
+      "color": "#EC4899",
+      "icon": "🦋",
+      "sort_order": 14
+    },
+    {
+      "id": "cat-15",
+      "name": "Healing Visualization",
+      "slug": "healing-visualization",
+      "color": "#84CC16",
+      "icon": "💫",
+      "sort_order": 15
+    },
+    {
+      "id": "cat-16",
+      "name": "Mental Skills",
+      "slug": "mental-skills",
+      "color": "#6366F1",
+      "icon": "🧩",
+      "sort_order": 16
+    }
+  ]
+}

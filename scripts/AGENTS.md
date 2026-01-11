@@ -5,33 +5,48 @@ Python tooling for generating dream narration audio and ambient music.
 ## Quick Start
 
 ```bash
-# Single dream with music
-python scripts/generate_audio.py --dream dream-1
+# Build dreamData.ts from narrative files
+python scripts/build_dream_data.py
 
-# Multiple dreams
-python scripts/generate_audio.py --limit 5
+# Generate audio for a single dream
+python scripts/generate_audio.py --dream dream-24
 
-# Narration only (skip music)
-python scripts/generate_audio.py --no-music
+# Generate audio for all dreams
+python scripts/generate_audio.py --all
 
-# Music only (for existing narration)
-python scripts/generate_music.py --dream dream-1
+# Generate audio for new dreams only (24+)
+python scripts/generate_audio.py --start 24
 
-# List available TTS voices
-python scripts/generate_audio.py --list-voices
+# Skip music generation
+python scripts/generate_audio.py --dream dream-24 --no-music
 ```
 
-## Pipeline Overview
+## Content Pipeline
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  lib/dreamData.ts                                               │
-│  └─ Dream narratives with [PAUSE] markers                       │
+│  scripts/narratives/*.txt                                       │
+│  └─ Individual dream narrative text files                       │
+│  └─ Include [PAUSE] markers for exploration periods             │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  generate_audio.py (Step 1)                                     │
+│  scripts/narratives/metadata.json                               │
+│  └─ Dream titles, music styles, category assignments            │
+│  └─ Category definitions (id, name, color, icon)                │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  build_dream_data.py                                            │
+│  └─ Reads metadata.json + narrative files                       │
+│  └─ Generates lib/dreamData.ts                                  │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  generate_audio.py                                              │
 │  └─ Edge TTS → {id}_full.opus (narration only)                  │
 │  └─ Extract preview → {id}_preview.opus (first 30s)             │
 │  └─ Auto-calls generate_music.py (unless --no-music)            │
@@ -39,27 +54,100 @@ python scripts/generate_audio.py --list-voices
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  generate_music.py (Step 2)                                     │
+│  generate_music.py                                              │
 │  └─ Procedural synthesis → {id}_music.opus                      │
 │  └─ Mix narration + music → {id}_combined.opus                  │
 │  └─ Update preview with music → {id}_preview.opus               │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+## Adding New Dreams
+
+1. **Create narrative file** in `scripts/narratives/`:
+   ```
+   scripts/narratives/my_new_dream.txt
+   ```
+2. **Add entry to metadata.json**:
+
+   ```json
+   {
+     "file": "my_new_dream.txt",
+     "title": "My New Dream Title",
+     "music": "ambient",
+     "categoryId": "cat-10"
+   }
+   ```
+
+3. **Rebuild dreamData.ts**:
+
+   ```bash
+   python scripts/build_dream_data.py
+   ```
+
+4. **Generate audio**:
+
+   ```bash
+   python scripts/generate_audio.py --dream dream-40
+   ```
+
+5. **Commit only combined files**:
+   ```bash
+   git add public/audio/dreams/*_combined.opus
+   git commit -m "feat: add new dream audio"
+   ```
+
+## Narrative File Format
+
+- Plain text, no headers or metadata
+- Use `[PAUSE]` markers every 3-4 paragraphs
+- Write in second person ("you")
+- Include reality check at start (look at hands)
+- Include awareness cues ("You are dreaming")
+- ~2000-3000 words recommended
+
 ## Output Files
 
-| File                 | Description                                  |
-| -------------------- | -------------------------------------------- |
-| `{id}_full.opus`     | Narration only (Edge TTS output)             |
-| `{id}_music.opus`    | Music only (procedural synthesis)            |
-| `{id}_combined.opus` | Narration + music mixed (web playback)       |
-| `{id}_preview.opus`  | First 30 seconds with music (browse preview) |
+| File                 | Description                  | Commit? |
+| -------------------- | ---------------------------- | ------- |
+| `{id}_full.opus`     | Narration only               | No      |
+| `{id}_music.opus`    | Music only                   | No      |
+| `{id}_combined.opus` | Narration + music (playback) | Yes     |
+| `{id}_preview.opus`  | First 30s with music         | No      |
 
-## generate_audio.py
+## Categories
 
-Edge TTS narration generation with pause handling.
+Categories are defined in `metadata.json`. Each dream can specify a `categoryId` or default to cycling through categories by index.
 
-### Voice Configuration
+| ID     | Name             | Icon | Use Case                           |
+| ------ | ---------------- | ---- | ---------------------------------- |
+| cat-1  | Adventure        | ⚔️   | Action-oriented dreams             |
+| cat-2  | Joy              | ✨   | Positive emotion cultivation       |
+| cat-3  | Creativity       | 🎨   | Creative visualization             |
+| cat-4  | Calming          | 🌊   | Relaxation and calm                |
+| cat-5  | Relaxation       | 🧘   | Deep relaxation                    |
+| cat-6  | Self-Esteem      | 💪   | Confidence building                |
+| cat-7  | Healing          | 💚   | General healing                    |
+| cat-8  | Mental Clarity   | 🧠   | Focus and clarity                  |
+| cat-9  | Renewal          | 🌱   | Fresh starts                       |
+| cat-10 | Skill Building   | 🎯   | Practice skills (speaking, music)  |
+| cat-11 | Nightmare Relief | 🛡️   | Transform nightmares               |
+| cat-12 | Problem Solving  | 💡   | Creative problem solving           |
+| cat-13 | Anxiety Relief   | 🌿   | Anxiety and depression relief      |
+| cat-14 | Fantasy          | 🦋   | Flying, underwater, meeting heroes |
+| cat-15 | Healing Viz      | 💫   | Cellular/physiological healing     |
+| cat-16 | Mental Skills    | 🧩   | Math, writing, clear thinking      |
+
+## Music Themes
+
+| Theme      | Description                             |
+| ---------- | --------------------------------------- |
+| `ambient`  | Ethereal pads, 432Hz tuning, slow tempo |
+| `piano`    | Soft piano, 440Hz, gentle progressions  |
+| `nature`   | Organic textures, wind, water sounds    |
+| `cosmic`   | Deep space drones, crystalline textures |
+| `binaural` | Binaural beats for entrainment          |
+
+## Voice Configuration
 
 ```python
 VOICE = "en-GB-SoniaNeural"  # Calm British female
@@ -67,105 +155,24 @@ RATE = "-30%"                 # Slower for dreamlike quality
 PITCH = "-15Hz"               # Lower pitch
 ```
 
-### Pause Handling
-
-- `[PAUSE]` markers in dreamData.ts → 45-second silence gaps
-- 2-second silence between text segments
-- Designed for lucid dreaming exploration moments
-
-### Dependencies
-
-```bash
-pip install edge-tts  # Auto-installed if missing
-# Requires: ffmpeg (system)
-```
-
-## generate_music.py
-
-Procedural ambient music generation using numpy synthesis.
-
-### Music Themes
-
-```python
-MUSIC_THEMES = {
-    "ambient": {
-        "base_freq": 432,  # 432Hz tuning
-        "chord_progression": ["Cmaj9", "Am11", "Fmaj9", ...],
-        "tempo_bpm": 50,
-        "instrument": "ethereal_pad",
-    },
-    "piano": {
-        "base_freq": 440,
-        "chord_progression": ["Am9", "Fmaj7", "C", ...],
-        "tempo_bpm": 65,
-        "instrument": "soft_piano",
-    },
-    "nature": {
-        "description": "Organic textures with wind, water tones",
-        # ...
-    },
-    "cosmic": {
-        "description": "Deep space drones and crystalline textures",
-        # ...
-    },
-}
-```
-
-### Volume Ducking
-
-```python
-MUSIC_VOLUME_BASE = 0.22   # During narration
-MUSIC_VOLUME_PAUSE = 0.30  # During [PAUSE] sections
-FADE_DURATION = 15.0       # Fade in/out seconds
-```
-
-### Dependencies
-
-```bash
-pip install numpy soundfile
-# Optional: scipy (for advanced filtering)
-# Requires: ffmpeg (system)
-```
-
 ## CI Integration
 
 `.github/workflows/deploy.yml` runs audio generation:
 
-1. Caches based on `lib/dreamData.ts` hash
-2. Only regenerates when narratives change
-3. Stores in `public/audio/` for GitHub Pages serving
+1. Caches based on `scripts/narratives/metadata.json` hash
+2. Only regenerates when narratives/metadata change
+3. Stores `*_combined.opus` in `public/audio/dreams/`
 
-### Cache Key
+## Dependencies
 
-```yaml
-key: audio-cache-${{ hashFiles('lib/dreamData.ts') }}
+```bash
+pip install edge-tts numpy soundfile
+# Requires: ffmpeg (system)
 ```
 
 ## DO NOT
 
-- Commit generated audio files (served from CI)
+- Commit `_full.opus`, `_music.opus`, or `_preview.opus` files
 - Modify voice/rate/pitch without testing full playback
 - Remove [PAUSE] markers without updating pause duration
-- Use scipy without fallback (optional dependency)
-
-## Troubleshooting
-
-### "ffmpeg not found"
-
-```bash
-# macOS
-brew install ffmpeg
-
-# Ubuntu
-sudo apt install ffmpeg
-```
-
-### Edge TTS rate limiting
-
-- Add delays between generations
-- Use `--limit` to batch process
-
-### Music sounds wrong
-
-- Check dream's `music` field matches a valid theme key
-- Fallback is "ambient" if theme not found
+- Edit dreamData.ts directly (regenerate via build_dream_data.py)

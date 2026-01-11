@@ -10,10 +10,11 @@ npm run ios              # iOS simulator
 npm run android          # Android emulator
 npm run typecheck        # TypeScript validation
 
-# Audio generation (Python)
-python scripts/generate_audio.py --dream dream-1    # Single dream + music
-python scripts/generate_audio.py --limit 5          # First 5 dreams
-python scripts/generate_audio.py --no-music         # Skip music step
+# Dream content pipeline (Python)
+python scripts/build_dream_data.py                  # Rebuild dreamData.ts from narratives
+python scripts/generate_audio.py --dream dream-24   # Generate audio for single dream
+python scripts/generate_audio.py --all              # Generate audio for all dreams
+python scripts/generate_audio.py --start 24         # Generate audio for dreams 24+
 ```
 
 ## Tech Stack
@@ -70,10 +71,14 @@ hooks/                 # React hooks
   useFavorites.ts      # Favorites persistence
 services/              # Business logic (see services/AGENTS.md)
 lib/                   # Utilities
-  dreamData.ts         # Dream narratives with [PAUSE] markers (2896 lines)
+  dreamData.ts         # Generated from narratives (DO NOT EDIT DIRECTLY)
   storage.ts           # AsyncStorage wrapper
   constants.ts         # App constants and thresholds
 scripts/               # Build tools (see scripts/AGENTS.md)
+  narratives/          # Dream narrative text files + metadata.json
+  build_dream_data.py  # Generates lib/dreamData.ts from narratives
+  generate_audio.py    # TTS narration generation
+  generate_music.py    # Procedural music + mixing
 theme/                 # Design tokens (colors, spacing, typography)
 types/                 # TypeScript type definitions
 public/audio/          # Generated audio files
@@ -159,6 +164,14 @@ Two-step pipeline in `scripts/`:
 2. **generate_music.py** → Procedural ambient music → `{id}_combined.opus`
 
 See `scripts/AGENTS.md` for detailed audio pipeline documentation.
+
+## Adding New Dreams
+
+1. Create narrative file: `scripts/narratives/my_dream.txt`
+2. Add entry to `scripts/narratives/metadata.json`
+3. Rebuild: `python scripts/build_dream_data.py`
+4. Generate audio: `python scripts/generate_audio.py --dream dream-N`
+5. Commit only `*_combined.opus` files
 
 ## Sleep Detection Thresholds
 

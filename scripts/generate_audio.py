@@ -1,20 +1,7 @@
 #!/usr/bin/env python3
-"""
-Audio Generation Script for Dream Stream
-
-Generates high-quality TTS audio from dream narratives using Edge TTS.
-Outputs Opus-encoded audio files optimized for web streaming.
-
-Usage:
-    python scripts/generate_audio.py
-    python scripts/generate_audio.py --dream "dream-1"
-    python scripts/generate_audio.py --limit 3
-"""
-
 import argparse
 import asyncio
 import json
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -28,7 +15,8 @@ except ImportError:
     import edge_tts
 
 PROJECT_ROOT = Path(__file__).parent.parent
-DREAM_DATA_PATH = PROJECT_ROOT / "lib" / "dreamData.ts"
+NARRATIVES_DIR = Path(__file__).parent / "narratives"
+METADATA_PATH = NARRATIVES_DIR / "metadata.json"
 OUTPUT_DIR = PROJECT_ROOT / "public" / "audio" / "dreams"
 CACHE_DIR = PROJECT_ROOT / ".audio_cache"
 
@@ -42,13 +30,13 @@ SILENCE_BETWEEN_SEGMENTS_MS = 2000
 
 class DreamContent(NamedTuple):
     id: str
+    name: str
     title: str
     music: str
     content: str
 
 
 def ensure_silence_files():
-    """Pre-generate reusable silence files"""
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
     pause_file = CACHE_DIR / "pause_45s.mp3"
@@ -101,23 +89,30 @@ def ensure_silence_files():
     return pause_file, gap_file
 
 
-def parse_dream_data() -> list[DreamContent]:
-    """Extract dream content from dreamData.ts"""
-    content = DREAM_DATA_PATH.read_text()
-    pattern = r"\{\s*title:\s*['\"](.+?)['\"],\s*music:\s*['\"]([^'\"]+)['\"],\s*content:\s*`([^`]+)`"
-    matches = re.findall(pattern, content, re.DOTALL)
+def load_dreams_from_metadata() -> list[DreamContent]:
+    with open(METADATA_PATH, "r") as f:
+        metadata = json.load(f)
 
     dreams = []
-    for i, (title, music, text) in enumerate(matches, 1):
-        dream_id = f"dream-{i}"
-        cleaned_content = text.strip()
-        dreams.append(DreamContent(dream_id, title, music, cleaned_content))
+    for i, entry in enumerate(metadata["dreams"]):
+        narrative_path = NARRATIVES_DIR / entry["file"]
+        if not narrative_path.exists():
+            print(f"Warning: {entry['file']} not found, skipping")
+            continue
+
+        with open(narrative_path, "r") as f:
+            content = f.read().strip()
+
+        dream_id = f"dream-{i + 1}"
+        name = entry["file"].replace(".txt", "")
+        dreams.append(
+            DreamContent(dream_id, name, entry["title"], entry["music"], content)
+        )
 
     return dreams
 
 
 def split_by_pauses(content: str) -> list[dict]:
-    """Split content by [PAUSE] markers into segments"""
     parts = content.split("[PAUSE]")
     segments = []
 
@@ -132,7 +127,6 @@ def split_by_pauses(content: str) -> list[dict]:
 
 
 async def generate_tts(text: str, output_path: Path, voice: str, rate: str, pitch: str):
-    """Generate TTS audio for text"""
     communicate = edge_tts.Communicate(text, voice, rate=rate, pitch=pitch)
     await communicate.save(str(output_path))
 
@@ -144,7 +138,6 @@ async def generate_dream_audio(
     gap_file: Path,
     voice: str = VOICE,
 ):
-    """Generate audio for a single dream"""
     dream_dir = output_dir / dream.id
     dream_dir.mkdir(parents=True, exist_ok=True)
 
@@ -282,6 +275,7 @@ async def generate_dream_audio(
 
     return {
         "id": dream.id,
+        "name": dream.name,
         "title": dream.title,
         "music": dream.music,
         "full_audio": f"audio/dreams/{dream.id}_full.opus",
@@ -298,15 +292,32 @@ async def generate_dream_audio(
 
 async def main():
     parser = argparse.ArgumentParser(description="Generate TTS audio for Dream Stream")
-    parser.add_argument("--dream", help="Generate only this dream ID")
+    parser.add_argument(
+        "--dream", help="Generate only this dream (narrative filename without .txt)"
+    )
+    parser.add_argument("--all", action="store_true", help="Generate all dreams")
+    parser.add_argument(
+        "--start", type=int, help="Start from this dream index (1-based)"
+    )
     parser.add_argument("--limit", type=int, help="Limit number of dreams")
     parser.add_argument("--voice", default=VOICE, help=f"Voice (default: {VOICE})")
     parser.add_argument("--no-music", action="store_true", help="Skip music generation")
+    parser.add_argument("--list", action="store_true", help="List all available dreams")
     args = parser.parse_args()
 
     print("=" * 60)
     print("Dream Stream Audio Generator")
     print("=" * 60)
+
+    dreams = load_dreams_from_metadata()
+    print(f"Found {len(dreams)} dreams in metadata.json")
+
+    if args.list:
+        print("\nAvailable dreams:")
+        for i, dream in enumerate(dreams, 1):
+            print(f"  {i:2d}. {dream.id} ({dream.name}) - {dream.title}")
+        return
+
     print(f"\nVoice: {args.voice}")
     print(f"Rate: {RATE}, Pitch: {PITCH}")
 
@@ -315,25 +326,33 @@ async def main():
     print("\nPreparing silence files...")
     pause_file, gap_file = ensure_silence_files()
 
-    print("\nParsing dream narratives...")
-    dreams = parse_dream_data()
-    print(f"Found {len(dreams)} dreams")
-
     if args.dream:
-        dreams = [d for d in dreams if d.id == args.dream]
+        dreams = [d for d in dreams if d.id == args.dream or d.name == args.dream]
         if not dreams:
             print(f"Error: Dream '{args.dream}' not found")
+            print("Use --list to see available dreams")
             sys.exit(1)
+
+    if args.start:
+        dreams = dreams[args.start - 1 :]
 
     if args.limit:
         dreams = dreams[: args.limit]
+
+    if not args.all and not args.dream and not args.start:
+        print("\nNo dreams selected. Use one of:")
+        print("  --dream <name>   Generate single dream by name")
+        print("  --all            Generate all dreams")
+        print("  --start N        Generate dreams starting from index N")
+        print("  --list           List all available dreams")
+        return
 
     results = []
     total_size = 0
     total_duration = 0
 
     for i, dream in enumerate(dreams, 1):
-        print(f"\n[{i}/{len(dreams)}] {dream.title}")
+        print(f"\n[{i}/{len(dreams)}] {dream.id} ({dream.name}) - {dream.title}")
         print("-" * 40)
 
         result = await generate_dream_audio(
@@ -348,44 +367,35 @@ async def main():
             print(f"  Size: {result['full_size_bytes'] / 1024 / 1024:.1f} MB")
 
     manifest_path = OUTPUT_DIR / "manifest.json"
+    if manifest_path.exists():
+        with open(manifest_path, "r") as f:
+            manifest = json.load(f)
+    else:
+        manifest = {"dreams": {}}
+
+    for result in results:
+        manifest["dreams"][result["id"]] = result
+
     with open(manifest_path, "w") as f:
-        json.dump(
-            {
-                "generated_at": __import__("datetime").datetime.now().isoformat(),
-                "voice": args.voice,
-                "rate": RATE,
-                "pitch": PITCH,
-                "total_dreams": len(results),
-                "total_duration_seconds": total_duration,
-                "total_size_bytes": total_size,
-                "dreams": results,
-            },
-            f,
-            indent=2,
-        )
+        json.dump(manifest, f, indent=2)
 
     print("\n" + "=" * 60)
-    print("Narration Complete!")
+    print("Summary")
     print("=" * 60)
-    print(f"Dreams: {len(results)}")
-    print(f"Duration: {total_duration / 60:.1f} minutes")
-    print(f"Size: {total_size / 1024 / 1024:.1f} MB")
+    print(f"Dreams processed: {len(results)}")
+    print(f"Total duration: {total_duration / 60:.1f} minutes")
+    print(f"Total size: {total_size / 1024 / 1024:.1f} MB")
 
     if not args.no_music and results:
-        print("\n" + "=" * 60)
-        print("Generating Music & Combined Audio...")
-        print("=" * 60)
-        music_script = PROJECT_ROOT / "scripts" / "generate_music.py"
-        for result in results:
-            dream_id = result["id"]
-            print(f"\n[Music] {dream_id}")
-            subprocess.run(
-                [sys.executable, str(music_script), "--dream", dream_id],
-                check=False,
-            )
-        print("\n" + "=" * 60)
-        print("All audio generation complete!")
-        print("=" * 60)
+        print("\nGenerating music...")
+        music_script = Path(__file__).parent / "generate_music.py"
+        if music_script.exists():
+            for result in results:
+                print(f"  Music for {result['id']}...")
+                subprocess.run(
+                    [sys.executable, str(music_script), "--dream", result["id"]],
+                    check=False,
+                )
 
 
 if __name__ == "__main__":

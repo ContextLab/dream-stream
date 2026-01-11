@@ -1,45 +1,95 @@
 # Audio Generation Notes
 
-## Two-Step Process
+## Pipeline Overview
 
-Dream audio generation requires TWO scripts to be run in sequence:
+Audio generation uses a narrative-based pipeline:
 
-1. **`scripts/generate_audio.py`** - Generates TTS narration
-   - Creates `{dream-id}_full.opus` (narration only)
-   - Creates `{dream-id}_preview.opus` (first 2 min of narration only)
-   - Uses Edge TTS with en-GB-SoniaNeural voice
+```
+scripts/narratives/*.txt   -> Text narratives with [PAUSE] markers
+scripts/narratives/metadata.json -> Dream titles, music styles, categories
+       |
+       v
+scripts/build_dream_data.py   -> Generates lib/dreamData.ts
+       |
+       v
+scripts/generate_audio.py     -> TTS narration (auto-calls generate_music.py)
+       |
+       v
+public/audio/dreams/dream-N_combined.opus -> Final audio for playback
+```
 
-2. **`scripts/generate_music.py`** - Generates music and combines with narration
-   - Reads the `_full.opus` narration file
-   - Generates procedural ambient music matching the dream's theme
-   - Creates `{dream-id}_combined.opus` (narration + music)
-   - Recreates `{dream-id}_preview.opus` from combined audio
-   - Creates `audio/music/{dream-id}_music.opus` (music only)
+## File Naming Convention
 
-## IMPORTANT
+Audio files use `dream-N` format (matching dreamData.ts IDs):
 
-- The `_combined.opus` file is what the app uses for playback
-- The preview is taken from the combined audio (with music)
-- Running only `generate_audio.py` will create files WITHOUT music
-- Always run `generate_music.py` after `generate_audio.py`
+- `dream-1_full.opus` - Narration only
+- `dream-1_music.opus` - Music only (in `audio/music/`)
+- `dream-1_combined.opus` - Narration + music (for playback)
+- `dream-1_preview.opus` - First 2 min of combined
 
 ## Commands
 
 ```bash
-# Generate a single dream (both steps)
+# Rebuild dreamData.ts from narratives
+python scripts/build_dream_data.py
+
+# List available dreams
+python scripts/generate_audio.py --list
+
+# Generate single dream (by ID or narrative name)
 python scripts/generate_audio.py --dream dream-24
-python scripts/generate_music.py --dream dream-24
+python scripts/generate_audio.py --dream skill_public_speaking
+
+# Generate dreams starting from index
+python scripts/generate_audio.py --start 26
 
 # Generate all dreams
-python scripts/generate_audio.py
-python scripts/generate_music.py
+python scripts/generate_audio.py --all
+
+# Skip music generation (faster, for testing)
+python scripts/generate_audio.py --dream dream-24 --no-music
+
+# Generate music only for existing narration
+python scripts/generate_music.py --dream dream-24
 ```
+
+## Two-Step Process
+
+`generate_audio.py` auto-calls `generate_music.py` unless `--no-music` is used.
+
+If interrupted, you can:
+
+1. Check which dreams have `_full.opus` but no `_combined.opus`
+2. Run `generate_music.py --dream dream-N` manually for those
 
 ## Music Themes
 
-Each dream has a music theme defined in `lib/dreamData.ts`:
-- ambient: Ethereal floating pads
+Defined in `scripts/narratives/metadata.json`:
+
+- ambient: Ethereal floating pads (432Hz)
 - piano: Gentle piano with bells
 - nature: Organic textures with wind/water
 - cosmic: Deep space drones
 - binaural: Theta/delta binaural beats
+
+## Voice Configuration
+
+```python
+VOICE = "en-GB-SoniaNeural"  # Calm British female
+RATE = "-30%"                 # Slower for dreamlike quality
+PITCH = "-15Hz"               # Lower pitch
+```
+
+## Current Status
+
+- 39 total dreams in metadata.json
+- Dreams 1-27 have combined audio
+- Dreams 28-39 still need generation
+
+## Commit Guidelines
+
+Only commit `*_combined.opus` files. Do NOT commit:
+
+- `*_full.opus`
+- `*_music.opus`
+- `*_preview.opus`

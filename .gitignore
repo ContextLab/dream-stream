@@ -271,3 +271,8 @@ public/audio/music/
 
 # macOS
 .DS_Store
+
+# uncompressed audio
+public/audio/*/*/*.mp3
+public/audio/*/*.mp3
+
