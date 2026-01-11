@@ -15,13 +15,8 @@ interface VolumeSetupProps {
   testAudioUrl?: string;
 }
 
-const TEST_PHRASES = [
-  'You are dreaming. You are aware.',
-  'This is a test of your dream volume.',
-  'Adjust until you can hear clearly but softly.',
-];
+const TEST_AUDIO_DESCRIPTION = 'Sample dream audio (10 sec preview)';
 
-// Simple custom slider component (no external dependencies)
 function VolumeSlider({
   value,
   onValueChange,
@@ -34,27 +29,83 @@ function VolumeSlider({
   maximumValue?: number;
 }) {
   const [trackWidth, setTrackWidth] = useState(0);
+  const [trackLeft, setTrackLeft] = useState(0);
+  const trackRef = useRef<View>(null);
+
+  const measureTrackPosition = useCallback(() => {
+    if (trackRef.current && Platform.OS === 'web') {
+      const element = trackRef.current as unknown as HTMLElement;
+      if (element.getBoundingClientRect) {
+        const rect = element.getBoundingClientRect();
+        setTrackLeft(rect.left);
+      }
+    }
+  }, []);
 
   const handleLayout = (e: LayoutChangeEvent) => {
     setTrackWidth(e.nativeEvent.layout.width);
+    measureTrackPosition();
   };
+
+  const calculateValueFromX = useCallback(
+    (x: number) => {
+      if (trackWidth === 0) return minimumValue;
+      const percentage = Math.max(0, Math.min(1, x / trackWidth));
+      return minimumValue + percentage * (maximumValue - minimumValue);
+    },
+    [trackWidth, minimumValue, maximumValue]
+  );
 
   const handlePress = (e: { nativeEvent: { locationX: number } }) => {
     if (trackWidth === 0) return;
-    const x = e.nativeEvent.locationX;
-    const percentage = Math.max(0, Math.min(1, x / trackWidth));
-    const newValue = minimumValue + percentage * (maximumValue - minimumValue);
+    const newValue = calculateValueFromX(e.nativeEvent.locationX);
     onValueChange(newValue);
   };
+
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      measureTrackPosition();
+
+      const element = trackRef.current as unknown as HTMLElement;
+      const rect = element?.getBoundingClientRect?.();
+      const currentTrackLeft = rect?.left ?? trackLeft;
+
+      const startX = e.clientX - currentTrackLeft;
+      onValueChange(calculateValueFromX(startX));
+
+      const handleMouseMove = (moveEvent: MouseEvent) => {
+        const x = moveEvent.clientX - currentTrackLeft;
+        onValueChange(calculateValueFromX(x));
+      };
+
+      const handleMouseUp = () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    },
+    [calculateValueFromX, measureTrackPosition, onValueChange, trackLeft]
+  );
 
   const safeValue = Number.isNaN(value) ? minimumValue : value;
   const fillPercentage = ((safeValue - minimumValue) / (maximumValue - minimumValue)) * 100;
 
+  const webProps =
+    Platform.OS === 'web'
+      ? {
+          onMouseDown: handleMouseDown as unknown as undefined,
+        }
+      : {};
+
   return (
-    <Pressable onPress={handlePress} onLayout={handleLayout} style={styles.sliderTrack}>
-      <View style={[styles.sliderFill, { width: `${fillPercentage}%` }]} />
-      <View style={[styles.sliderThumb, { left: `${fillPercentage}%` }]} />
-    </Pressable>
+    <View ref={trackRef} onLayout={handleLayout} style={styles.sliderTrack} {...webProps}>
+      <Pressable onPress={handlePress} style={StyleSheet.absoluteFill} />
+      <View style={[styles.sliderFill, { width: `${fillPercentage}%` }]} pointerEvents="none" />
+      <View style={[styles.sliderThumb, { left: `${fillPercentage}%` }]} pointerEvents="none" />
+    </View>
   );
 }
 
@@ -68,10 +119,9 @@ function getAudioBaseUrl(): string {
 }
 
 export function VolumeSetup({ onComplete, onSkip, testAudioUrl }: VolumeSetupProps) {
-  const [volume, setVolume] = useState(0.3);
+  const [volume, setVolume] = useState(0.8);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [currentPhrase, setCurrentPhrase] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [volumeWarning, setVolumeWarning] = useState<string | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
@@ -162,7 +212,6 @@ export function VolumeSetup({ onComplete, onSkip, testAudioUrl }: VolumeSetupPro
   const onPlaybackStatusUpdate = (status: AVPlaybackStatus) => {
     if (status.isLoaded && status.didJustFinish) {
       setIsPlaying(false);
-      setCurrentPhrase((prev) => (prev + 1) % TEST_PHRASES.length);
     }
   };
 
@@ -223,7 +272,7 @@ export function VolumeSetup({ onComplete, onSkip, testAudioUrl }: VolumeSetupPro
 
       <View style={styles.testSection}>
         <Text variant="bodySmall" color="muted" align="center" style={styles.phrase}>
-          "{TEST_PHRASES[currentPhrase]}"
+          {TEST_AUDIO_DESCRIPTION}
         </Text>
 
         <Pressable
