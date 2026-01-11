@@ -19,12 +19,12 @@ interface DreamPlayerProps {
   onError?: (error: Error) => void;
 }
 
-function getAudioUrl(dreamId: string, mode: PlaybackMode): string {
-  const baseUrl = Platform.OS === 'web' 
-    ? '/dream-stream/audio/dreams'
-    : 'https://context-lab.com/dream-stream/audio/dreams';
-  const suffix = mode === 'preview' ? '_preview' : '_full';
-  return `${baseUrl}/${dreamId}${suffix}.opus`;
+function getAudioUrl(dreamId: string, _mode: PlaybackMode): string {
+  const baseUrl =
+    Platform.OS === 'web'
+      ? '/dream-stream/audio/dreams'
+      : 'https://context-lab.com/dream-stream/audio/dreams';
+  return `${baseUrl}/${dreamId}_combined.opus`;
 }
 
 export function DreamPlayer({
@@ -43,13 +43,13 @@ export function DreamPlayer({
   const [duration, setDuration] = useState(
     playbackMode === 'preview' ? dream.preview_duration_seconds : dream.full_duration_seconds
   );
-  
+
   const soundRef = useRef<Audio.Sound | null>(null);
   const hasCompletedRef = useRef(false);
 
   useEffect(() => {
     loadAudio();
-    
+
     return () => {
       cleanup();
     };
@@ -67,13 +67,13 @@ export function DreamPlayer({
       });
 
       const audioUrl = getAudioUrl(dream.id, playbackMode);
-      
+
       const { sound } = await Audio.Sound.createAsync(
         { uri: audioUrl },
         { shouldPlay: autoPlay, positionMillis: initialPosition * 1000 },
         onPlaybackStatusUpdate
       );
-      
+
       soundRef.current = sound;
       setStatus('ready');
       onStatusChange?.('ready');
@@ -102,8 +102,8 @@ export function DreamPlayer({
     }
 
     const positionSec = Math.floor(playbackStatus.positionMillis / 1000);
-    const durationSec = playbackStatus.durationMillis 
-      ? Math.floor(playbackStatus.durationMillis / 1000) 
+    const durationSec = playbackStatus.durationMillis
+      ? Math.floor(playbackStatus.durationMillis / 1000)
       : duration;
 
     setCurrentTime(positionSec);
@@ -128,7 +128,7 @@ export function DreamPlayer({
 
   const play = useCallback(async () => {
     if (!soundRef.current || status === 'error') return;
-    
+
     try {
       await soundRef.current.playAsync();
       setIsPlaying(true);
@@ -142,7 +142,7 @@ export function DreamPlayer({
 
   const pause = useCallback(async () => {
     if (!soundRef.current) return;
-    
+
     try {
       await soundRef.current.pauseAsync();
       setIsPlaying(false);
@@ -163,7 +163,7 @@ export function DreamPlayer({
 
   const seekTo = useCallback(async (seconds: number) => {
     if (!soundRef.current) return;
-    
+
     try {
       await soundRef.current.setPositionAsync(seconds * 1000);
       setCurrentTime(seconds);
@@ -173,10 +173,13 @@ export function DreamPlayer({
     }
   }, []);
 
-  const seekRelative = useCallback((delta: number) => {
-    const newTime = Math.max(0, Math.min(currentTime + delta, duration));
-    seekTo(newTime);
-  }, [currentTime, duration, seekTo]);
+  const seekRelative = useCallback(
+    (delta: number) => {
+      const newTime = Math.max(0, Math.min(currentTime + delta, duration));
+      seekTo(newTime);
+    },
+    [currentTime, duration, seekTo]
+  );
 
   const isLoading = status === 'loading';
   const hasError = status === 'error';
@@ -190,10 +193,10 @@ export function DreamPlayer({
   return (
     <View style={styles.container}>
       <View style={styles.visualizer}>
-        <Ionicons 
-          name={isPlaying ? "radio-outline" : "moon-outline"} 
-          size={64} 
-          color={isPlaying ? colors.primary[500] : colors.gray[600]} 
+        <Ionicons
+          name={isPlaying ? 'radio-outline' : 'moon-outline'}
+          size={64}
+          color={isPlaying ? colors.primary[500] : colors.gray[600]}
         />
         <Text variant="h4" weight="semibold" style={styles.title} numberOfLines={2}>
           {dream.title}
@@ -219,7 +222,7 @@ export function DreamPlayer({
         ) : (
           <>
             <View style={styles.progressContainer}>
-              <Pressable 
+              <Pressable
                 style={styles.progressBar}
                 onPress={(e) => {
                   const { locationX } = e.nativeEvent;
@@ -228,11 +231,11 @@ export function DreamPlayer({
                   seekTo(percent * duration);
                 }}
               >
-                <View 
+                <View
                   style={[
-                    styles.progressFill, 
-                    { width: duration > 0 ? `${(currentTime / duration) * 100}%` : '0%' }
-                  ]} 
+                    styles.progressFill,
+                    { width: duration > 0 ? `${(currentTime / duration) * 100}%` : '0%' },
+                  ]}
                 />
               </Pressable>
               <View style={styles.timeRow}>
@@ -248,24 +251,24 @@ export function DreamPlayer({
             <View style={styles.buttonRow}>
               <Pressable onPress={() => seekRelative(-15)} style={styles.seekButton}>
                 <Ionicons name="play-back" size={24} color={colors.gray[400]} />
-                <Text variant="caption" color="muted">15s</Text>
+                <Text variant="caption" color="muted">
+                  15s
+                </Text>
               </Pressable>
 
               <Pressable onPress={togglePlayPause} style={styles.playButton}>
                 {isLoading ? (
                   <ActivityIndicator size="large" color={colors.primary[500]} />
                 ) : (
-                  <Ionicons 
-                    name={isPlaying ? "pause" : "play"} 
-                    size={36} 
-                    color="#ffffff" 
-                  />
+                  <Ionicons name={isPlaying ? 'pause' : 'play'} size={36} color="#ffffff" />
                 )}
               </Pressable>
 
               <Pressable onPress={() => seekRelative(15)} style={styles.seekButton}>
                 <Ionicons name="play-forward" size={24} color={colors.gray[400]} />
-                <Text variant="caption" color="muted">15s</Text>
+                <Text variant="caption" color="muted">
+                  15s
+                </Text>
               </Pressable>
             </View>
           </>

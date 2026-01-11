@@ -71,8 +71,7 @@ export function VolumeSetup({ onComplete, onSkip, testAudioUrl }: VolumeSetupPro
   const [volumeWarning, setVolumeWarning] = useState<string | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
 
-  // Use a short preview from the first dream as test audio
-  const effectiveTestUrl = testAudioUrl || `${AUDIO_BASE_URL}/dream-1_full.opus`;
+  const effectiveTestUrl = testAudioUrl || `${AUDIO_BASE_URL}/dream-1_combined.opus`;
 
   useEffect(() => {
     loadSavedVolume();

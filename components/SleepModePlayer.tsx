@@ -61,11 +61,12 @@ export function SleepModePlayer({
         shouldDuckAndroid: true,
       });
 
-      const baseUrl = Platform.OS === 'web' 
-        ? '/dream-stream/audio/dreams'
-        : 'https://context-lab.com/dream-stream/audio/dreams';
-      const audioUrl = `${baseUrl}/${dream.id}_full.opus`;
-      
+      const baseUrl =
+        Platform.OS === 'web'
+          ? '/dream-stream/audio/dreams'
+          : 'https://context-lab.com/dream-stream/audio/dreams';
+      const audioUrl = `${baseUrl}/${dream.id}_combined.opus`;
+
       const { sound, status } = await Audio.Sound.createAsync(
         { uri: audioUrl },
         { shouldPlay: false, volume }
@@ -73,7 +74,7 @@ export function SleepModePlayer({
 
       soundRef.current = sound;
       sound.setOnPlaybackStatusUpdate(onPlaybackStatusUpdate);
-      
+
       if (status.isLoaded && status.durationMillis) {
         setDuration(status.durationMillis / 1000);
       }
@@ -126,20 +127,17 @@ export function SleepModePlayer({
     stopVolumeEnforcement();
     setIsPlaying(false);
     cancelAnimation(pulseScale);
-    
+
     if (enableHaptics && Platform.OS !== 'web') {
       Vibration.vibrate(HAPTIC_PATTERN_PULSE);
     }
-    
+
     onComplete?.();
   };
 
   const startPulseAnimation = () => {
     pulseScale.value = withRepeat(
-      withSequence(
-        withTiming(1.1, { duration: 1500 }),
-        withTiming(1, { duration: 1500 })
-      ),
+      withSequence(withTiming(1.1, { duration: 1500 }), withTiming(1, { duration: 1500 })),
       -1,
       true
     );
@@ -242,11 +240,7 @@ export function SleepModePlayer({
           style={[styles.mainButton, isPlaying && styles.mainButtonPlaying]}
           onPress={isPlaying ? handlePause : handlePlay}
         >
-          <Ionicons
-            name={isPlaying ? 'pause' : 'play'}
-            size={32}
-            color="#ffffff"
-          />
+          <Ionicons name={isPlaying ? 'pause' : 'play'} size={32} color="#ffffff" />
         </Pressable>
 
         <View style={styles.controlButton}>
