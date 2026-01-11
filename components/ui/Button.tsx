@@ -7,7 +7,7 @@ import {
   TextStyle,
   TouchableOpacityProps,
 } from 'react-native';
-import { touchTargetMinSize } from '@/theme/tokens';
+import { touchTargetMinSize, fontFamily } from '@/theme/tokens';
 
 type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost';
 type ButtonSize = 'sm' | 'md' | 'lg';
@@ -96,7 +96,7 @@ export const Button = forwardRef<React.ElementRef<typeof TouchableOpacity>, Butt
             {leftIcon}
             <Text
               className={`font-semibold ${variantStyle.text} ${sizeStyle.text} ${leftIcon ? 'ml-2' : ''} ${rightIcon ? 'mr-2' : ''}`}
-              style={textStyle}
+              style={[{ fontFamily: fontFamily.bold }, textStyle]}
             >
               {children}
             </Text>
