@@ -64,7 +64,9 @@
           "android": {
             "compileSdkVersion": 35,
             "targetSdkVersion": 35,
-            "minSdkVersion": 26
+            "minSdkVersion": 26,
+            "enableResourceOptimizations": false,
+            "extraProguardRules": "-keep class com.google.android.material.** { *; }"
           }
         }
       ]
