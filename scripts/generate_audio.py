@@ -301,6 +301,7 @@ async def main():
     parser.add_argument("--dream", help="Generate only this dream ID")
     parser.add_argument("--limit", type=int, help="Limit number of dreams")
     parser.add_argument("--voice", default=VOICE, help=f"Voice (default: {VOICE})")
+    parser.add_argument("--no-music", action="store_true", help="Skip music generation")
     args = parser.parse_args()
 
     print("=" * 60)
@@ -364,11 +365,27 @@ async def main():
         )
 
     print("\n" + "=" * 60)
-    print("Complete!")
+    print("Narration Complete!")
     print("=" * 60)
     print(f"Dreams: {len(results)}")
     print(f"Duration: {total_duration / 60:.1f} minutes")
     print(f"Size: {total_size / 1024 / 1024:.1f} MB")
+
+    if not args.no_music and results:
+        print("\n" + "=" * 60)
+        print("Generating Music & Combined Audio...")
+        print("=" * 60)
+        music_script = PROJECT_ROOT / "scripts" / "generate_music.py"
+        for result in results:
+            dream_id = result["id"]
+            print(f"\n[Music] {dream_id}")
+            subprocess.run(
+                [sys.executable, str(music_script), "--dream", dream_id],
+                check=False,
+            )
+        print("\n" + "=" * 60)
+        print("All audio generation complete!")
+        print("=" * 60)
 
 
 if __name__ == "__main__":
