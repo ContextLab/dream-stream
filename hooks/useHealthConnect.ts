@@ -1,19 +1,15 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Platform } from 'react-native';
+// STUB: Health Connect removed during nuclear reset (Jan 12, 2026)
+// Restore from git commit 8f942cb to rebuild Android support
+
+import { useState, useCallback } from 'react';
 import {
-  getHealthConnectStatus,
-  initializeHealthConnect,
-  requestHealthPermissions,
-  getCurrentVitals,
   runConnectionTest,
-  getRecentSleepSessions,
   openHealthConnectSettings,
   SUPPORTED_DEVICES,
   type HealthConnectStatus,
   type VitalsSnapshot,
   type SleepStageSample,
 } from '@/services/healthConnect';
-import { processVitalsUpdate, enableVitalsDetection } from '@/services/sleep';
 
 interface ConnectionTestResult {
   success: boolean;
@@ -40,139 +36,36 @@ interface UseHealthConnectReturn {
 }
 
 export function useHealthConnect(): UseHealthConnectReturn {
-  const isAndroid = Platform.OS === 'android';
+  const isAndroid = false;
 
-  const [status, setStatus] = useState<HealthConnectStatus | null>(null);
-  const [vitals, setVitals] = useState<VitalsSnapshot | null>(null);
-  const [recentSleepStages, setRecentSleepStages] = useState<SleepStageSample[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [status] = useState<HealthConnectStatus>({
+    available: false,
+    initialized: false,
+    permissionsGranted: false,
+    sdkStatus: 'unavailable',
+  });
+  const [vitals] = useState<VitalsSnapshot | null>(null);
+  const [recentSleepStages] = useState<SleepStageSample[]>([]);
+  const [isLoading] = useState(false);
+  const [error] = useState<string | null>(null);
   const [isTestRunning, setIsTestRunning] = useState(false);
   const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null);
 
-  const refreshStatus = useCallback(async () => {
-    if (!isAndroid) {
-      setStatus({
-        available: false,
-        initialized: false,
-        permissionsGranted: false,
-        sdkStatus: 'unavailable',
-      });
-      setIsLoading(false);
-      return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const newStatus = await getHealthConnectStatus();
-      setStatus(newStatus);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to get Health Connect status');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [isAndroid]);
-
-  const refreshVitals = useCallback(async () => {
-    if (!isAndroid || !status?.initialized) return;
-
-    try {
-      const [newVitals, sleepStages] = await Promise.all([
-        getCurrentVitals(),
-        getRecentSleepSessions(12),
-      ]);
-      setVitals(newVitals);
-      setRecentSleepStages(sleepStages);
-
-      if (newVitals.heartRate !== null || newVitals.hrv !== null) {
-        processVitalsUpdate(newVitals);
-      }
-    } catch (err) {
-      console.error('Failed to refresh vitals:', err);
-    }
-  }, [isAndroid, status?.initialized]);
-
-  const initialize = useCallback(async (): Promise<boolean> => {
-    if (!isAndroid) return false;
-
-    setError(null);
-    try {
-      const result = await initializeHealthConnect();
-      await refreshStatus();
-      return result;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to initialize Health Connect');
-      return false;
-    }
-  }, [isAndroid, refreshStatus]);
-
-  const requestPermissions = useCallback(async (): Promise<boolean> => {
-    if (!isAndroid) return false;
-
-    setError(null);
-    try {
-      const result = await requestHealthPermissions();
-      await refreshStatus();
-      if (result) {
-        await refreshVitals();
-      }
-      return result;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to request permissions');
-      return false;
-    }
-  }, [isAndroid, refreshStatus, refreshVitals]);
+  const refreshStatus = useCallback(async () => {}, []);
+  const refreshVitals = useCallback(async () => {}, []);
+  const initialize = useCallback(async (): Promise<boolean> => false, []);
+  const requestPermissions = useCallback(async (): Promise<boolean> => false, []);
 
   const testConnection = useCallback(async (): Promise<ConnectionTestResult> => {
     setIsTestRunning(true);
-    setTestResult(null);
-    setError(null);
-
-    try {
-      const result = await runConnectionTest();
-      setTestResult(result);
-      return result;
-    } catch (err) {
-      const failedResult: ConnectionTestResult = {
-        success: false,
-        steps: [
-          {
-            name: 'Connection Test',
-            passed: false,
-            error: err instanceof Error ? err.message : 'Unknown error',
-          },
-        ],
-      };
-      setTestResult(failedResult);
-      return failedResult;
-    } finally {
-      setIsTestRunning(false);
-    }
+    const result = await runConnectionTest();
+    setTestResult(result);
+    setIsTestRunning(false);
+    return result;
   }, []);
 
-  useEffect(() => {
-    refreshStatus();
-  }, [refreshStatus]);
-
-  useEffect(() => {
-    if (!status?.initialized) {
-      enableVitalsDetection(false);
-      return;
-    }
-
-    enableVitalsDetection(true);
-    refreshVitals();
-    const interval = setInterval(refreshVitals, 30000);
-    return () => {
-      clearInterval(interval);
-      enableVitalsDetection(false);
-    };
-  }, [status?.initialized, refreshVitals]);
-
   return {
-    isAvailable: status?.available ?? false,
+    isAvailable: false,
     isAndroid,
     status,
     isLoading,
