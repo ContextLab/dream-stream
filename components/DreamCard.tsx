@@ -121,6 +121,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    minWidth: 0, // Allow content to shrink below natural width for marquee to work
   },
   compactContent: {
     justifyContent: 'center',
@@ -144,6 +145,8 @@ const styles = StyleSheet.create({
   },
   duration: {
     fontFamily: fontFamily.regular,
+    flexShrink: 0,
+    marginLeft: 8,
   },
   cardContent: {
     flex: 1,

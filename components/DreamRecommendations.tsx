@@ -54,7 +54,7 @@ export function DreamRecommendations({
   const renderItem = useCallback(
     ({ item }: { item: DreamListItem }) => (
       <View style={styles.cardContainer}>
-        <DreamCard dream={item} variant="featured" />
+        <DreamCard dream={item} variant="compact" />
       </View>
     ),
     []
@@ -105,6 +105,7 @@ const styles = StyleSheet.create({
   },
   cardContainer: {
     marginRight: spacing.md,
+    width: 240,
   },
   loadingContainer: {
     padding: spacing.xl,
