@@ -47,6 +47,20 @@
           "image": "./assets/splash-icon.png",
           "imageWidth": 200
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26
+          }
+        }
+      ],
+      [
+        "react-native-health-connect",
+        {
+          "requestPermissionsRationale": "Dream Stream uses Health Connect to read sleep data from your wearable device for optimal lucid dream induction timing."
+        }
       ]
     ],
     "experiments": {
