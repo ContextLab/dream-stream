@@ -4181,7 +4181,7 @@ Sink deeper into rest. Let the dream fade completely. You have done beautiful wo
     categoryId: 'cat-16',
   },
   {
-    title: 'The Writer\'s Sanctuary',
+    title: "The Writer's Sanctuary",
     music: 'piano',
     content: `Take a slow breath and look at your hands. Really look at them. Notice how they shimmer slightly at the edges, how the lines on your palms seem to shift and rearrange themselves like words on a page being rewritten. Count your fingers if you can. You may find more or fewer than you expect. This is how you know. You are dreaming. You are in a lucid dream, and everything here responds to your intention.
 
@@ -4309,6 +4309,7 @@ function generateDreams(): DreamListItem[] {
         slug: category.slug,
         color: category.color,
       },
+      tags: [category.slug],
     };
   });
 }
@@ -4322,7 +4323,8 @@ export function getDreamById(id: string): Dream | null {
   const listItem = DREAMS[index];
   const dreamScript = DREAM_SCRIPTS[index];
   const category = dreamScript.categoryId
-    ? CATEGORIES.find((c) => c.id === dreamScript.categoryId) || CATEGORIES[index % CATEGORIES.length]
+    ? CATEGORIES.find((c) => c.id === dreamScript.categoryId) ||
+      CATEGORIES[index % CATEGORIES.length]
     : CATEGORIES[index % CATEGORIES.length];
 
   return {
