@@ -59,13 +59,17 @@ export const DreamCard = memo(function DreamCard({ dream, variant = 'default' }:
           >
             {dream.title}
           </MarqueeText>
-          {dream.tags && dream.tags.length > 0 && (
-            <View style={styles.tagsContainer}>
-              {dream.tags.slice(0, 3).map((tag: string, index: number) => (
-                <Text key={tag} variant="caption" color="secondary">
-                  {index > 0 ? ' · ' : ''}#{tag}
-                </Text>
-              ))}
+          {dream.category && (
+            <View style={styles.categoryRow}>
+              <View
+                style={[
+                  styles.categoryDot,
+                  { backgroundColor: dream.category.color || colors.gray[500] },
+                ]}
+              />
+              <Text variant="caption" color="secondary">
+                {dream.category.name}
+              </Text>
             </View>
           )}
         </View>
@@ -138,10 +142,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: 4,
   },
-  tagsContainer: {
+  categoryRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
+    marginTop: 2,
+  },
+  categoryDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
   },
   duration: {
     fontFamily: fontFamily.regular,
