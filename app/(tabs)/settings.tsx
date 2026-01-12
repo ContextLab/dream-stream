@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Text, Heading } from '@/components/ui/Text';
 import { SleepDebugPanel } from '@/components/SleepDebugPanel';
 import { VolumeSetup } from '@/components/VolumeSetup';
+import { MicrophoneTest } from '@/components/MicrophoneTest';
 import { useHealthConnect } from '@/hooks/useHealthConnect';
 import { colors, spacing } from '@/theme/tokens';
 
@@ -13,6 +14,7 @@ export default function SettingsScreen() {
   const router = useRouter();
   const [showSleepDebug, setShowSleepDebug] = useState(false);
   const [showVolumeSetup, setShowVolumeSetup] = useState(false);
+  const [showMicTest, setShowMicTest] = useState(false);
   const [showHealthConnect, setShowHealthConnect] = useState(false);
 
   const {
@@ -46,6 +48,11 @@ export default function SettingsScreen() {
             label="Volume & Audio"
             onPress={() => setShowVolumeSetup(true)}
           />
+          <MenuRow
+            icon="mic-outline"
+            label="Microphone Calibration"
+            onPress={() => setShowMicTest(true)}
+          />
           <Link href={'/about' as any} asChild>
             <Pressable style={styles.menuRow}>
               <Ionicons name="information-circle-outline" size={24} color={colors.gray[400]} />
@@ -57,164 +64,148 @@ export default function SettingsScreen() {
           </Link>
         </View>
 
-        <View style={styles.wearableSection}>
-          <MenuRow
-            icon="watch-outline"
-            label="Wearable / Health Connect"
-            onPress={() => setShowHealthConnect(!showHealthConnect)}
-            badge={!isAndroid ? 'Android Only' : undefined}
-          />
-          {showHealthConnect && (
-            <View style={styles.expandedSection}>
-              {!isAndroid ? (
-                <Text variant="caption" color="muted" style={styles.platformNote}>
-                  Health Connect is only available on Android devices. iOS support via HealthKit
-                  coming soon.
-                </Text>
-              ) : (
-                <>
-                  <View style={styles.statusRow}>
-                    <Text variant="caption" color="muted">
-                      Status:
-                    </Text>
-                    <Text variant="caption" color={isAvailable ? 'success' : 'muted'}>
-                      {isLoading
-                        ? 'Checking...'
-                        : status?.sdkStatus === 'available'
-                          ? 'Available'
-                          : 'Not Available'}
-                    </Text>
-                  </View>
+        {isAndroid && (
+          <View style={styles.wearableSection}>
+            <MenuRow
+              icon="watch-outline"
+              label="Wearable / Health Connect"
+              onPress={() => setShowHealthConnect(!showHealthConnect)}
+            />
+            {showHealthConnect && (
+              <View style={styles.expandedSection}>
+                <View style={styles.statusRow}>
+                  <Text variant="caption" color="muted">
+                    Status:
+                  </Text>
+                  <Text variant="caption" color={isAvailable ? 'success' : 'muted'}>
+                    {isLoading
+                      ? 'Checking...'
+                      : status?.sdkStatus === 'available'
+                        ? 'Available'
+                        : 'Not Available'}
+                  </Text>
+                </View>
 
-                  {error && (
-                    <Text variant="caption" color="error" style={styles.errorText}>
-                      {error}
-                    </Text>
-                  )}
+                {error && (
+                  <Text variant="caption" color="error" style={styles.errorText}>
+                    {error}
+                  </Text>
+                )}
 
-                  {!status?.initialized && (
+                {!status?.initialized && (
+                  <Pressable
+                    style={styles.actionButton}
+                    onPress={async () => {
+                      await initialize();
+                      await requestPermissions();
+                    }}
+                  >
+                    <Ionicons name="link-outline" size={18} color={colors.primary[400]} />
+                    <Text variant="body" color="primary" style={styles.actionButtonText}>
+                      Connect Health Connect
+                    </Text>
+                  </Pressable>
+                )}
+
+                {status?.initialized && (
+                  <>
+                    {vitals && (
+                      <View style={styles.vitalsContainer}>
+                        <View style={styles.vitalItem}>
+                          <Ionicons name="heart-outline" size={20} color={colors.primary[400]} />
+                          <Text variant="body" color="primary">
+                            {vitals.heartRate ? `${vitals.heartRate} bpm` : '--'}
+                          </Text>
+                        </View>
+                        <View style={styles.vitalItem}>
+                          <Ionicons name="pulse-outline" size={20} color={colors.primary[400]} />
+                          <Text variant="body" color="primary">
+                            {vitals.hrv ? `${vitals.hrv.toFixed(0)} ms HRV` : '--'}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+
                     <Pressable
                       style={styles.actionButton}
-                      onPress={async () => {
-                        await initialize();
-                        await requestPermissions();
-                      }}
+                      onPress={testConnection}
+                      disabled={isTestRunning}
                     >
-                      <Ionicons name="link-outline" size={18} color={colors.primary[400]} />
+                      {isTestRunning ? (
+                        <ActivityIndicator size="small" color={colors.primary[400]} />
+                      ) : (
+                        <Ionicons
+                          name="checkmark-circle-outline"
+                          size={18}
+                          color={colors.primary[400]}
+                        />
+                      )}
                       <Text variant="body" color="primary" style={styles.actionButtonText}>
-                        Connect Health Connect
+                        {isTestRunning ? 'Testing...' : 'Test Connection'}
                       </Text>
                     </Pressable>
-                  )}
 
-                  {status?.initialized && (
-                    <>
-                      {vitals && (
-                        <View style={styles.vitalsContainer}>
-                          <View style={styles.vitalItem}>
-                            <Ionicons name="heart-outline" size={20} color={colors.primary[400]} />
-                            <Text variant="body" color="primary">
-                              {vitals.heartRate ? `${vitals.heartRate} bpm` : '--'}
-                            </Text>
-                          </View>
-                          <View style={styles.vitalItem}>
-                            <Ionicons name="pulse-outline" size={20} color={colors.primary[400]} />
-                            <Text variant="body" color="primary">
-                              {vitals.hrv ? `${vitals.hrv.toFixed(0)} ms HRV` : '--'}
-                            </Text>
-                          </View>
-                        </View>
-                      )}
-
-                      <Pressable
-                        style={styles.actionButton}
-                        onPress={testConnection}
-                        disabled={isTestRunning}
-                      >
-                        {isTestRunning ? (
-                          <ActivityIndicator size="small" color={colors.primary[400]} />
-                        ) : (
-                          <Ionicons
-                            name="checkmark-circle-outline"
-                            size={18}
-                            color={colors.primary[400]}
-                          />
-                        )}
-                        <Text variant="body" color="primary" style={styles.actionButtonText}>
-                          {isTestRunning ? 'Testing...' : 'Test Connection'}
-                        </Text>
-                      </Pressable>
-
-                      {testResult && (
-                        <View style={styles.testResults}>
-                          {testResult.steps.map((step, index) => (
-                            <View key={index} style={styles.testStep}>
-                              <Ionicons
-                                name={step.passed ? 'checkmark-circle' : 'close-circle'}
-                                size={16}
-                                color={step.passed ? colors.success : colors.error}
-                              />
-                              <View style={styles.testStepContent}>
-                                <Text
-                                  variant="caption"
-                                  color={step.passed ? 'success' : 'error'}
-                                  style={styles.testStepText}
-                                >
-                                  {step.name}
-                                </Text>
-                                {step.detail && (
-                                  <Text
-                                    variant="caption"
-                                    color="muted"
-                                    style={styles.testStepDetail}
-                                  >
-                                    {step.detail}
-                                  </Text>
-                                )}
-                                {step.error && !step.passed && (
-                                  <Text
-                                    variant="caption"
-                                    color="error"
-                                    style={styles.testStepDetail}
-                                  >
-                                    {step.error}
-                                  </Text>
-                                )}
-                              </View>
-                            </View>
-                          ))}
-                          {!testResult.success && (
-                            <Pressable style={styles.actionButton} onPress={openSettings}>
-                              <Ionicons
-                                name="settings-outline"
-                                size={18}
-                                color={colors.primary[400]}
-                              />
-                              <Text variant="body" color="primary" style={styles.actionButtonText}>
-                                Open Health Connect Settings
+                    {testResult && (
+                      <View style={styles.testResults}>
+                        {testResult.steps.map((step, index) => (
+                          <View key={index} style={styles.testStep}>
+                            <Ionicons
+                              name={step.passed ? 'checkmark-circle' : 'close-circle'}
+                              size={16}
+                              color={step.passed ? colors.success : colors.error}
+                            />
+                            <View style={styles.testStepContent}>
+                              <Text
+                                variant="caption"
+                                color={step.passed ? 'success' : 'error'}
+                                style={styles.testStepText}
+                              >
+                                {step.name}
                               </Text>
-                            </Pressable>
-                          )}
-                        </View>
-                      )}
-                    </>
-                  )}
+                              {step.detail && (
+                                <Text variant="caption" color="muted" style={styles.testStepDetail}>
+                                  {step.detail}
+                                </Text>
+                              )}
+                              {step.error && !step.passed && (
+                                <Text variant="caption" color="error" style={styles.testStepDetail}>
+                                  {step.error}
+                                </Text>
+                              )}
+                            </View>
+                          </View>
+                        ))}
+                        {!testResult.success && (
+                          <Pressable style={styles.actionButton} onPress={openSettings}>
+                            <Ionicons
+                              name="settings-outline"
+                              size={18}
+                              color={colors.primary[400]}
+                            />
+                            <Text variant="body" color="primary" style={styles.actionButtonText}>
+                              Open Health Connect Settings
+                            </Text>
+                          </Pressable>
+                        )}
+                      </View>
+                    )}
+                  </>
+                )}
 
-                  <View style={styles.deviceList}>
-                    <Text variant="caption" color="muted" style={styles.deviceListTitle}>
-                      Supported Devices:
+                <View style={styles.deviceList}>
+                  <Text variant="caption" color="muted" style={styles.deviceListTitle}>
+                    Supported Devices:
+                  </Text>
+                  {supportedDevices.slice(0, 4).map((device, index) => (
+                    <Text key={index} variant="caption" color="muted" style={styles.deviceItem}>
+                      • {device.name}
                     </Text>
-                    {supportedDevices.slice(0, 4).map((device, index) => (
-                      <Text key={index} variant="caption" color="muted" style={styles.deviceItem}>
-                        • {device.name}
-                      </Text>
-                    ))}
-                  </View>
-                </>
-              )}
-            </View>
-          )}
-        </View>
+                  ))}
+                </View>
+              </View>
+            )}
+          </View>
+        )}
 
         <View style={styles.debugSection}>
           <MenuRow
@@ -247,6 +238,25 @@ export default function SettingsScreen() {
           <VolumeSetup
             onComplete={() => setShowVolumeSetup(false)}
             onSkip={() => setShowVolumeSetup(false)}
+          />
+        </SafeAreaView>
+      </Modal>
+
+      <Modal
+        visible={showMicTest}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowMicTest(false)}
+      >
+        <SafeAreaView style={styles.modalContainer} edges={['top', 'bottom']}>
+          <View style={styles.modalHeader}>
+            <Pressable onPress={() => setShowMicTest(false)} style={styles.closeButton}>
+              <Ionicons name="close" size={24} color={colors.gray[400]} />
+            </Pressable>
+          </View>
+          <MicrophoneTest
+            onComplete={() => setShowMicTest(false)}
+            onSkip={() => setShowMicTest(false)}
           />
         </SafeAreaView>
       </Modal>

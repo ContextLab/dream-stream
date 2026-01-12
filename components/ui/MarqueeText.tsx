@@ -77,7 +77,12 @@ export const MarqueeText = memo(function MarqueeText({
   return (
     <View style={[styles.container, containerStyle]} onLayout={handleContainerLayout}>
       <Animated.View style={[styles.textWrapper, { transform: [{ translateX }] }]}>
-        <Text {...textProps} style={[style, styles.text]} onLayout={handleTextLayout}>
+        <Text
+          {...textProps}
+          style={[style, styles.text]}
+          onLayout={handleTextLayout}
+          numberOfLines={1}
+        >
           {children}
         </Text>
       </Animated.View>
@@ -88,6 +93,7 @@ export const MarqueeText = memo(function MarqueeText({
 const styles = StyleSheet.create({
   container: {
     overflow: 'hidden',
+    flexDirection: 'row',
   },
   textWrapper: {
     flexDirection: 'row',

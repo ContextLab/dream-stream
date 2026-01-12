@@ -335,7 +335,9 @@ export interface VitalsSnapshot {
 }
 
 export async function getCurrentVitals(): Promise<VitalsSnapshot> {
-  const [hrSamples, hrvSamples] = await Promise.all([getRecentHeartRate(5), getRecentHRV(5)]);
+  // HR updates frequently, but HRV is only recorded during sleep or stress measurements
+  // so we need a longer lookback window for HRV
+  const [hrSamples, hrvSamples] = await Promise.all([getRecentHeartRate(30), getRecentHRV(480)]);
 
   return {
     heartRate: hrSamples.length > 0 ? hrSamples[0].beatsPerMinute : null,
@@ -417,14 +419,14 @@ export async function runConnectionTest(): Promise<{
     detail: hrSamples.length > 0 ? `Found ${hrSamples.length} samples` : undefined,
   });
 
-  const hrvSamples = await getRecentHRV(60);
+  const hrvSamples = await getRecentHRV(480);
   steps.push({
     name: 'Read HRV Data',
     passed: hrvSamples.length > 0,
     error:
       hrvSamples.length === 0
         ? hasHrvPermission
-          ? 'No data found - HRV may require wearing device during sleep'
+          ? 'No recent data - Pixel Watch records HRV during sleep or stress measurements'
           : 'Permission not granted'
         : undefined,
     detail: hrvSamples.length > 0 ? `Found ${hrvSamples.length} samples` : undefined,
@@ -436,7 +438,7 @@ export async function runConnectionTest(): Promise<{
 
 export const SUPPORTED_DEVICES = [
   {
-    name: 'Google Pixel Watch (1, 2, 3)',
+    name: 'Google Pixel Watch',
     manufacturer: 'Google',
     features: ['Heart Rate', 'HRV', 'Sleep Stages'],
     notes: 'Full support via Health Connect',

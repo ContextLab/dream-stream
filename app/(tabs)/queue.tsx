@@ -128,8 +128,8 @@ export default function QueueScreen() {
               </Pressable>
 
               <Pressable style={styles.controlButton} onPress={handleClear}>
-                <Ionicons name="trash-outline" size={20} color={colors.error} />
-                <Text variant="caption" style={{ color: colors.error }}>
+                <Ionicons name="trash-outline" size={20} color={colors.gray[300]} />
+                <Text variant="caption" color="secondary">
                   Clear
                 </Text>
               </Pressable>

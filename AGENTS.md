@@ -191,6 +191,46 @@ const SLEEP_BREATHING_REGULARITY = 0.85;
 - **CI**: `.github/workflows/deploy.yml` generates audio, caches based on mockData.ts hash
 - **Audio**: Opus format, 64kbps, served from `/audio/dreams/`
 
+## Android Build
+
+### Current Status: BLOCKED
+
+Android builds are blocked by a bug in Android Gradle Plugin 8.11.0+ that fails to parse color resources from AndroidX libraries. This affects both local builds and EAS cloud builds.
+
+**Error:**
+
+```
+appcompat-1.x.x/res/values/values.xml: Invalid <color> for given resource value.
+java.lang.IllegalStateException: Can not extract resource from com.android.aaptcompiler.ParsedResource
+```
+
+### Workarounds Attempted (All Failed)
+
+- Downgrade AGP to 8.7.3, 8.6.1
+- Force older appcompat/material versions
+- External AAPT2 binary override
+- EAS local and cloud builds
+
+### When Fixed
+
+Once the AGP bug is resolved (monitor Expo/React Native releases), build with:
+
+```bash
+# Option 1: EAS Cloud Build (recommended)
+export EXPO_TOKEN=<your-expo-token>
+npx eas build --platform android --profile preview
+
+# Option 2: Local build
+cd android && ./gradlew assembleRelease
+# APK at: android/app/build/outputs/apk/release/app-release.apk
+```
+
+### EAS Configuration
+
+- Project ID: `8d6aab43-b375-4a93-86a2-bb5d4e407871`
+- Owner: `contextlab`
+- Credentials: Local debug keystore (`credentials.json`)
+
 ---
 
 _Last updated: 2026-01-11_

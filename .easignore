@@ -1,0 +1,21 @@
+# Audio files - served from web, not bundled in APK
+public/audio/
+
+# Generated files
+dist/
+
+# Notes and docs
+notes/
+docs/
+
+# Android build artifacts (will be regenerated)
+android/.gradle/
+android/app/build/
+android/build/
+
+# iOS (if exists)
+ios/
+
+# Other
+.git/
+*.log

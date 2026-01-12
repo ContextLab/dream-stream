@@ -78,7 +78,11 @@
     "extra": {
       "router": {
         "origin": false
+      },
+      "eas": {
+        "projectId": "8d6aab43-b375-4a93-86a2-bb5d4e407871"
       }
-    }
+    },
+    "owner": "contextlab"
   }
 }

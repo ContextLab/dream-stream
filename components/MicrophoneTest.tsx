@@ -66,11 +66,6 @@ export function MicrophoneTest({ onComplete, onSkip }: MicrophoneTestProps) {
   }, []);
 
   const startTest = useCallback(async () => {
-    if (Platform.OS !== 'web') {
-      setStatus('success');
-      return;
-    }
-
     setStatus('requesting');
     setErrorMessage(null);
     setBreathingData(null);

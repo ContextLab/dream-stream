@@ -591,7 +591,7 @@ export default function DreamScreen() {
                 <View style={styles.meditationBadge}>
                   <Ionicons name="sparkles" size={12} color={colors.primary[400]} />
                   <Text variant="caption" color="primary">
-                    ~10 min meditation
+                    ~30 min meditation
                   </Text>
                 </View>
               </Pressable>

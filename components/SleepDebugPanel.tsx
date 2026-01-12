@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
+import { View, StyleSheet, ScrollView, Platform } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
 import {
@@ -10,6 +10,7 @@ import {
   getSleepStageColor,
   type BreathingAnalysis,
 } from '@/services/sleep';
+import { useHealthConnect } from '@/hooks/useHealthConnect';
 import type { SleepStage } from '@/types/database';
 import { colors, darkTheme, spacing, borderRadius } from '@/theme/tokens';
 
@@ -21,6 +22,8 @@ interface DebugState {
   error: string | null;
 }
 
+const isAndroid = Platform.OS === 'android';
+
 export function SleepDebugPanel() {
   const [state, setState] = useState<DebugState>({
     isRunning: false,
@@ -29,6 +32,8 @@ export function SleepDebugPanel() {
     lastAnalysis: null,
     error: null,
   });
+
+  const { vitals, status: healthStatus } = useHealthConnect();
 
   useEffect(() => {
     const unsubscribe = onSleepStageChange((stage) => {
@@ -124,6 +129,39 @@ export function SleepDebugPanel() {
           ))
         )}
       </ScrollView>
+
+      {isAndroid && (
+        <View style={styles.wearableSection}>
+          <Text style={styles.sectionTitle}>Wearable Data</Text>
+          <View style={styles.statusRow}>
+            <Text style={styles.label}>Health Connect:</Text>
+            <Text
+              style={[
+                styles.value,
+                { color: healthStatus?.initialized ? colors.success : darkTheme.textMuted },
+              ]}
+            >
+              {healthStatus?.initialized ? 'Connected' : 'Not Connected'}
+            </Text>
+          </View>
+          {healthStatus?.initialized && vitals && (
+            <>
+              <View style={styles.statusRow}>
+                <Text style={styles.label}>Heart Rate:</Text>
+                <Text style={styles.value}>
+                  {vitals.heartRate ? `${vitals.heartRate} bpm` : '--'}
+                </Text>
+              </View>
+              <View style={styles.statusRow}>
+                <Text style={styles.label}>HRV:</Text>
+                <Text style={styles.value}>
+                  {vitals.hrv ? `${vitals.hrv.toFixed(0)} ms` : '--'}
+                </Text>
+              </View>
+            </>
+          )}
+        </View>
+      )}
 
       <Text style={styles.instructions}>
         Instructions:{'\n'}
@@ -223,5 +261,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     marginTop: spacing.md,
+  },
+  wearableSection: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.gray[800],
   },
 });

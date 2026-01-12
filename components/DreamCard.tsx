@@ -59,14 +59,13 @@ export const DreamCard = memo(function DreamCard({ dream, variant = 'default' }:
           >
             {dream.title}
           </MarqueeText>
-          {dream.category && (
-            <View style={styles.categoryContainer}>
-              {dream.category.color && (
-                <View style={[styles.categoryDot, { backgroundColor: dream.category.color }]} />
-              )}
-              <Text variant="caption" color="secondary">
-                {dream.category.name}
-              </Text>
+          {dream.tags && dream.tags.length > 0 && (
+            <View style={styles.tagsContainer}>
+              {dream.tags.slice(0, 3).map((tag: string, index: number) => (
+                <Text key={tag} variant="caption" color="secondary">
+                  {index > 0 ? ' · ' : ''}#{tag}
+                </Text>
+              ))}
             </View>
           )}
         </View>
@@ -75,11 +74,8 @@ export const DreamCard = memo(function DreamCard({ dream, variant = 'default' }:
         </Text>
       </Pressable>
       <View style={styles.actionButtons}>
-        <QueueButton dreamId={dream.id} size={18} />
-        <FavoriteButton dreamId={dream.id} size={18} />
-        <Pressable onPress={handleCardPress}>
-          <Ionicons name="play-circle-outline" size={24} color={colors.gray[500]} />
-        </Pressable>
+        <QueueButton dreamId={dream.id} size={20} />
+        <FavoriteButton dreamId={dream.id} size={20} />
       </View>
     </View>
   );
@@ -141,15 +137,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: 4,
   },
-  categoryContainer: {
+  tagsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  categoryDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginRight: 6,
+    flexWrap: 'wrap',
   },
   duration: {
     fontFamily: fontFamily.regular,
@@ -162,7 +153,7 @@ const styles = StyleSheet.create({
   actionButtons: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginLeft: 8,
+    gap: 8,
+    marginLeft: 12,
   },
 });

@@ -96,7 +96,7 @@ export interface DreamLaunchQueue {
 
 export type DreamListItem = Pick<
   Dream,
-  'id' | 'title' | 'preview_duration_seconds' | 'full_duration_seconds' | 'is_featured'
+  'id' | 'title' | 'preview_duration_seconds' | 'full_duration_seconds' | 'is_featured' | 'tags'
 > & {
   category?: Pick<Category, 'name' | 'slug' | 'color'>;
 };
