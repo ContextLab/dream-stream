@@ -76,7 +76,13 @@ export function MicrophoneTest({ onComplete, onSkip }: MicrophoneTestProps) {
 
       if (!success) {
         setStatus('error');
-        setErrorMessage('Could not access microphone. Please check your browser settings.');
+        if (Platform.OS === 'web') {
+          setErrorMessage('Could not access microphone. Please check your browser settings.');
+        } else {
+          setErrorMessage(
+            'Microphone access not available. Please ensure the app has microphone permission in your device settings.'
+          );
+        }
         return;
       }
 
@@ -113,7 +119,7 @@ export function MicrophoneTest({ onComplete, onSkip }: MicrophoneTestProps) {
       if (err instanceof DOMException) {
         if (err.name === 'NotAllowedError') {
           setErrorMessage(
-            'Microphone access denied. Please allow microphone access in your browser settings.'
+            'Microphone access denied. Please allow microphone access in your device settings.'
           );
         } else if (err.name === 'NotFoundError') {
           setErrorMessage('No microphone found. Please connect a microphone and try again.');
@@ -121,7 +127,13 @@ export function MicrophoneTest({ onComplete, onSkip }: MicrophoneTestProps) {
           setErrorMessage('Could not access microphone. Please check your device settings.');
         }
       } else {
-        setErrorMessage('An unexpected error occurred. Please try again.');
+        if (Platform.OS === 'web') {
+          setErrorMessage('An unexpected error occurred. Please try again.');
+        } else {
+          setErrorMessage(
+            'Microphone feature requires native audio permissions. Please check app permissions in device settings.'
+          );
+        }
       }
     }
   }, [levelHeight, stageScale, micConfirmedWorking]);

@@ -38,7 +38,7 @@ export default function SettingsScreen() {
         <View style={styles.menuSection}>
           <MenuRow
             icon="volume-medium-outline"
-            label="Volume & Audio"
+            label="Volume Calibration"
             onPress={() => setShowVolumeSetup(true)}
           />
           <MenuRow

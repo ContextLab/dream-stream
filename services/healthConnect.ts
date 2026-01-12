@@ -46,8 +46,9 @@ interface PermissionRecord {
   accessType: string;
 }
 
-const SDK_AVAILABLE = 1;
+const SDK_UNAVAILABLE = 1;
 const SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED = 2;
+const SDK_AVAILABLE = 3;
 
 const SLEEP_STAGE_MAP: Record<number, SleepStage> = {
   0: 'unknown',
