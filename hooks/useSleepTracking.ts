@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Platform } from 'react-native';
 import {
   startSleepSession,
   endSleepSession,
@@ -9,6 +10,10 @@ import {
   onSleepStageChange,
   getSleepHistory,
   calculateSleepSummary,
+  startVitalsPolling,
+  stopVitalsPolling,
+  isVitalsPollingActive,
+  getDetectionMode,
   type SleepSession,
   type SleepSummary,
   type SleepTrackingSource,
@@ -21,6 +26,8 @@ interface UseSleepTrackingReturn {
   isTracking: boolean;
   isLoading: boolean;
   history: SleepSession[];
+  detectionMode: 'audio' | 'vitals' | 'fused' | 'none';
+  isVitalsActive: boolean;
   start: (source?: SleepTrackingSource) => Promise<void>;
   stop: () => Promise<SleepSummary | null>;
   setStage: (stage: SleepStage) => void;
@@ -66,6 +73,10 @@ export function useSleepTracking(): UseSleepTrackingReturn {
     try {
       const newSession = await startSleepSession(source);
       setSession(newSession);
+
+      if (Platform.OS === 'android') {
+        startVitalsPolling().catch((err) => console.log('Vitals polling not available:', err));
+      }
     } catch (err) {
       console.warn('Failed to start sleep session:', err);
       throw err;
@@ -74,6 +85,8 @@ export function useSleepTracking(): UseSleepTrackingReturn {
 
   const handleStop = useCallback(async (): Promise<SleepSummary | null> => {
     try {
+      stopVitalsPolling();
+
       const endedSession = await endSleepSession();
       setSession(null);
       setCurrentStage(null);
@@ -93,12 +106,9 @@ export function useSleepTracking(): UseSleepTrackingReturn {
     updateSleepStage(stage);
   }, []);
 
-  const checkIsInTarget = useCallback(
-    (targetStage: SleepStage): boolean => {
-      return isInTargetStage(targetStage);
-    },
-    []
-  );
+  const checkIsInTarget = useCallback((targetStage: SleepStage): boolean => {
+    return isInTargetStage(targetStage);
+  }, []);
 
   return {
     session,
@@ -106,6 +116,8 @@ export function useSleepTracking(): UseSleepTrackingReturn {
     isTracking: session?.isActive ?? false,
     isLoading,
     history,
+    detectionMode: getDetectionMode(),
+    isVitalsActive: isVitalsPollingActive(),
     start: handleStart,
     stop: handleStop,
     setStage: handleSetStage,

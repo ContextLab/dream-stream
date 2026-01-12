@@ -8,7 +8,7 @@ import {
   getCurrentVitalsStage,
   resetVitalsWindow,
 } from './vitalsClassifier';
-import type { VitalsSnapshot } from './healthConnect';
+import { getCurrentVitals, getHealthConnectStatus, type VitalsSnapshot } from './healthConnect';
 
 export type SleepTrackingSource = 'audio' | 'wearable' | 'manual';
 
@@ -585,12 +585,53 @@ export function stopCalibrationTest(): void {
 
 let vitalsPollingInterval: ReturnType<typeof setInterval> | null = null;
 let useVitalsForDetection = false;
+const VITALS_POLL_INTERVAL_MS = 30000;
 
 export function enableVitalsDetection(enabled: boolean): void {
   useVitalsForDetection = enabled;
   if (!enabled) {
     resetVitalsWindow();
   }
+}
+
+export async function startVitalsPolling(): Promise<boolean> {
+  if (vitalsPollingInterval) return true;
+
+  const status = await getHealthConnectStatus();
+  if (!status.available || !status.permissionsGranted) {
+    console.log('Health Connect not available or permissions not granted');
+    return false;
+  }
+
+  enableVitalsDetection(true);
+
+  const poll = async () => {
+    try {
+      const vitals = await getCurrentVitals();
+      if (vitals.heartRate !== null || vitals.hrv !== null) {
+        processVitalsUpdate(vitals);
+      }
+    } catch (error) {
+      console.error('Failed to poll vitals:', error);
+    }
+  };
+
+  await poll();
+  vitalsPollingInterval = setInterval(poll, VITALS_POLL_INTERVAL_MS);
+
+  return true;
+}
+
+export function stopVitalsPolling(): void {
+  if (vitalsPollingInterval) {
+    clearInterval(vitalsPollingInterval);
+    vitalsPollingInterval = null;
+  }
+  enableVitalsDetection(false);
+}
+
+export function isVitalsPollingActive(): boolean {
+  return vitalsPollingInterval !== null;
 }
 
 export function processVitalsUpdate(vitals: VitalsSnapshot): void {
@@ -669,4 +710,7 @@ export const sleepService = {
   enableVitalsDetection,
   processVitalsUpdate,
   getDetectionMode,
+  startVitalsPolling,
+  stopVitalsPolling,
+  isVitalsPollingActive,
 };
