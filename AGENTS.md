@@ -193,9 +193,22 @@ const SLEEP_BREATHING_REGULARITY = 0.85;
 
 ## Android Build
 
-### Current Status: BLOCKED
+### Current Status: REMOVED (Nuclear Reset)
 
-Android builds are blocked by a bug in Android Gradle Plugin's AAPT2 resource compiler that fails to parse color resources from Material library. This affects both local builds and potentially EAS cloud builds.
+**WARNING**: As of January 12, 2026, the Android-specific code has been REMOVED from this codebase due to intractable build issues. The web app is the primary platform.
+
+### CRITICAL: NEVER Propose EAS Cloud Builds
+
+**DO NOT suggest EAS cloud builds as a solution.** Cloud builds will NOT work if we cannot get the build working locally. This has been attempted and failed. The root cause is a fundamental incompatibility between:
+
+- React Native 0.81+ / Expo SDK 54+
+- react-native-screens 4.19+
+- Material Components 1.13.0
+- Android Gradle Plugin AAPT2 resource compiler
+
+### Historical Context (Pre-Reset)
+
+Android builds were blocked by a bug in Android Gradle Plugin's AAPT2 resource compiler that fails to parse color resources from Material library.
 
 **Error:**
 
@@ -203,6 +216,8 @@ Android builds are blocked by a bug in Android Gradle Plugin's AAPT2 resource co
 material-1.13.0/res/values/values.xml:364:4: Invalid <color> for given resource value.
 java.lang.IllegalStateException: Can not extract resource from com.android.aaptcompiler.ParsedResource
 ```
+
+**Root Cause**: Health Connect integration (`expo-health-connect`, `react-native-health-connect`) required `react-native-screens@4.19.0` which depends on Material 1.13.0. Material 1.13.0 uses M3 Design Tokens with `<macro>` XML tags that AGP's AAPT2 cannot parse.
 
 ### AGP Versions Tested (All Failed)
 
@@ -214,39 +229,21 @@ java.lang.IllegalStateException: Can not extract resource from com.android.aaptc
 | 8.11.0        | 8.14.3 | 1.13.0    | Invalid color error               |
 | 8.13.0-8.13.2 | 8.13   | 1.12.0    | Invalid color error               |
 
-### Next Steps to Try
+### Future Android Implementation
 
-1. **EAS Cloud Build** - May have different toolchain:
+When rebuilding Android support:
 
-   ```bash
-   eas login
-   eas build --platform android --profile preview
-   ```
+1. Start from a working web-only codebase
+2. Use `npx expo prebuild --platform android` to generate fresh native files
+3. Add native features ONE AT A TIME, testing build after each
+4. Avoid Health Connect until the AGP/Material bug is resolved upstream
+5. Test build locally BEFORE committing any native changes
 
-2. **Wait for AGP fix** - Bug tracked in Google Issue Tracker
-
-- External AAPT2 binary override
-- EAS local and cloud builds
-
-### When Fixed
-
-Once the AGP bug is resolved (monitor Expo/React Native releases), build with:
-
-```bash
-# Option 1: EAS Cloud Build (recommended)
-export EXPO_TOKEN=<your-expo-token>
-npx eas build --platform android --profile preview
-
-# Option 2: Local build
-cd android && ./gradlew assembleRelease
-# APK at: android/app/build/outputs/apk/release/app-release.apk
-```
-
-### EAS Configuration
+### EAS Configuration (Reference Only)
 
 - Project ID: `8d6aab43-b375-4a93-86a2-bb5d4e407871`
 - Owner: `contextlab`
-- Credentials: Local debug keystore (`credentials.json`)
+- **DO NOT USE** until local builds work first
 
 ---
 
