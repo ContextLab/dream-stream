@@ -112,7 +112,7 @@ export default function DreamDetailScreen() {
       <Stack.Screen options={{ headerShown: false }} />
 
       <SafeAreaView edges={['top']} style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.headerButton} hitSlop={8}>
+        <Pressable onPress={() => router.replace('/')} style={styles.headerButton} hitSlop={8}>
           <Ionicons name="arrow-back" size={24} color="#ffffff" />
         </Pressable>
         <View style={styles.headerSpacer} />
