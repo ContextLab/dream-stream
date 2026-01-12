@@ -67,9 +67,15 @@ export const DreamCard = memo(function DreamCard({ dream, variant = 'default' }:
                   { backgroundColor: dream.category.color || colors.gray[500] },
                 ]}
               />
-              <Text variant="caption" color="secondary">
+              <MarqueeText
+                variant="caption"
+                color="secondary"
+                speed={20}
+                pauseDuration={2000}
+                containerStyle={styles.categoryTextContainer}
+              >
                 {dream.category.name}
-              </Text>
+              </MarqueeText>
             </View>
           )}
         </View>
@@ -152,6 +158,11 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     marginRight: 6,
+    flexShrink: 0,
+  },
+  categoryTextContainer: {
+    flex: 1,
+    minWidth: 0,
   },
   duration: {
     fontFamily: fontFamily.regular,
