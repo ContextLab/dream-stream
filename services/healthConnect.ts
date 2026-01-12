@@ -79,6 +79,25 @@ export async function getHealthConnectStatus(): Promise<HealthConnectStatus> {
       sdkStatus = 'installed';
     }
 
+    if (status !== SDK_AVAILABLE) {
+      return {
+        available: false,
+        initialized: false,
+        permissionsGranted: false,
+        sdkStatus,
+      };
+    }
+
+    const initialized = await healthConnect.initialize();
+    if (!initialized) {
+      return {
+        available: true,
+        initialized: false,
+        permissionsGranted: false,
+        sdkStatus,
+      };
+    }
+
     const permissions = (await checkGrantedPermissions()) as PermissionRecord[];
     const requiredPermissions = ['HeartRate', 'HeartRateVariabilityRmssd', 'SleepSession'];
     const hasAllPermissions = requiredPermissions.every((p) =>
@@ -86,8 +105,8 @@ export async function getHealthConnectStatus(): Promise<HealthConnectStatus> {
     );
 
     return {
-      available: status === SDK_AVAILABLE,
-      initialized: status === SDK_AVAILABLE,
+      available: true,
+      initialized: true,
       permissionsGranted: hasAllPermissions,
       sdkStatus,
     };
@@ -452,10 +471,10 @@ export const SUPPORTED_DEVICES = [
     notes: 'Via Samsung Health sync',
   },
   {
-    name: 'Fitbit (Pixel Watch)',
-    manufacturer: 'Google/Fitbit',
+    name: 'Fitbit Trackers',
+    manufacturer: 'Fitbit',
     features: ['Heart Rate', 'HRV', 'Sleep Stages'],
-    notes: 'Health Connect support in Wear OS 4+',
+    notes: 'Via Fitbit app sync to Health Connect',
   },
   {
     name: 'Fossil Gen 6',
