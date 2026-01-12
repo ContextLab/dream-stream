@@ -129,6 +129,7 @@ android {
     }
     androidResources {
         ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
+        noCompress 'xml'
     }
 }
 
@@ -152,11 +153,66 @@ android {
     }
 }
 
-// Force Material 1.12.0 to fix AGP 8.11+ ParsedResource bug with Material 1.13.0 color resources
-// See notes/android-build-blocker.md for details
+// ============================================================================
+// Workaround for AGP 8.10-8.14 AAPT2 bug with Material library <macro> tags
+// See: notes/android-build-blocker.md
+//
+// This task strips <macro> elements from Material AAR resources before AGP
+// processes them. The macros are used for M3 design tokens which we don't need
+// since the app uses a fixed dark theme.
+// ============================================================================
+
+import java.util.zip.ZipFile
+import java.util.zip.ZipOutputStream
+import java.util.zip.ZipEntry
+
+task stripMaterialMacros {
+    description = 'Strips <macro> tags from Material library to work around AGP AAPT2 bug'
+    
+    doLast {
+        def gradleCaches = new File(System.getProperty('user.home'), '.gradle/caches')
+        def transformDirs = []
+        
+        // Find all transform directories
+        gradleCaches.eachDirRecurse { dir ->
+            if (dir.name == 'transforms') {
+                transformDirs << dir
+            }
+        }
+        
+        transformDirs.each { transformDir ->
+            transformDir.eachDirRecurse { dir ->
+                if (dir.name.startsWith('material-1.1') || dir.name.startsWith('material-1.2')) {
+                    def valuesDir = new File(dir, 'res/values')
+                    if (valuesDir.exists()) {
+                        valuesDir.eachFile { file ->
+                            if (file.name.endsWith('.xml')) {
+                                def content = file.text
+                                if (content.contains('<macro')) {
+                                    def stripped = content.replaceAll(/<macro[^>]*>.*?<\/macro>/, '')
+                                    file.text = stripped
+                                    println "[stripMaterialMacros] Stripped macros from ${file.absolutePath}"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Run the stripper task before resource merging
+tasks.whenTaskAdded { task ->
+    if (task.name == 'mergeReleaseResources' || task.name == 'mergeDebugResources') {
+        task.dependsOn stripMaterialMacros
+    }
+}
+
 configurations.all {
+    // Force Material 1.6.1 to avoid AAPT2 resource parsing bug with M3 design tokens in 1.7+
     resolutionStrategy {
-        force 'com.google.android.material:material:1.12.0'
+        force 'com.google.android.material:material:1.6.1'
     }
 }
 

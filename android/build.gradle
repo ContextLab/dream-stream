@@ -6,9 +6,15 @@ buildscript {
     mavenCentral()
   }
   dependencies {
-    classpath('com.android.tools.build:gradle')
+    // Force AGP 8.6.0 to avoid AAPT2 color resource bug in 8.10-8.14
+    classpath('com.android.tools.build:gradle:8.6.0')
     classpath('com.facebook.react:react-native-gradle-plugin')
     classpath('org.jetbrains.kotlin:kotlin-gradle-plugin')
+  }
+  configurations.classpath {
+    resolutionStrategy {
+      force 'com.android.tools.build:gradle:8.6.0'
+    }
   }
 }
 

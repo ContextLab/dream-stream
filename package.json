@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "seed": "npx supabase db execute --file supabase/seed.sql",
     "build:ios": "eas build --platform ios",
-    "build:android": "eas build --platform android"
+    "build:android": "eas build --platform android",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@expo-google-fonts/courier-prime": "^0.4.1",
@@ -53,6 +54,7 @@
     "eslint-config-expo": "^10.0.0",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
+    "patch-package": "^8.0.1",
     "prettier": "^3.7.4",
     "typescript": "~5.9.2",
     "typescript-eslint": "^8.52.0"

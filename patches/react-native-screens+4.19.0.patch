@@ -1,0 +1,41 @@
+diff --git a/node_modules/react-native-screens/android/build.gradle b/node_modules/react-native-screens/android/build.gradle
+index 23aecd3..d07d8b5 100644
+--- a/node_modules/react-native-screens/android/build.gradle
++++ b/node_modules/react-native-screens/android/build.gradle
+@@ -220,7 +220,7 @@ dependencies {
+     implementation 'androidx.fragment:fragment-ktx:1.6.1'
+     implementation 'androidx.coordinatorlayout:coordinatorlayout:1.2.0'
+     implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
+-    implementation 'com.google.android.material:material:1.13.0'
++    implementation 'com.google.android.material:material:1.6.1'
+     implementation "androidx.core:core-ktx:1.8.0"
+ 
+     constraints {
+diff --git a/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/gamma/tabs/TabsHostAppearanceApplicator.kt b/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/gamma/tabs/TabsHostAppearanceApplicator.kt
+index 0f9fc4e..6f2d102 100644
+--- a/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/gamma/tabs/TabsHostAppearanceApplicator.kt
++++ b/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/gamma/tabs/TabsHostAppearanceApplicator.kt
+@@ -29,7 +29,8 @@ class TabsHostAppearanceApplicator(
+         bottomNavigationView.isVisible = !tabsHost.tabBarHidden
+         bottomNavigationView.setBackgroundColor(
+             tabsHost.tabBarBackgroundColor
+-                ?: resolveColorAttr(com.google.android.material.R.attr.colorSurfaceContainer),
++                // Use colorSurface instead of colorSurfaceContainer for Material 1.6.x compatibility
++                ?: resolveColorAttr(com.google.android.material.R.attr.colorSurface),
+         )
+ 
+         val states =
+@@ -182,13 +183,10 @@ class TabsHostAppearanceApplicator(
+         val badge = bottomNavigationView.getOrCreateBadge(menuItemIndex)
+         badge.isVisible = true
+ 
+-        badge.clearText()
+         badge.clearNumber()
+ 
+         if (badgeValueNumber != null) {
+             badge.number = badgeValueNumber
+-        } else if (badgeValue != "") {
+-            badge.text = badgeValue
+         }
+ 
+         // Styling
