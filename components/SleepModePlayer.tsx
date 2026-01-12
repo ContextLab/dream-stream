@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { View, StyleSheet, Pressable, Vibration, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Audio, AVPlaybackStatus } from 'expo-av';
-import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+import { useKeepAwake, activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import Animated, {
   useAnimatedStyle,
   withRepeat,
@@ -34,6 +34,7 @@ export function SleepModePlayer({
   onStop,
   enableHaptics = true,
 }: SleepModePlayerProps) {
+  useKeepAwake();
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(dream.full_duration_seconds);

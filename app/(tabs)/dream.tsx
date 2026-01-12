@@ -27,7 +27,7 @@ import type { Dream } from '@/types/database';
 
 export default function DreamScreen() {
   const router = useRouter();
-  const { currentStage, isTracking, start, stop } = useSleepTracking();
+  const { session, currentStage, isTracking, start, stop } = useSleepTracking();
   const { queue, getNext, complete } = useLaunchQueue();
 
   const [showVolumeSetup, setShowVolumeSetup] = useState(false);
@@ -529,6 +529,9 @@ export default function DreamScreen() {
                 stages={stageHistory}
                 currentStage={currentStage}
                 isTracking={isTracking}
+                sessionStartTime={
+                  session?.startTime ? new Date(session.startTime).getTime() : undefined
+                }
               />
 
               <View style={styles.actionRow}>

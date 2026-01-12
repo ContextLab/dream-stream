@@ -25,7 +25,7 @@
       "package": "com.dreamstream.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "transparent"
+        "backgroundColor": "#FFFFFF"
       }
     },
     "web": {

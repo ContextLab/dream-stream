@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from 'react';
-import { View, StyleSheet, Pressable, Platform } from 'react-native';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { View, StyleSheet, Pressable, Platform, ScrollView } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -24,6 +24,7 @@ interface SleepStageGraphProps {
   stages: StageHistoryEntry[];
   currentStage: SleepStage | null;
   isTracking: boolean;
+  sessionStartTime?: number;
   onStagePress?: (stage: SleepStage, timestamp: number) => void;
 }
 
@@ -122,14 +123,30 @@ function AnimatedDataPoint({
   );
 }
 
+const PIXELS_PER_MINUTE = 8;
+const MIN_GRAPH_DURATION_MS = 5 * 60 * 1000;
+
 export function SleepStageGraph({
   stages,
   currentStage,
   isTracking,
+  sessionStartTime,
   onStagePress,
 }: SleepStageGraphProps) {
   const [selectedPoint, setSelectedPoint] = useState<StageHistoryEntry | null>(null);
   const [graphWidth, setGraphWidth] = useState(300);
+  const [currentTime, setCurrentTime] = useState(Date.now());
+  const scrollViewRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (!isTracking) return;
+
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [isTracking]);
 
   const handleLayout = useCallback((event: { nativeEvent: { layout: { width: number } } }) => {
     setGraphWidth(event.nativeEvent.layout.width - STAGE_LABELS_WIDTH - spacing.md);
@@ -147,12 +164,15 @@ export function SleepStageGraph({
   const renderPath = useCallback(() => {
     if (stages.length < 2) return null;
 
-    const minTime = stages[0]?.timestamp ?? Date.now();
-    const maxTime = stages[stages.length - 1]?.timestamp ?? Date.now();
-    const timeRange = Math.max(maxTime - minTime, 1);
+    const startTime = sessionStartTime ?? stages[0]?.timestamp ?? Date.now();
+    const endTime = isTracking ? currentTime : (stages[stages.length - 1]?.timestamp ?? Date.now());
+    const elapsedMs = Math.max(endTime - startTime, MIN_GRAPH_DURATION_MS);
+    const elapsedMinutes = elapsedMs / 60000;
+    const calculatedWidth = elapsedMinutes * PIXELS_PER_MINUTE;
+    const effectiveWidth = Math.max(graphWidth, calculatedWidth);
 
     const points = stages.map((entry) => {
-      const x = ((entry.timestamp - minTime) / timeRange) * graphWidth;
+      const x = ((entry.timestamp - startTime) / elapsedMs) * effectiveWidth;
       const y = getYForStage(entry.stage);
       return { x, y, entry };
     });
@@ -166,66 +186,88 @@ export function SleepStageGraph({
       })
       .join(' ');
 
+    const currentX = isTracking ? effectiveWidth : (points[points.length - 1]?.x ?? 0);
+
     return (
-      <View style={styles.pathContainer}>
-        {Platform.OS === 'web' ? (
-          <svg width={graphWidth} height={GRAPH_HEIGHT} style={{ position: 'absolute' }}>
-            <defs>
-              <linearGradient id="lineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor={colors.primary[600]} />
-                <stop offset="100%" stopColor={colors.primary[400]} />
-              </linearGradient>
-            </defs>
-            <path
-              d={pathD}
-              fill="none"
-              stroke="url(#lineGradient)"
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
-          </svg>
-        ) : (
-          points.slice(1).map((p, i) => {
-            const prev = points[i];
-            return (
-              <View
-                key={i}
-                style={[
-                  styles.lineSegment,
-                  {
-                    left: prev.x,
-                    top: Math.min(prev.y, p.y),
-                    width: p.x - prev.x,
-                    height: Math.abs(p.y - prev.y) + 2,
-                    backgroundColor: colors.primary[500],
-                  },
-                ]}
+      <ScrollView
+        ref={scrollViewRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ width: effectiveWidth, height: GRAPH_HEIGHT }}
+        onContentSizeChange={() => {
+          if (isTracking && scrollViewRef.current) {
+            scrollViewRef.current.scrollToEnd({ animated: true });
+          }
+        }}
+      >
+        <View style={[styles.pathContainer, { width: effectiveWidth }]}>
+          {Platform.OS === 'web' ? (
+            <svg width={effectiveWidth} height={GRAPH_HEIGHT} style={{ position: 'absolute' }}>
+              <defs>
+                <linearGradient id="lineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor={colors.primary[600]} />
+                  <stop offset="100%" stopColor={colors.primary[400]} />
+                </linearGradient>
+              </defs>
+              <path
+                d={pathD}
+                fill="none"
+                stroke="url(#lineGradient)"
+                strokeWidth="2"
+                strokeLinecap="round"
               />
-            );
-          })
-        )}
+            </svg>
+          ) : (
+            points.slice(1).map((p, i) => {
+              const prev = points[i];
+              return (
+                <View
+                  key={i}
+                  style={[
+                    styles.lineSegment,
+                    {
+                      left: prev.x,
+                      top: Math.min(prev.y, p.y),
+                      width: p.x - prev.x,
+                      height: Math.abs(p.y - prev.y) + 2,
+                      backgroundColor: colors.primary[500],
+                    },
+                  ]}
+                />
+              );
+            })
+          )}
 
-        {points.map((p, i) => (
-          <AnimatedDataPoint
-            key={`${p.entry.timestamp}-${i}`}
-            x={p.x}
-            y={p.y}
-            color={getSleepStageColor(p.entry.stage)}
-            delay={i * 50}
-            onPress={() => handlePointPress(p.entry)}
-          />
-        ))}
+          {points.map((p, i) => (
+            <AnimatedDataPoint
+              key={`${p.entry.timestamp}-${i}`}
+              x={p.x}
+              y={p.y}
+              color={getSleepStageColor(p.entry.stage)}
+              delay={i * 50}
+              onPress={() => handlePointPress(p.entry)}
+            />
+          ))}
 
-        {isTracking && currentStage && points.length > 0 && (
-          <PulsingDot
-            x={points[points.length - 1].x}
-            y={points[points.length - 1].y}
-            color={getSleepStageColor(currentStage)}
-          />
-        )}
-      </View>
+          {isTracking && currentStage && (
+            <PulsingDot
+              x={currentX}
+              y={getYForStage(currentStage)}
+              color={getSleepStageColor(currentStage)}
+            />
+          )}
+        </View>
+      </ScrollView>
     );
-  }, [stages, graphWidth, isTracking, currentStage, handlePointPress]);
+  }, [
+    stages,
+    graphWidth,
+    isTracking,
+    currentStage,
+    currentTime,
+    sessionStartTime,
+    handlePointPress,
+  ]);
 
   const renderGridLines = useCallback(() => {
     return STAGE_ORDER.map((stage) => {

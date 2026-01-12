@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import Meyda from 'meyda';
 import type { MeydaFeaturesObject } from 'meyda';
 import type { SleepStage } from '@/types/database';
@@ -9,6 +10,11 @@ import {
   resetVitalsWindow,
 } from './vitalsClassifier';
 import { getCurrentVitals, getHealthConnectStatus, type VitalsSnapshot } from './healthConnect';
+import {
+  startNativeAudioCapture,
+  stopNativeAudioCapture,
+  isNativeAudioAvailable,
+} from './nativeAudio';
 
 export type SleepTrackingSource = 'audio' | 'wearable' | 'manual';
 
@@ -62,7 +68,11 @@ const STORAGE_KEY_HISTORY = 'sleep_history';
 const BREATHING_RATE_MIN = 8;
 const BREATHING_RATE_MAX = 25;
 const ANALYSIS_WINDOW_MS = 60000;
-const RMS_THRESHOLD_BREATHING = 0.02;
+const CALIBRATION_WINDOW_MS = 10000;
+const BASE_RMS_THRESHOLD = 0.02;
+const MIN_RMS_THRESHOLD = 0.005;
+const MAX_RMS_THRESHOLD = 0.15;
+const THRESHOLD_MULTIPLIER = 1.5;
 const DROWSY_BREATHING_REGULARITY = 0.7;
 const SLEEP_BREATHING_REGULARITY = 0.85;
 const REM_RRV_THRESHOLD = 0.25;
@@ -81,6 +91,8 @@ let breathIntervals: number[] = [];
 let stageHistory: { stage: SleepStage; timestamp: number }[] = [];
 let remCallbacks: Set<() => void> = new Set();
 let remEndCallbacks: Set<() => void> = new Set();
+let adaptiveRmsThreshold = BASE_RMS_THRESHOLD;
+let calibrationRmsValues: number[] = [];
 
 function generateId(): string {
   return `sleep_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -285,6 +297,31 @@ function calculateDuration(start: string, end: string): number {
 async function startAudioDetection(): Promise<boolean> {
   if (isAudioRunning) return true;
 
+  if (isNativeAudioAvailable()) {
+    return startNativeAudioDetection();
+  }
+
+  return startWebAudioDetection();
+}
+
+async function startNativeAudioDetection(): Promise<boolean> {
+  try {
+    const success = await startNativeAudioCapture((rms: number) => {
+      processRmsValue(rms);
+    });
+
+    if (success) {
+      isAudioRunning = true;
+    }
+
+    return success;
+  } catch (error) {
+    console.error('Failed to start native audio detection:', error);
+    return false;
+  }
+}
+
+async function startWebAudioDetection(): Promise<boolean> {
   if (typeof window === 'undefined' || !navigator.mediaDevices) {
     console.warn('Audio capture not available');
     return false;
@@ -315,12 +352,16 @@ async function startAudioDetection(): Promise<boolean> {
 
     return true;
   } catch (error) {
-    console.error('Failed to start audio detection:', error);
+    console.error('Failed to start web audio detection:', error);
     return false;
   }
 }
 
 function stopAudioDetection(): void {
+  if (isNativeAudioAvailable()) {
+    stopNativeAudioCapture();
+  }
+
   if (analyzer) {
     analyzer.stop();
     analyzer = null;
@@ -341,18 +382,45 @@ function stopAudioDetection(): void {
   peakTimestamps = [];
   breathIntervals = [];
   stageHistory = [];
+  calibrationRmsValues = [];
+  adaptiveRmsThreshold = BASE_RMS_THRESHOLD;
 }
 
-function processAudioFeatures(features: Partial<MeydaFeaturesObject>): void {
+function recalibrateThreshold(): void {
+  if (calibrationRmsValues.length < 50) return;
+
+  const sorted = [...calibrationRmsValues].sort((a, b) => a - b);
+  const medianIdx = Math.floor(sorted.length / 2);
+  const median = sorted[medianIdx];
+  const p75Idx = Math.floor(sorted.length * 0.75);
+  const p75 = sorted[p75Idx];
+
+  const noiseFloor = median;
+  const signalEstimate = p75;
+  const dynamicRange = signalEstimate - noiseFloor;
+
+  if (dynamicRange > 0.001) {
+    const newThreshold = noiseFloor + dynamicRange * THRESHOLD_MULTIPLIER;
+    adaptiveRmsThreshold = Math.max(MIN_RMS_THRESHOLD, Math.min(MAX_RMS_THRESHOLD, newThreshold));
+  }
+
+  calibrationRmsValues = calibrationRmsValues.slice(-100);
+}
+
+function processRmsValue(rms: number): void {
   const now = Date.now();
-  const rms = features.rms ?? 0;
 
   notifyRawAudioLevel(rms);
+
+  calibrationRmsValues.push(rms);
+  if (calibrationRmsValues.length % 50 === 0) {
+    recalibrateThreshold();
+  }
 
   rmsHistory.push({ value: rms, timestamp: now });
   rmsHistory = rmsHistory.filter((entry) => now - entry.timestamp < ANALYSIS_WINDOW_MS);
 
-  if (rms > RMS_THRESHOLD_BREATHING) {
+  if (rms > adaptiveRmsThreshold) {
     const lastPeak = peakTimestamps[peakTimestamps.length - 1];
     if (!lastPeak || now - lastPeak > 1500) {
       peakTimestamps.push(now);
@@ -375,6 +443,10 @@ function processAudioFeatures(features: Partial<MeydaFeaturesObject>): void {
       }
     }
   }
+}
+
+function processAudioFeatures(features: Partial<MeydaFeaturesObject>): void {
+  processRmsValue(features.rms ?? 0);
 }
 
 function calculateRRV(intervals: number[]): number {
