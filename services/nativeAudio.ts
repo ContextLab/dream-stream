@@ -1,12 +1,22 @@
 import { Platform } from 'react-native';
 import { Audio } from 'expo-av';
+import {
+  isBluetoothHeadsetConnected,
+  startBluetoothSco,
+  stopBluetoothSco,
+  getConnectedBluetoothDevice,
+  isBluetoothAudioSupported,
+} from './bluetoothAudio';
 
 type AudioCallback = (rms: number) => void;
+type AudioSource = 'phone' | 'bluetooth' | 'wired';
 
 let recording: Audio.Recording | null = null;
 let isRunning = false;
 let audioCallback: AudioCallback | null = null;
 let statusInterval: ReturnType<typeof setInterval> | null = null;
+let isBluetoothScoActive = false;
+let currentAudioSource: AudioSource = 'phone';
 
 const POLLING_INTERVAL_MS = 100;
 const DBFS_MIN = -60;
@@ -52,6 +62,27 @@ export async function startNativeAudioCapture(callback: AudioCallback): Promise<
     if (!hasPermission) {
       console.error('Microphone permission not granted');
       return false;
+    }
+
+    if (Platform.OS === 'android' && isBluetoothAudioSupported()) {
+      const btConnected = await isBluetoothHeadsetConnected();
+      if (btConnected) {
+        const device = await getConnectedBluetoothDevice();
+        console.log('Bluetooth headset connected:', device?.name ?? 'Unknown');
+
+        const scoStarted = await startBluetoothSco();
+        if (scoStarted) {
+          isBluetoothScoActive = true;
+          currentAudioSource = 'bluetooth';
+          console.log('Bluetooth SCO started - using Bluetooth microphone');
+        } else {
+          console.log('Failed to start Bluetooth SCO - falling back to phone microphone');
+          currentAudioSource = 'phone';
+        }
+      } else {
+        currentAudioSource = 'phone';
+        console.log('No Bluetooth headset - using phone microphone');
+      }
     }
 
     await Audio.setAudioModeAsync({
@@ -136,6 +167,16 @@ export async function stopNativeAudioCapture(): Promise<void> {
     recording = null;
   }
 
+  if (isBluetoothScoActive) {
+    try {
+      await stopBluetoothSco();
+      isBluetoothScoActive = false;
+      console.log('Bluetooth SCO stopped');
+    } catch (_) {}
+  }
+
+  currentAudioSource = 'phone';
+
   try {
     await Audio.setAudioModeAsync({
       allowsRecordingIOS: false,
@@ -150,3 +191,33 @@ export function isNativeAudioRunning(): boolean {
 export function isNativeAudioAvailable(): boolean {
   return Platform.OS === 'android' || Platform.OS === 'ios';
 }
+
+export function getCurrentAudioSource(): AudioSource {
+  return currentAudioSource;
+}
+
+export function isUsingBluetoothMicrophone(): boolean {
+  return isBluetoothScoActive;
+}
+
+export async function checkBluetoothAvailability(): Promise<{
+  supported: boolean;
+  headsetConnected: boolean;
+  deviceName: string | null;
+}> {
+  if (!isBluetoothAudioSupported()) {
+    return { supported: false, headsetConnected: false, deviceName: null };
+  }
+
+  const connected = await isBluetoothHeadsetConnected();
+  let deviceName: string | null = null;
+
+  if (connected) {
+    const device = await getConnectedBluetoothDevice();
+    deviceName = device?.name ?? null;
+  }
+
+  return { supported: true, headsetConnected: connected, deviceName };
+}
+
+export type { AudioSource };

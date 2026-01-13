@@ -18,6 +18,11 @@ import {
   getSleepStageColor,
   type BreathingAnalysis,
 } from '@/services/sleep';
+import {
+  getCurrentAudioSource,
+  checkBluetoothAvailability,
+  type AudioSource,
+} from '@/services/nativeAudio';
 import { useHealthConnect } from '@/hooks/useHealthConnect';
 import { colors, spacing, borderRadius } from '@/theme/tokens';
 
@@ -35,6 +40,8 @@ export function MicrophoneTest({ onComplete, onSkip }: MicrophoneTestProps) {
   const [breathingData, setBreathingData] = useState<BreathingAnalysis | null>(null);
   const [testDuration, setTestDuration] = useState(0);
   const [micConfirmedWorking, setMicConfirmedWorking] = useState(false);
+  const [audioSource, setAudioSource] = useState<AudioSource>('phone');
+  const [bluetoothDeviceName, setBluetoothDeviceName] = useState<string | null>(null);
 
   const { vitals, status: hcStatus, refreshVitals, isAndroid } = useHealthConnect();
 
@@ -100,6 +107,14 @@ export function MicrophoneTest({ onComplete, onSkip }: MicrophoneTestProps) {
 
       setStatus('testing');
       testStartTimeRef.current = Date.now();
+
+      if (Platform.OS !== 'web') {
+        setAudioSource(getCurrentAudioSource());
+        const btInfo = await checkBluetoothAvailability();
+        if (btInfo.headsetConnected) {
+          setBluetoothDeviceName(btInfo.deviceName);
+        }
+      }
 
       timerRef.current = setInterval(() => {
         setTestDuration(Math.floor((Date.now() - testStartTimeRef.current) / 1000));
@@ -316,6 +331,21 @@ export function MicrophoneTest({ onComplete, onSkip }: MicrophoneTestProps) {
               )}
             </View>
 
+            {Platform.OS !== 'web' && (
+              <View style={styles.audioSourceIndicator}>
+                <Ionicons
+                  name={audioSource === 'bluetooth' ? 'bluetooth' : 'mic'}
+                  size={16}
+                  color={audioSource === 'bluetooth' ? colors.primary[400] : colors.gray[400]}
+                />
+                <Text variant="caption" color={audioSource === 'bluetooth' ? 'primary' : 'muted'}>
+                  {audioSource === 'bluetooth'
+                    ? `Bluetooth: ${bluetoothDeviceName ?? 'Connected'}`
+                    : 'Phone Microphone'}
+                </Text>
+              </View>
+            )}
+
             <Text variant="caption" color="muted" align="center" style={styles.hint}>
               {micConfirmedWorking
                 ? 'Breathe naturally and watch the estimated sleep stage update.'
@@ -459,6 +489,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     backgroundColor: colors.gray[900],
     borderRadius: borderRadius.lg,
+  },
+  audioSourceIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    backgroundColor: colors.gray[800],
+    borderRadius: borderRadius.md,
   },
   hint: {
     maxWidth: 280,
