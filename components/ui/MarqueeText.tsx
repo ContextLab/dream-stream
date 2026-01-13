@@ -105,13 +105,17 @@ const styles = StyleSheet.create({
   container: {
     overflow: 'hidden',
     flexDirection: 'row',
+    alignItems: 'center',
   },
   measureText: {
     position: 'absolute',
     opacity: 0,
+    left: 0,
+    top: 0,
   },
   textWrapper: {
     flexDirection: 'row',
+    alignItems: 'center',
   },
   text: {
     flexShrink: 0,

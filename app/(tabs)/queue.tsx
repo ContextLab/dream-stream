@@ -1,10 +1,11 @@
 import { useCallback } from 'react';
-import { View, StyleSheet, ScrollView, Alert, Pressable } from 'react-native';
+import { View, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text, Heading } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
+import { useThemedAlert } from '@/components/ui/ThemedAlert';
 import { DraggableQueueList } from '@/components/DraggableQueueList';
 import { useLaunchQueue } from '@/hooks/useLaunchQueue';
 import { colors, spacing, borderRadius } from '@/theme/tokens';
@@ -21,8 +22,18 @@ function formatQueueDuration(totalSeconds: number): string {
 
 export default function QueueScreen() {
   const router = useRouter();
-  const { queue, activeItem, remove, reorderByIndex, clear, shuffle, repeatMode, setRepeatMode } =
-    useLaunchQueue();
+  const { showAlert } = useThemedAlert();
+  const {
+    queue,
+    activeItem,
+    remove,
+    reorderByIndex,
+    clear,
+    toggleShuffle,
+    shuffleEnabled,
+    repeatMode,
+    setRepeatMode,
+  } = useLaunchQueue();
 
   const handlePlay = useCallback(
     (dreamId: string) => {
@@ -36,10 +47,10 @@ export default function QueueScreen() {
       try {
         await remove(queueId);
       } catch {
-        Alert.alert('Error', 'Failed to remove from queue');
+        showAlert('Error', 'Failed to remove from queue');
       }
     },
-    [remove]
+    [remove, showAlert]
   );
 
   const handleDragEnd = useCallback(
@@ -47,14 +58,14 @@ export default function QueueScreen() {
       try {
         await reorderByIndex(fromIndex, toIndex);
       } catch {
-        Alert.alert('Error', 'Failed to reorder queue');
+        showAlert('Error', 'Failed to reorder queue');
       }
     },
-    [reorderByIndex]
+    [reorderByIndex, showAlert]
   );
 
   const handleClear = useCallback(async () => {
-    Alert.alert('Clear Queue', 'Remove all dreams from the queue?', [
+    showAlert('Clear Queue', 'Remove all dreams from the queue?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Clear All',
@@ -63,29 +74,29 @@ export default function QueueScreen() {
           try {
             await clear();
           } catch {
-            Alert.alert('Error', 'Failed to clear queue');
+            showAlert('Error', 'Failed to clear queue');
           }
         },
       },
     ]);
-  }, [clear]);
+  }, [clear, showAlert]);
 
-  const handleShuffle = useCallback(async () => {
+  const handleToggleShuffle = useCallback(async () => {
     try {
-      await shuffle();
+      await toggleShuffle();
     } catch {
-      Alert.alert('Error', 'Failed to shuffle queue');
+      showAlert('Error', 'Failed to toggle shuffle mode');
     }
-  }, [shuffle]);
+  }, [toggleShuffle, showAlert]);
 
   const handleToggleRepeat = useCallback(async () => {
     const nextMode = repeatMode === 'off' ? 'all' : 'off';
     try {
       await setRepeatMode(nextMode);
     } catch {
-      Alert.alert('Error', 'Failed to change repeat mode');
+      showAlert('Error', 'Failed to change repeat mode');
     }
-  }, [repeatMode, setRepeatMode]);
+  }, [repeatMode, setRepeatMode, showAlert]);
 
   const totalDuration = queue.reduce((acc, item) => acc + item.dream.full_duration_seconds, 0);
 
@@ -109,10 +120,14 @@ export default function QueueScreen() {
         {queue.length > 0 && (
           <View style={styles.controlsSection}>
             <View style={styles.controlsRow}>
-              <Pressable style={styles.controlButton} onPress={handleShuffle}>
-                <Ionicons name="shuffle-outline" size={20} color={colors.gray[300]} />
-                <Text variant="caption" color="secondary">
-                  Shuffle
+              <Pressable style={styles.controlButton} onPress={handleToggleShuffle}>
+                <Ionicons
+                  name={shuffleEnabled ? 'shuffle' : 'shuffle-outline'}
+                  size={20}
+                  color={shuffleEnabled ? '#22c55e' : colors.gray[300]}
+                />
+                <Text variant="caption" color={shuffleEnabled ? 'success' : 'secondary'}>
+                  {shuffleEnabled ? 'Shuffle On' : 'Shuffle'}
                 </Text>
               </Pressable>
 

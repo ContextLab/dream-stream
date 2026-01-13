@@ -1,8 +1,9 @@
 import { useCallback } from 'react';
-import { Pressable, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { useAnimatedStyle, withSpring, useSharedValue } from 'react-native-reanimated';
 import { useFavoritesContext } from '@/components/FavoritesProvider';
+import { useThemedAlert } from '@/components/ui/ThemedAlert';
 import { colors, touchTargetMinSize } from '@/theme/tokens';
 
 interface FavoriteButtonProps {
@@ -17,6 +18,7 @@ export function FavoriteButton({
   showBackground = false,
 }: FavoriteButtonProps) {
   const { isFavorited: checkFavorited, isLoading, toggleFavorite } = useFavoritesContext();
+  const { showAlert } = useThemedAlert();
   const isFavorited = checkFavorited(dreamId);
   const toggle = useCallback(() => toggleFavorite(dreamId), [toggleFavorite, dreamId]);
   const scale = useSharedValue(1);
@@ -29,9 +31,9 @@ export function FavoriteButton({
     try {
       await toggle();
     } catch {
-      Alert.alert('Error', 'Failed to update favorite. Please try again.');
+      showAlert('Error', 'Failed to update favorite. Please try again.');
     }
-  }, [toggle, scale]);
+  }, [toggle, scale, showAlert]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],

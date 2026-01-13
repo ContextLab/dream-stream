@@ -1,11 +1,12 @@
 import { useCallback, useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, ScrollView, Alert, Pressable, Modal, Platform } from 'react-native';
+import { View, StyleSheet, ScrollView, Pressable, Modal, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Audio, AVPlaybackStatus } from 'expo-av';
 import { Text, Heading } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
+import { useThemedAlert } from '@/components/ui/ThemedAlert';
 import { VolumeSetup } from '@/components/VolumeSetup';
 import { MicrophoneTest } from '@/components/MicrophoneTest';
 import { SleepStageGraph } from '@/components/SleepStageGraph';
@@ -30,6 +31,7 @@ import type { Dream } from '@/types/database';
 
 export default function DreamScreen() {
   const router = useRouter();
+  const { showAlert } = useThemedAlert();
   const { session, currentStage, isTracking, start, stop, history, deleteSession } =
     useSleepTracking();
   const { queue, getNext, complete } = useLaunchQueue();
@@ -162,7 +164,7 @@ export default function DreamScreen() {
       }
     } catch (err) {
       console.warn('Failed to play dream:', err);
-      Alert.alert('Error', 'Failed to play audio');
+      showAlert('Error', 'Failed to play audio');
     }
   };
 
@@ -189,7 +191,7 @@ export default function DreamScreen() {
 
   const handleStartTracking = useCallback(() => {
     if (queue.length === 0) {
-      Alert.alert(
+      showAlert(
         'No Dreams Queued',
         'Add some dreams to your queue first, then come back to start sleep tracking.',
         [
@@ -239,7 +241,7 @@ export default function DreamScreen() {
               setMeditationProgress(0);
               meditationSoundRef.current = null;
               start('audio').catch(() => {
-                Alert.alert('Error', 'Failed to start sleep tracking.');
+                showAlert('Error', 'Failed to start sleep tracking.');
               });
             }
           }
@@ -251,7 +253,7 @@ export default function DreamScreen() {
       } catch (err) {
         console.warn('Failed to play meditation:', err);
         start('audio').catch(() => {
-          Alert.alert('Error', 'Failed to start sleep tracking.');
+          showAlert('Error', 'Failed to start sleep tracking.');
         });
       }
     },
@@ -272,7 +274,7 @@ export default function DreamScreen() {
     try {
       await start('audio');
     } catch {
-      Alert.alert('Error', 'Failed to start sleep tracking.');
+      showAlert('Error', 'Failed to start sleep tracking.');
     }
   }, [start]);
 
@@ -335,7 +337,7 @@ export default function DreamScreen() {
       try {
         await start('audio');
       } catch {
-        Alert.alert(
+        showAlert(
           'Error',
           'Failed to start sleep tracking. Please ensure microphone access is enabled.'
         );
@@ -352,7 +354,7 @@ export default function DreamScreen() {
       try {
         await start('audio');
       } catch {
-        Alert.alert(
+        showAlert(
           'Error',
           'Failed to start sleep tracking. Please ensure microphone access is enabled.'
         );
@@ -377,7 +379,7 @@ export default function DreamScreen() {
         }
       } catch (err) {
         console.error('Failed to stop sleep tracking:', err);
-        Alert.alert('Error', 'Failed to stop sleep tracking');
+        showAlert('Error', 'Failed to stop sleep tracking');
       }
     };
 
@@ -386,7 +388,7 @@ export default function DreamScreen() {
         await doStop();
       }
     } else {
-      Alert.alert('Stop Sleep Tracking', 'Are you sure you want to stop?', [
+      showAlert('Stop Sleep Tracking', 'Are you sure you want to stop?', [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Stop', style: 'destructive', onPress: doStop },
       ]);
@@ -395,7 +397,7 @@ export default function DreamScreen() {
 
   const handleDeleteSession = useCallback(
     async (sessionId: string) => {
-      Alert.alert('Delete Sleep Session', 'Are you sure you want to delete this sleep session?', [
+      showAlert('Delete Sleep Session', 'Are you sure you want to delete this sleep session?', [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',

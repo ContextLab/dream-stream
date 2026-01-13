@@ -10,6 +10,7 @@ import { AuthProvider } from '@/components/AuthProvider';
 import { ThemeProvider, useTheme } from '@/components/ThemeProvider';
 import { DarkOverlayProvider } from '@/components/DarkOverlayProvider';
 import { FavoritesProvider } from '@/components/FavoritesProvider';
+import { ThemedAlertProvider } from '@/components/ui/ThemedAlert';
 import {
   useFonts,
   CourierPrime_400Regular,
@@ -61,9 +62,11 @@ export default function RootLayout() {
         <ThemeProvider>
           <AuthProvider>
             <FavoritesProvider>
-              <DarkOverlayProvider>
-                <RootLayoutContent />
-              </DarkOverlayProvider>
+              <ThemedAlertProvider>
+                <DarkOverlayProvider>
+                  <RootLayoutContent />
+                </DarkOverlayProvider>
+              </ThemedAlertProvider>
             </FavoritesProvider>
           </AuthProvider>
         </ThemeProvider>

@@ -1,10 +1,11 @@
 import { useCallback, useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, ScrollView, Alert, Pressable, Modal } from 'react-native';
+import { View, StyleSheet, ScrollView, Pressable, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
+import { useThemedAlert } from '@/components/ui/ThemedAlert';
 import { WearableStatus } from '@/components/WearableStatus';
 import { LaunchQueueCard } from '@/components/LaunchQueueCard';
 import { VolumeSetup } from '@/components/VolumeSetup';
@@ -32,6 +33,7 @@ function formatQueueDuration(totalSeconds: number): string {
 
 export default function SleepScreen() {
   const router = useRouter();
+  const { showAlert } = useThemedAlert();
   const { connectedDevice } = useWearable();
   const { currentStage, isTracking, start, stop } = useSleepTracking();
   const {
@@ -43,7 +45,8 @@ export default function SleepScreen() {
     moveUp,
     moveDown,
     clear,
-    shuffle,
+    toggleShuffle,
+    shuffleEnabled,
     repeatMode,
     setRepeatMode,
   } = useLaunchQueue();
@@ -87,7 +90,7 @@ export default function SleepScreen() {
     try {
       await start('audio');
     } catch {
-      Alert.alert(
+      showAlert(
         'Error',
         'Failed to start sleep tracking. Please ensure microphone access is enabled.'
       );
@@ -100,7 +103,7 @@ export default function SleepScreen() {
   }, []);
 
   const handleStopTracking = useCallback(async () => {
-    Alert.alert('Stop Sleep Tracking', 'Are you sure you want to stop tracking your sleep?', [
+    showAlert('Stop Sleep Tracking', 'Are you sure you want to stop tracking your sleep?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Stop',
@@ -109,13 +112,13 @@ export default function SleepScreen() {
           try {
             const summary = await stop();
             if (summary) {
-              Alert.alert(
+              showAlert(
                 'Sleep Summary',
                 `Total: ${summary.totalDurationMinutes} mins\nREM: ${summary.remMinutes} mins (${summary.remPercentage}%)`
               );
             }
           } catch {
-            Alert.alert('Error', 'Failed to stop sleep tracking');
+            showAlert('Error', 'Failed to stop sleep tracking');
           }
         },
       },
@@ -127,7 +130,7 @@ export default function SleepScreen() {
       try {
         await setReady(queueId);
       } catch {
-        Alert.alert('Error', 'Failed to update queue item');
+        showAlert('Error', 'Failed to update queue item');
       }
     },
     [setReady]
@@ -139,7 +142,7 @@ export default function SleepScreen() {
         await launch(queueId);
         router.push('/dream/launch');
       } catch {
-        Alert.alert('Error', 'Failed to launch dream');
+        showAlert('Error', 'Failed to launch dream');
       }
     },
     [launch, router]
@@ -150,7 +153,7 @@ export default function SleepScreen() {
       try {
         await remove(queueId);
       } catch {
-        Alert.alert('Error', 'Failed to remove from queue');
+        showAlert('Error', 'Failed to remove from queue');
       }
     },
     [remove]
@@ -161,7 +164,7 @@ export default function SleepScreen() {
       try {
         await moveUp(queueId);
       } catch {
-        Alert.alert('Error', 'Failed to reorder queue');
+        showAlert('Error', 'Failed to reorder queue');
       }
     },
     [moveUp]
@@ -172,14 +175,14 @@ export default function SleepScreen() {
       try {
         await moveDown(queueId);
       } catch {
-        Alert.alert('Error', 'Failed to reorder queue');
+        showAlert('Error', 'Failed to reorder queue');
       }
     },
     [moveDown]
   );
 
   const handleClear = useCallback(async () => {
-    Alert.alert('Clear Queue', 'Remove all dreams from the queue?', [
+    showAlert('Clear Queue', 'Remove all dreams from the queue?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Clear All',
@@ -188,20 +191,20 @@ export default function SleepScreen() {
           try {
             await clear();
           } catch {
-            Alert.alert('Error', 'Failed to clear queue');
+            showAlert('Error', 'Failed to clear queue');
           }
         },
       },
     ]);
   }, [clear]);
 
-  const handleShuffle = useCallback(async () => {
+  const handleToggleShuffle = useCallback(async () => {
     try {
-      await shuffle();
+      await toggleShuffle();
     } catch {
-      Alert.alert('Error', 'Failed to shuffle queue');
+      showAlert('Error', 'Failed to toggle shuffle mode');
     }
-  }, [shuffle]);
+  }, [toggleShuffle]);
 
   const handleToggleRepeat = useCallback(async () => {
     const modes: RepeatMode[] = ['off', 'all', 'one'];
@@ -210,7 +213,7 @@ export default function SleepScreen() {
     try {
       await setRepeatMode(nextMode);
     } catch {
-      Alert.alert('Error', 'Failed to change repeat mode');
+      showAlert('Error', 'Failed to change repeat mode');
     }
   }, [repeatMode, setRepeatMode]);
 
@@ -237,7 +240,7 @@ export default function SleepScreen() {
         <View style={styles.statusSection}>
           <WearableStatus
             onPressConnect={() =>
-              Alert.alert('Coming Soon', 'Device pairing will be available soon.')
+              showAlert('Coming Soon', 'Device pairing will be available soon.')
             }
           />
         </View>
@@ -326,8 +329,12 @@ export default function SleepScreen() {
 
           {queue.length > 0 && (
             <View style={styles.queueControls}>
-              <Pressable style={styles.queueControlButton} onPress={handleShuffle}>
-                <Ionicons name="shuffle-outline" size={20} color={colors.gray[400]} />
+              <Pressable style={styles.queueControlButton} onPress={handleToggleShuffle}>
+                <Ionicons
+                  name={shuffleEnabled ? 'shuffle' : 'shuffle-outline'}
+                  size={20}
+                  color={shuffleEnabled ? '#22c55e' : colors.gray[400]}
+                />
               </Pressable>
               <Pressable style={styles.queueControlButton} onPress={handleToggleRepeat}>
                 <Ionicons
@@ -432,7 +439,7 @@ export default function SleepScreen() {
               onSkip={() => {
                 setShowVolumeSetup(false);
                 start('audio').catch(() => {
-                  Alert.alert(
+                  showAlert(
                     'Error',
                     'Failed to start sleep tracking. Please ensure microphone access is enabled.'
                   );

@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, Alert } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
+import { useThemedAlert } from '@/components/ui/ThemedAlert';
 import { SleepModePlayer } from '@/components/SleepModePlayer';
 import { useLaunchQueue } from '@/hooks/useLaunchQueue';
 import { useSleepTracking } from '@/hooks/useSleepTracking';
@@ -12,6 +13,7 @@ import { colors, spacing } from '@/theme/tokens';
 
 export default function DreamLaunchScreen() {
   const router = useRouter();
+  const { showAlert } = useThemedAlert();
   const { activeItem, complete, cancel, refresh } = useLaunchQueue();
   const { isTracking, currentStage } = useSleepTracking();
   const [isLaunching, setIsLaunching] = useState(false);
@@ -25,18 +27,18 @@ export default function DreamLaunchScreen() {
 
     try {
       await complete(activeItem.id);
-      Alert.alert('Dream Complete', 'Your dream session has ended.', [
+      showAlert('Dream Complete', 'Your dream session has ended.', [
         { text: 'OK', onPress: () => router.replace('/(tabs)') },
       ]);
     } catch {
-      Alert.alert('Error', 'Failed to mark dream as complete');
+      showAlert('Error', 'Failed to mark dream as complete');
     }
   }, [activeItem, complete, router]);
 
   const handleStop = useCallback(async () => {
     if (!activeItem) return;
 
-    Alert.alert('Stop Dream', 'Are you sure you want to stop this dream?', [
+    showAlert('Stop Dream', 'Are you sure you want to stop this dream?', [
       { text: 'Continue', style: 'cancel' },
       {
         text: 'Stop',
@@ -46,7 +48,7 @@ export default function DreamLaunchScreen() {
             await cancel(activeItem.id);
             router.replace('/(tabs)');
           } catch {
-            Alert.alert('Error', 'Failed to stop dream');
+            showAlert('Error', 'Failed to stop dream');
           }
         },
       },

@@ -65,9 +65,15 @@ export function useHealthConnect(): UseHealthConnectReturn {
   }, [isAndroid]);
 
   const refreshVitals = useCallback(async () => {
-    if (!isAndroid || !status?.permissionsGranted) return;
+    if (!isAndroid) return;
 
     try {
+      const currentStatus = await getHealthConnectStatus();
+      if (!currentStatus.permissionsGranted) {
+        console.log('Permissions not granted, skipping vitals refresh');
+        return;
+      }
+
       const [newVitals, sleepStages] = await Promise.all([
         getCurrentVitals(),
         getRecentSleepSessions(12),
@@ -77,7 +83,7 @@ export function useHealthConnect(): UseHealthConnectReturn {
     } catch (e) {
       console.error('Failed to refresh vitals:', e);
     }
-  }, [isAndroid, status?.permissionsGranted]);
+  }, [isAndroid]);
 
   const initialize = useCallback(async (): Promise<boolean> => {
     if (!isAndroid) return false;

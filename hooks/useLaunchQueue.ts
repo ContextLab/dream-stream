@@ -13,7 +13,8 @@ import {
   reorderQueue,
   reorderQueueByIndex,
   getNextQueueItem,
-  shuffleQueue,
+  getShuffleEnabled,
+  setShuffleEnabled as setShuffleEnabledService,
   getRepeatMode,
   setRepeatMode as setRepeatModeService,
   subscribeToQueueChanges,
@@ -28,6 +29,7 @@ interface UseLaunchQueueReturn {
   isLoading: boolean;
   error: Error | null;
   repeatMode: RepeatMode;
+  shuffleEnabled: boolean;
   refresh: () => Promise<void>;
   add: (dreamId: string, triggerMode?: TriggerMode, targetStage?: SleepStage) => Promise<void>;
   remove: (queueId: string) => Promise<void>;
@@ -41,7 +43,7 @@ interface UseLaunchQueueReturn {
   moveDown: (queueId: string) => Promise<void>;
   reorderByIndex: (fromIndex: number, toIndex: number) => Promise<void>;
   getNext: () => Promise<QueuedDream | null>;
-  shuffle: () => Promise<void>;
+  toggleShuffle: () => Promise<void>;
   setRepeatMode: (mode: RepeatMode) => Promise<void>;
 }
 
@@ -52,6 +54,7 @@ export function useLaunchQueue(): UseLaunchQueueReturn {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [repeatMode, setRepeatModeState] = useState<RepeatMode>('off');
+  const [shuffleEnabled, setShuffleEnabledState] = useState(false);
 
   const fetchQueue = useCallback(async () => {
     if (!user) {
@@ -65,14 +68,16 @@ export function useLaunchQueue(): UseLaunchQueueReturn {
     setError(null);
 
     try {
-      const [queueItems, active, currentRepeatMode] = await Promise.all([
+      const [queueItems, active, currentRepeatMode, currentShuffleEnabled] = await Promise.all([
         getQueuedDreams(user.id),
         getActiveQueueItem(user.id),
         getRepeatMode(),
+        getShuffleEnabled(),
       ]);
       setQueue(queueItems);
       setActiveItem(active);
       setRepeatModeState(currentRepeatMode);
+      setShuffleEnabledState(currentShuffleEnabled);
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Failed to load queue'));
     } finally {
@@ -228,16 +233,16 @@ export function useLaunchQueue(): UseLaunchQueueReturn {
     return getNextQueueItem(user.id);
   }, [user]);
 
-  const handleShuffle = useCallback(async () => {
-    if (!user) return;
+  const handleToggleShuffle = useCallback(async () => {
     try {
-      await shuffleQueue(user.id);
-      await fetchQueue();
+      const newValue = !shuffleEnabled;
+      await setShuffleEnabledService(newValue);
+      setShuffleEnabledState(newValue);
     } catch (err) {
-      setError(err instanceof Error ? err : new Error('Failed to shuffle'));
+      setError(err instanceof Error ? err : new Error('Failed to toggle shuffle'));
       throw err;
     }
-  }, [user, fetchQueue]);
+  }, [shuffleEnabled]);
 
   const handleSetRepeatMode = useCallback(async (mode: RepeatMode) => {
     try {
@@ -268,6 +273,7 @@ export function useLaunchQueue(): UseLaunchQueueReturn {
     isLoading,
     error,
     repeatMode,
+    shuffleEnabled,
     refresh: fetchQueue,
     add: handleAdd,
     remove: handleRemove,
@@ -281,7 +287,7 @@ export function useLaunchQueue(): UseLaunchQueueReturn {
     moveDown: handleMoveDown,
     reorderByIndex: handleReorderByIndex,
     getNext: handleGetNext,
-    shuffle: handleShuffle,
+    toggleShuffle: handleToggleShuffle,
     setRepeatMode: handleSetRepeatMode,
   };
 }

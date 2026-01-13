@@ -74,7 +74,9 @@ export async function startNativeAudioCapture(callback: AudioCallback): Promise<
         if (scoStarted) {
           isBluetoothScoActive = true;
           currentAudioSource = 'bluetooth';
-          console.log('Bluetooth SCO started - using Bluetooth microphone');
+          console.log('Bluetooth SCO started - waiting for connection...');
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+          console.log('Bluetooth SCO ready - using Bluetooth microphone');
         } else {
           console.log('Failed to start Bluetooth SCO - falling back to phone microphone');
           currentAudioSource = 'phone';

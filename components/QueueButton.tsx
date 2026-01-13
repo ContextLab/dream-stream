@@ -1,8 +1,9 @@
 import { useCallback, useState, useEffect } from 'react';
-import { Pressable, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { useAnimatedStyle, withSpring, useSharedValue } from 'react-native-reanimated';
 import { useLaunchQueue, useQueueStatus } from '@/hooks/useLaunchQueue';
+import { useThemedAlert } from '@/components/ui/ThemedAlert';
 import { colors, touchTargetMinSize } from '@/theme/tokens';
 
 interface QueueButtonProps {
@@ -14,6 +15,7 @@ interface QueueButtonProps {
 export function QueueButton({ dreamId, size = 24, showBackground = false }: QueueButtonProps) {
   const { add, remove, queue } = useLaunchQueue();
   const { inQueue, isLoading: statusLoading } = useQueueStatus(dreamId);
+  const { showAlert } = useThemedAlert();
   const [isUpdating, setIsUpdating] = useState(false);
   const scale = useSharedValue(1);
 
@@ -21,7 +23,6 @@ export function QueueButton({ dreamId, size = 24, showBackground = false }: Queu
 
   const handlePress = useCallback(
     async (e?: { stopPropagation?: () => void }) => {
-      // Stop propagation to prevent parent Link navigation
       e?.stopPropagation?.();
 
       scale.value = withSpring(1.3, { damping: 10 }, () => {
@@ -37,12 +38,12 @@ export function QueueButton({ dreamId, size = 24, showBackground = false }: Queu
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to update queue';
-        Alert.alert('Error', message);
+        showAlert('Error', message);
       } finally {
         setIsUpdating(false);
       }
     },
-    [inQueue, queueItem, add, remove, dreamId, scale]
+    [inQueue, queueItem, add, remove, dreamId, scale, showAlert]
   );
 
   const animatedStyle = useAnimatedStyle(() => ({

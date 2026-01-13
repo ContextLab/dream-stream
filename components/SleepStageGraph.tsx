@@ -162,7 +162,7 @@ export function SleepStageGraph({
   );
 
   const renderPath = useCallback(() => {
-    if (stages.length < 2) return null;
+    if (stages.length === 0 && !isTracking) return null;
 
     const startTime = sessionStartTime ?? stages[0]?.timestamp ?? Date.now();
     const endTime = isTracking ? currentTime : (stages[stages.length - 1]?.timestamp ?? Date.now());
@@ -177,14 +177,17 @@ export function SleepStageGraph({
       return { x, y, entry };
     });
 
-    const pathD = points
-      .map((p, i) => {
-        if (i === 0) return `M ${p.x} ${p.y}`;
-        const prev = points[i - 1];
-        const midX = (prev.x + p.x) / 2;
-        return `C ${midX} ${prev.y}, ${midX} ${p.y}, ${p.x} ${p.y}`;
-      })
-      .join(' ');
+    const pathD =
+      points.length >= 2
+        ? points
+            .map((p, i) => {
+              if (i === 0) return `M ${p.x} ${p.y}`;
+              const prev = points[i - 1];
+              const midX = (prev.x + p.x) / 2;
+              return `C ${midX} ${prev.y}, ${midX} ${p.y}, ${p.x} ${p.y}`;
+            })
+            .join(' ')
+        : '';
 
     const currentX = isTracking ? effectiveWidth : (points[points.length - 1]?.x ?? 0);
 
@@ -361,6 +364,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: GRAPH_HEIGHT,
     position: 'relative',
+    overflow: 'hidden',
   },
   gridLine: {
     position: 'absolute',

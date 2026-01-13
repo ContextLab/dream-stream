@@ -49,16 +49,28 @@ export const DreamCard = memo(function DreamCard({ dream, variant = 'default' }:
           </View>
         )}
         <View style={isCompact ? { ...styles.content, ...styles.compactContent } : styles.content}>
-          <MarqueeText
-            variant={isFeatured ? 'h4' : 'body'}
-            weight="semibold"
-            style={styles.title}
-            containerStyle={isFeatured ? styles.marqueeContainer : undefined}
-            speed={25}
-            pauseDuration={2000}
-          >
-            {dream.title}
-          </MarqueeText>
+          {isFeatured ? (
+            <MarqueeText
+              variant="h4"
+              weight="semibold"
+              style={styles.title}
+              containerStyle={styles.marqueeContainer}
+              speed={25}
+              pauseDuration={2000}
+            >
+              {dream.title}
+            </MarqueeText>
+          ) : (
+            <Text
+              variant="body"
+              weight="semibold"
+              style={styles.title}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              {dream.title}
+            </Text>
+          )}
           {dream.category && (
             <View style={styles.categoryRow}>
               <View
@@ -138,6 +150,9 @@ const styles = StyleSheet.create({
   },
   title: {
     color: colors.gray[100],
+  },
+  titleContainer: {
+    flex: 1,
   },
   marqueeContainer: {
     marginHorizontal: 10,

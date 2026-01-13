@@ -408,6 +408,15 @@ function stopAudioDetection(): void {
 
 function startHeartbeat(): void {
   stopHeartbeat();
+
+  setTimeout(() => {
+    if (currentSession?.isActive && currentSession.currentStage) {
+      const now = Date.now();
+      stageHistory.push({ stage: currentSession.currentStage, timestamp: now });
+      notifyStageHistoryChange();
+    }
+  }, 5000);
+
   heartbeatInterval = setInterval(() => {
     if (currentSession?.isActive && currentSession.currentStage) {
       const now = Date.now();

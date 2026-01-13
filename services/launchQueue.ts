@@ -295,16 +295,25 @@ export async function reorderQueueByIndex(
 
 export async function getNextQueueItem(userId: string): Promise<QueuedDream | null> {
   const queue = await getLocalQueue();
+  const settings = await getQueueSettings();
   const pendingItems = queue.items.filter(
     (item) => item.user_id === userId && item.status === 'pending'
   );
 
   if (pendingItems.length === 0) return null;
 
-  const dream = await getDreamById(pendingItems[0].dream_id);
+  let selectedItem;
+  if (settings.shuffleEnabled && pendingItems.length > 1) {
+    const randomIndex = Math.floor(Math.random() * pendingItems.length);
+    selectedItem = pendingItems[randomIndex];
+  } else {
+    selectedItem = pendingItems[0];
+  }
+
+  const dream = await getDreamById(selectedItem.dream_id);
   if (!dream) return null;
 
-  return { ...pendingItems[0], dream };
+  return { ...selectedItem, dream };
 }
 
 export function getStatusDisplayName(status: LaunchStatus): string {
