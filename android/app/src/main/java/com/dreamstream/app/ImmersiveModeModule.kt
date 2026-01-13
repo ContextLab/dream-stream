@@ -129,7 +129,11 @@ class ImmersiveModeModule(reactContext: ReactApplicationContext) : ReactContextB
 
                 val window = activity.window
                 val layoutParams = window.attributes
-                layoutParams.screenBrightness = brightness.coerceIn(0f, 1f)
+                layoutParams.screenBrightness = if (brightness < 0) {
+                    WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                } else {
+                    brightness.coerceIn(0f, 1f)
+                }
                 window.attributes = layoutParams
 
                 promise.resolve(true)
