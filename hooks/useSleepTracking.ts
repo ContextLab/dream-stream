@@ -9,6 +9,7 @@ import {
   isInTargetStage,
   onSleepStageChange,
   getSleepHistory,
+  deleteSleepSession,
   calculateSleepSummary,
   startVitalsPolling,
   stopVitalsPolling,
@@ -33,6 +34,7 @@ interface UseSleepTrackingReturn {
   setStage: (stage: SleepStage) => void;
   isInTarget: (targetStage: SleepStage) => boolean;
   refresh: () => Promise<void>;
+  deleteSession: (sessionId: string) => Promise<boolean>;
 }
 
 export function useSleepTracking(): UseSleepTrackingReturn {
@@ -110,6 +112,14 @@ export function useSleepTracking(): UseSleepTrackingReturn {
     return isInTargetStage(targetStage);
   }, []);
 
+  const handleDelete = useCallback(async (sessionId: string): Promise<boolean> => {
+    const success = await deleteSleepSession(sessionId);
+    if (success) {
+      setHistory((prev) => prev.filter((s) => s.id !== sessionId));
+    }
+    return success;
+  }, []);
+
   return {
     session,
     currentStage,
@@ -123,5 +133,6 @@ export function useSleepTracking(): UseSleepTrackingReturn {
     setStage: handleSetStage,
     isInTarget: checkIsInTarget,
     refresh: fetchState,
+    deleteSession: handleDelete,
   };
 }

@@ -118,11 +118,11 @@ export function SleepSessionDetailModal({
 
         <ScrollView contentContainerStyle={styles.content}>
           <View style={styles.dateSection}>
-            <Ionicons name="moon" size={24} color={colors.primary[400]} />
-            <Text variant="h4" weight="semibold" color="primary">
+            <Ionicons name="bed" size={20} color={colors.primary[400]} />
+            <Text variant="body" weight="semibold" color="primary">
               {formatDate(session.startTime)}
             </Text>
-            <Text variant="body" color="muted">
+            <Text variant="caption" color="muted">
               {formatTimeRange(session.startTime, session.endTime)}
             </Text>
           </View>
@@ -132,23 +132,23 @@ export function SleepSessionDetailModal({
               <Text variant="caption" color="muted">
                 Total Sleep
               </Text>
-              <Text variant="h3" weight="bold" color="primary">
+              <Text variant="body" weight="bold" color="primary">
                 {formatDuration(summary.totalDurationMinutes)}
               </Text>
             </View>
             <View style={styles.summaryCard}>
               <Text variant="caption" color="muted">
-                Sleep Efficiency
+                Efficiency
               </Text>
-              <Text variant="h3" weight="bold" color="primary">
+              <Text variant="body" weight="bold" color="primary">
                 {summary.sleepEfficiency}%
               </Text>
             </View>
             <View style={styles.summaryCard}>
               <Text variant="caption" color="muted">
-                REM Sleep
+                REM
               </Text>
-              <Text variant="h3" weight="bold" style={{ color: getSleepStageColor('rem') }}>
+              <Text variant="body" weight="bold" style={{ color: getSleepStageColor('rem') }}>
                 {summary.remPercentage}%
               </Text>
             </View>
@@ -305,9 +305,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(26, 26, 46, 0.8)',
     borderRadius: borderRadius.lg,
     padding: spacing.md,
+    overflow: 'hidden',
   },
   graphLabels: {
-    width: 60,
+    width: 50,
     height: GRAPH_HEIGHT,
     position: 'relative',
   },
@@ -325,6 +326,7 @@ const styles = StyleSheet.create({
   graph: {
     height: GRAPH_HEIGHT,
     position: 'relative',
+    overflow: 'hidden',
   },
   gridLine: {
     position: 'absolute',

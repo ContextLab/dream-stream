@@ -93,6 +93,8 @@ let remCallbacks: Set<() => void> = new Set();
 let remEndCallbacks: Set<() => void> = new Set();
 let adaptiveRmsThreshold = BASE_RMS_THRESHOLD;
 let calibrationRmsValues: number[] = [];
+let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+const HEARTBEAT_INTERVAL_MS = 30000; // Add graph point every 30 seconds
 
 function generateId(): string {
   return `sleep_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -128,6 +130,8 @@ export async function startSleepSession(
   stageHistory = [{ stage: 'awake', timestamp: Date.now() }];
   notifyStageHistoryChange();
 
+  startHeartbeat();
+
   if (source === 'audio') {
     await startAudioDetection();
   }
@@ -138,6 +142,7 @@ export async function startSleepSession(
 export async function endSleepSession(): Promise<SleepSession | null> {
   if (!currentSession) return null;
 
+  stopHeartbeat();
   stopAudioDetection();
 
   const endTime = new Date().toISOString();
@@ -227,6 +232,16 @@ export function onRemEnd(callback: () => void): () => void {
 export async function getSleepHistory(): Promise<SleepSession[]> {
   const history = await storage.get<SleepSession[]>(STORAGE_KEY_HISTORY);
   return history ?? [];
+}
+
+export async function deleteSleepSession(sessionId: string): Promise<boolean> {
+  const history = await getSleepHistory();
+  const filtered = history.filter((s) => s.id !== sessionId);
+  if (filtered.length === history.length) {
+    return false;
+  }
+  await storage.set(STORAGE_KEY_HISTORY, filtered);
+  return true;
 }
 
 export function calculateSleepSummary(session: SleepSession): SleepSummary {
@@ -361,6 +376,8 @@ async function startWebAudioDetection(): Promise<boolean> {
 }
 
 function stopAudioDetection(): void {
+  stopHeartbeat();
+
   if (isNativeAudioAvailable()) {
     stopNativeAudioCapture();
   }
@@ -387,6 +404,28 @@ function stopAudioDetection(): void {
   stageHistory = [];
   calibrationRmsValues = [];
   adaptiveRmsThreshold = BASE_RMS_THRESHOLD;
+}
+
+function startHeartbeat(): void {
+  stopHeartbeat();
+  heartbeatInterval = setInterval(() => {
+    if (currentSession?.isActive && currentSession.currentStage) {
+      const now = Date.now();
+      const lastEntry = stageHistory[stageHistory.length - 1];
+      if (!lastEntry || now - lastEntry.timestamp >= HEARTBEAT_INTERVAL_MS - 1000) {
+        stageHistory.push({ stage: currentSession.currentStage, timestamp: now });
+        stageHistory = stageHistory.filter((s) => now - s.timestamp < 3600000);
+        notifyStageHistoryChange();
+      }
+    }
+  }, HEARTBEAT_INTERVAL_MS);
+}
+
+function stopHeartbeat(): void {
+  if (heartbeatInterval) {
+    clearInterval(heartbeatInterval);
+    heartbeatInterval = null;
+  }
 }
 
 function recalibrateThreshold(): void {

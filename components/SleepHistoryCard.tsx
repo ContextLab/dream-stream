@@ -2,12 +2,13 @@ import { View, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
 import { colors, spacing, borderRadius } from '@/theme/tokens';
-import type { SleepSession, SleepSummary } from '@/services/sleep';
+import type { SleepSession } from '@/services/sleep';
 import { calculateSleepSummary, getSleepStageColor } from '@/services/sleep';
 
 interface SleepHistoryCardProps {
   session: SleepSession;
   onPress: () => void;
+  onDelete?: () => void;
 }
 
 function formatDate(dateString: string): string {
@@ -48,7 +49,7 @@ function formatDuration(minutes: number): string {
   return `${hours}h ${mins}m`;
 }
 
-export function SleepHistoryCard({ session, onPress }: SleepHistoryCardProps) {
+export function SleepHistoryCard({ session, onPress, onDelete }: SleepHistoryCardProps) {
   const summary = calculateSleepSummary(session);
 
   const stageBarData = [
@@ -62,15 +63,27 @@ export function SleepHistoryCard({ session, onPress }: SleepHistoryCardProps) {
     <Pressable style={styles.container} onPress={onPress}>
       <View style={styles.header}>
         <View style={styles.dateSection}>
-          <Ionicons name="moon" size={18} color={colors.primary[400]} />
-          <Text variant="body" weight="semibold" color="primary">
+          <Ionicons name="bed" size={16} color={colors.primary[400]} />
+          <Text variant="bodySmall" weight="semibold" color="primary">
             {formatDate(session.startTime)}
           </Text>
         </View>
-        <View style={styles.timeSection}>
+        <View style={styles.headerRight}>
           <Text variant="caption" color="muted">
             {formatTimeRange(session.startTime, session.endTime)}
           </Text>
+          {onDelete && (
+            <Pressable
+              style={styles.deleteButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              hitSlop={8}
+            >
+              <Ionicons name="trash-outline" size={16} color={colors.gray[500]} />
+            </Pressable>
+          )}
         </View>
       </View>
 
@@ -100,7 +113,7 @@ export function SleepHistoryCard({ session, onPress }: SleepHistoryCardProps) {
           <Text variant="caption" color="muted">
             Duration
           </Text>
-          <Text variant="body" weight="semibold" color="primary">
+          <Text variant="caption" weight="semibold" color="primary">
             {formatDuration(summary.totalDurationMinutes)}
           </Text>
         </View>
@@ -108,7 +121,7 @@ export function SleepHistoryCard({ session, onPress }: SleepHistoryCardProps) {
           <Text variant="caption" color="muted">
             REM
           </Text>
-          <Text variant="body" weight="semibold" style={{ color: getSleepStageColor('rem') }}>
+          <Text variant="caption" weight="semibold" style={{ color: getSleepStageColor('rem') }}>
             {summary.remPercentage}%
           </Text>
         </View>
@@ -116,11 +129,11 @@ export function SleepHistoryCard({ session, onPress }: SleepHistoryCardProps) {
           <Text variant="caption" color="muted">
             Efficiency
           </Text>
-          <Text variant="body" weight="semibold" color="primary">
+          <Text variant="caption" weight="semibold" color="primary">
             {summary.sleepEfficiency}%
           </Text>
         </View>
-        <Ionicons name="chevron-forward" size={20} color={colors.gray[500]} />
+        <Ionicons name="chevron-forward" size={18} color={colors.gray[500]} />
       </View>
     </Pressable>
   );
@@ -129,45 +142,52 @@ export function SleepHistoryCard({ session, onPress }: SleepHistoryCardProps) {
 const styles = StyleSheet.create({
   container: {
     backgroundColor: 'rgba(26, 26, 46, 0.8)',
-    borderRadius: borderRadius.xl,
-    padding: spacing.md,
-    marginBottom: spacing.md,
+    borderRadius: borderRadius.lg,
+    padding: spacing.sm,
+    marginBottom: spacing.sm,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   dateSection: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.xs,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.sm,
   },
-  timeSection: {},
+  deleteButton: {
+    padding: spacing.xs,
+  },
   stageBar: {
     flexDirection: 'row',
-    height: 8,
-    borderRadius: 4,
+    height: 6,
+    borderRadius: 3,
     overflow: 'hidden',
     backgroundColor: colors.gray[800],
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   stageSegment: {
     height: '100%',
   },
   stageSegmentFirst: {
-    borderTopLeftRadius: 4,
-    borderBottomLeftRadius: 4,
+    borderTopLeftRadius: 3,
+    borderBottomLeftRadius: 3,
   },
   stageSegmentLast: {
-    borderTopRightRadius: 4,
-    borderBottomRightRadius: 4,
+    borderTopRightRadius: 3,
+    borderBottomRightRadius: 3,
   },
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.lg,
+    gap: spacing.md,
   },
   stat: {
     alignItems: 'center',

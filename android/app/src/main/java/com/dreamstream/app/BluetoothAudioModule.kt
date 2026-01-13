@@ -1,6 +1,7 @@
 package com.dreamstream.app
 
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothA2dp
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothHeadset
 import android.bluetooth.BluetoothProfile
@@ -9,6 +10,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.os.Build
 import androidx.core.content.ContextCompat
@@ -17,6 +19,7 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.WritableMap
+import com.facebook.react.bridge.WritableArray
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.modules.core.DeviceEventManagerModule
 
@@ -25,12 +28,13 @@ class BluetoothAudioModule(reactContext: ReactApplicationContext) : ReactContext
     private val audioManager: AudioManager = reactContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     private var bluetoothAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
     private var bluetoothHeadset: BluetoothHeadset? = null
+    private var bluetoothA2dp: BluetoothA2dp? = null
     private var isScoStarted = false
     private var scoReceiver: BroadcastReceiver? = null
 
     override fun getName(): String = "BluetoothAudioModule"
 
-    private val profileListener = object : BluetoothProfile.ServiceListener {
+    private val headsetProfileListener = object : BluetoothProfile.ServiceListener {
         override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
             if (profile == BluetoothProfile.HEADSET) {
                 bluetoothHeadset = proxy as BluetoothHeadset
@@ -44,9 +48,24 @@ class BluetoothAudioModule(reactContext: ReactApplicationContext) : ReactContext
         }
     }
 
+    private val a2dpProfileListener = object : BluetoothProfile.ServiceListener {
+        override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
+            if (profile == BluetoothProfile.A2DP) {
+                bluetoothA2dp = proxy as BluetoothA2dp
+            }
+        }
+
+        override fun onServiceDisconnected(profile: Int) {
+            if (profile == BluetoothProfile.A2DP) {
+                bluetoothA2dp = null
+            }
+        }
+    }
+
     init {
         if (hasBluetoothPermission()) {
-            bluetoothAdapter?.getProfileProxy(reactContext, profileListener, BluetoothProfile.HEADSET)
+            bluetoothAdapter?.getProfileProxy(reactContext, headsetProfileListener, BluetoothProfile.HEADSET)
+            bluetoothAdapter?.getProfileProxy(reactContext, a2dpProfileListener, BluetoothProfile.A2DP)
         }
     }
 
@@ -74,19 +93,27 @@ class BluetoothAudioModule(reactContext: ReactApplicationContext) : ReactContext
     @ReactMethod
     fun isBluetoothHeadsetConnected(promise: Promise) {
         try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val devices = audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS)
+                for (device in devices) {
+                    if (device.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+                        device.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
+                        device.type == AudioDeviceInfo.TYPE_BLE_HEADSET) {
+                        promise.resolve(true)
+                        return
+                    }
+                }
+            }
+
             if (!hasBluetoothPermission()) {
                 promise.resolve(false)
                 return
             }
 
-            val headset = bluetoothHeadset
-            if (headset == null) {
-                promise.resolve(false)
-                return
-            }
-
-            val connectedDevices = headset.connectedDevices
-            promise.resolve(connectedDevices.isNotEmpty())
+            val headsetConnected = bluetoothHeadset?.connectedDevices?.isNotEmpty() == true
+            val a2dpConnected = bluetoothA2dp?.connectedDevices?.isNotEmpty() == true
+            
+            promise.resolve(headsetConnected || a2dpConnected)
         } catch (e: SecurityException) {
             promise.resolve(false)
         } catch (e: Exception) {
@@ -97,32 +124,90 @@ class BluetoothAudioModule(reactContext: ReactApplicationContext) : ReactContext
     @ReactMethod
     fun getConnectedBluetoothDevice(promise: Promise) {
         try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val devices = audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS)
+                for (device in devices) {
+                    if (device.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+                        device.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
+                        device.type == AudioDeviceInfo.TYPE_BLE_HEADSET) {
+                        val result: WritableMap = Arguments.createMap()
+                        result.putString("name", device.productName?.toString() ?: "Bluetooth Device")
+                        result.putString("address", device.id.toString())
+                        result.putString("type", when(device.type) {
+                            AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> "SCO"
+                            AudioDeviceInfo.TYPE_BLUETOOTH_A2DP -> "A2DP"
+                            AudioDeviceInfo.TYPE_BLE_HEADSET -> "BLE"
+                            else -> "Unknown"
+                        })
+                        promise.resolve(result)
+                        return
+                    }
+                }
+            }
+
             if (!hasBluetoothPermission()) {
                 promise.resolve(null)
                 return
             }
 
-            val headset = bluetoothHeadset
-            if (headset == null) {
+            var device: BluetoothDevice? = null
+            device = bluetoothHeadset?.connectedDevices?.firstOrNull()
+            if (device == null) {
+                device = bluetoothA2dp?.connectedDevices?.firstOrNull()
+            }
+
+            if (device == null) {
                 promise.resolve(null)
                 return
             }
 
-            val connectedDevices = headset.connectedDevices
-            if (connectedDevices.isEmpty()) {
-                promise.resolve(null)
-                return
-            }
-
-            val device = connectedDevices[0]
             val result: WritableMap = Arguments.createMap()
             result.putString("name", device.name ?: "Unknown")
             result.putString("address", device.address)
+            result.putString("type", "Classic")
             promise.resolve(result)
         } catch (e: SecurityException) {
             promise.resolve(null)
         } catch (e: Exception) {
             promise.reject("BT_ERROR", "Failed to get connected device", e)
+        }
+    }
+
+    @ReactMethod
+    fun getAudioDevices(promise: Promise) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val inputDevices = audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS)
+                val result: WritableArray = Arguments.createArray()
+                
+                for (device in inputDevices) {
+                    val deviceInfo: WritableMap = Arguments.createMap()
+                    deviceInfo.putInt("id", device.id)
+                    deviceInfo.putString("name", device.productName?.toString() ?: "Unknown")
+                    deviceInfo.putInt("type", device.type)
+                    deviceInfo.putString("typeName", getDeviceTypeName(device.type))
+                    deviceInfo.putBoolean("isSource", device.isSource)
+                    result.pushMap(deviceInfo)
+                }
+                
+                promise.resolve(result)
+            } else {
+                promise.resolve(Arguments.createArray())
+            }
+        } catch (e: Exception) {
+            promise.reject("AUDIO_ERROR", "Failed to get audio devices", e)
+        }
+    }
+
+    private fun getDeviceTypeName(type: Int): String {
+        return when (type) {
+            AudioDeviceInfo.TYPE_BUILTIN_MIC -> "Built-in Mic"
+            AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> "Bluetooth SCO"
+            AudioDeviceInfo.TYPE_BLUETOOTH_A2DP -> "Bluetooth A2DP"
+            AudioDeviceInfo.TYPE_WIRED_HEADSET -> "Wired Headset"
+            AudioDeviceInfo.TYPE_USB_HEADSET -> "USB Headset"
+            AudioDeviceInfo.TYPE_BLE_HEADSET -> "BLE Headset"
+            else -> "Unknown ($type)"
         }
     }
 

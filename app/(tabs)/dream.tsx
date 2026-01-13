@@ -30,12 +30,19 @@ import type { Dream } from '@/types/database';
 
 export default function DreamScreen() {
   const router = useRouter();
-  const { session, currentStage, isTracking, start, stop, history } = useSleepTracking();
+  const { session, currentStage, isTracking, start, stop, history, deleteSession } =
+    useSleepTracking();
   const { queue, getNext, complete } = useLaunchQueue();
 
   const [showVolumeSetup, setShowVolumeSetup] = useState(false);
   const [showMicTest, setShowMicTest] = useState(false);
   const [selectedSession, setSelectedSession] = useState<SleepSession | null>(null);
+  const [showSleepSummary, setShowSleepSummary] = useState(false);
+  const [sleepSummaryData, setSleepSummaryData] = useState<{
+    total: number;
+    rem: number;
+    remPct: number;
+  } | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentDream, setCurrentDream] = useState<Dream | null>(null);
   const [progress, setProgress] = useState(0);
@@ -361,10 +368,12 @@ export default function DreamScreen() {
         setCurrentDream(null);
         const summary = await stop();
         if (summary) {
-          Alert.alert(
-            'Sleep Summary',
-            `Total: ${summary.totalDurationMinutes} mins\nREM: ${summary.remMinutes} mins (${summary.remPercentage}%)`
-          );
+          setSleepSummaryData({
+            total: summary.totalDurationMinutes,
+            rem: summary.remMinutes,
+            remPct: summary.remPercentage,
+          });
+          setShowSleepSummary(true);
         }
       } catch (err) {
         console.error('Failed to stop sleep tracking:', err);
@@ -383,6 +392,22 @@ export default function DreamScreen() {
       ]);
     }
   }, [stop, cleanup]);
+
+  const handleDeleteSession = useCallback(
+    async (sessionId: string) => {
+      Alert.alert('Delete Sleep Session', 'Are you sure you want to delete this sleep session?', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            await deleteSession(sessionId);
+          },
+        },
+      ]);
+    },
+    [deleteSession]
+  );
 
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
@@ -617,7 +642,12 @@ export default function DreamScreen() {
 
               {history.length > 0 && (
                 <View style={styles.historySection}>
-                  <Text variant="h4" weight="semibold" color="primary" style={styles.historyTitle}>
+                  <Text
+                    variant="body"
+                    weight="semibold"
+                    color="primary"
+                    style={styles.historyTitle}
+                  >
                     Sleep History
                   </Text>
                   {history.slice(0, 5).map((pastSession) => (
@@ -625,6 +655,7 @@ export default function DreamScreen() {
                       key={pastSession.id}
                       session={pastSession}
                       onPress={() => setSelectedSession(pastSession)}
+                      onDelete={() => handleDeleteSession(pastSession.id)}
                     />
                   ))}
                 </View>
@@ -639,6 +670,49 @@ export default function DreamScreen() {
         visible={selectedSession !== null}
         onClose={() => setSelectedSession(null)}
       />
+
+      <Modal
+        visible={showSleepSummary}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowSleepSummary(false)}
+      >
+        <View style={styles.summaryOverlay}>
+          <View style={styles.summaryModal}>
+            <Ionicons name="bed" size={48} color={colors.primary[400]} />
+            <Heading variant="h3" color="primary" style={styles.summaryTitle}>
+              Sleep Complete
+            </Heading>
+            {sleepSummaryData && (
+              <View style={styles.summaryStats}>
+                <View style={styles.summaryStat}>
+                  <Text variant="caption" color="muted">
+                    Total Sleep
+                  </Text>
+                  <Text variant="h4" weight="bold" color="primary">
+                    {Math.floor(sleepSummaryData.total / 60)}h {sleepSummaryData.total % 60}m
+                  </Text>
+                </View>
+                <View style={styles.summaryStat}>
+                  <Text variant="caption" color="muted">
+                    REM Sleep
+                  </Text>
+                  <Text variant="h4" weight="bold" style={{ color: colors.success }}>
+                    {sleepSummaryData.rem}m ({sleepSummaryData.remPct}%)
+                  </Text>
+                </View>
+              </View>
+            )}
+            <Button
+              variant="primary"
+              onPress={() => setShowSleepSummary(false)}
+              style={styles.summaryButton}
+            >
+              Done
+            </Button>
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={showVolumeSetup}
@@ -916,5 +990,37 @@ const styles = StyleSheet.create({
   },
   closeButton: {
     padding: spacing.sm,
+  },
+  summaryOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.lg,
+  },
+  summaryModal: {
+    backgroundColor: '#1a1a2e',
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
+    alignItems: 'center',
+    gap: spacing.md,
+    width: '100%',
+    maxWidth: 320,
+  },
+  summaryTitle: {
+    marginTop: spacing.sm,
+  },
+  summaryStats: {
+    flexDirection: 'row',
+    gap: spacing.xl,
+    marginVertical: spacing.md,
+  },
+  summaryStat: {
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  summaryButton: {
+    marginTop: spacing.md,
+    minWidth: 120,
   },
 });
