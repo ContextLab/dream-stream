@@ -111,11 +111,11 @@ export default function DreamDetailScreen() {
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      <SafeAreaView edges={['top']} style={styles.header}>
+      <SafeAreaView edges={['top']} style={styles.header} pointerEvents="box-none">
         <Pressable onPress={() => router.replace('/')} style={styles.headerButton} hitSlop={8}>
           <Ionicons name="arrow-back" size={24} color="#ffffff" />
         </Pressable>
-        <View style={styles.headerSpacer} />
+        <View style={styles.headerSpacer} pointerEvents="none" />
         <View style={styles.headerActions}>
           <QueueButton dreamId={id || ''} showBackground size={22} />
           <FavoriteButton dreamId={id || ''} showBackground />
@@ -286,6 +286,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gray[900],
     borderWidth: 1,
     borderColor: colors.gray[800],
+    overflow: 'hidden',
   },
   modeButtonActive: {
     backgroundColor: colors.gray[800],

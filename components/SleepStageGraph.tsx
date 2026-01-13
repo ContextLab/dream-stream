@@ -1,11 +1,6 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-  Easing,
-} from 'react-native-reanimated';
+
 import { Text } from '@/components/ui/Text';
 import { colors, spacing, borderRadius } from '@/theme/tokens';
 import type { SleepStage } from '@/types/database';
@@ -21,6 +16,7 @@ interface SleepStageGraphProps {
   currentStage: SleepStage | null;
   isTracking: boolean;
   sessionStartTime?: number;
+  isDarkMode?: boolean;
   onStagePress?: (stage: SleepStage, timestamp: number) => void;
 }
 
@@ -40,10 +36,9 @@ const STAGE_LABELS_WIDTH = 50;
 const USABLE_HEIGHT = GRAPH_HEIGHT - GRAPH_PADDING_TOP - GRAPH_PADDING_BOTTOM;
 
 const INITIAL_DURATION_MS = 10000;
-const RENDER_INTERVAL_MS = 10;
+const RENDER_INTERVAL_MS = 16;
 const DATA_POINT_INTERVAL_MS = 10000;
-const GROWTH_THRESHOLD = 0.95;
-const GROWTH_FACTOR = 1.05;
+const LIVE_POSITION = 0.95;
 const LINE_THICKNESS = 4;
 const TRANSITION_COLOR = colors.gray[500];
 
@@ -64,13 +59,14 @@ export function SleepStageGraph({
   currentStage,
   isTracking,
   sessionStartTime,
+  isDarkMode = false,
   onStagePress,
 }: SleepStageGraphProps) {
   const [graphWidth, setGraphWidth] = useState(300);
   const [dataPoints, setDataPoints] = useState<DataPoint[]>([]);
   const [currentDuration, setCurrentDuration] = useState(INITIAL_DURATION_MS);
   const [currentTime, setCurrentTime] = useState(Date.now());
-  const scaleAnimation = useSharedValue(1);
+
   const renderIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const dataIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number>(0);
@@ -93,45 +89,23 @@ export function SleepStageGraph({
       return;
     }
 
-    startTimeRef.current = sessionStartTime ?? Date.now();
+    const now = Date.now();
+    const startTime = sessionStartTime ?? now;
+    startTimeRef.current = startTime;
     lastStageRef.current = currentStage;
+    setCurrentTime(startTime);
     setCurrentDuration(INITIAL_DURATION_MS);
-    setDataPoints([]);
+    setDataPoints([{ x: 0, y: 0, stage: currentStage ?? 'awake', timestamp: startTime }]);
 
-    const addDataPoint = (stage: SleepStage) => {
-      const now = Date.now();
+    const addPeriodicPoint = () => {
+      const stage = currentStage ?? 'awake';
+      const timestamp = Date.now();
       setDataPoints((prev) => {
-        const newPoints = [...prev, { x: 0, y: 0, stage, timestamp: now }];
+        const newPoints = [...prev, { x: 0, y: 0, stage, timestamp }];
         return newPoints.slice(-500);
       });
     };
 
-    addDataPoint(currentStage ?? 'awake');
-
-    const updateRender = () => {
-      const now = Date.now();
-      setCurrentTime(now);
-
-      const elapsed = now - startTimeRef.current;
-      setCurrentDuration((prevDuration) => {
-        if (elapsed >= prevDuration * GROWTH_THRESHOLD) {
-          const newDuration = prevDuration * GROWTH_FACTOR;
-          scaleAnimation.value = withTiming(1, {
-            duration: 300,
-            easing: Easing.out(Easing.cubic),
-          });
-          return newDuration;
-        }
-        return prevDuration;
-      });
-    };
-
-    const addPeriodicPoint = () => {
-      const stage = currentStage ?? 'awake';
-      addDataPoint(stage);
-    };
-
-    renderIntervalRef.current = setInterval(updateRender, RENDER_INTERVAL_MS);
     dataIntervalRef.current = setInterval(addPeriodicPoint, DATA_POINT_INTERVAL_MS);
 
     return () => {
@@ -144,7 +118,7 @@ export function SleepStageGraph({
         dataIntervalRef.current = null;
       }
     };
-  }, [isTracking, sessionStartTime, scaleAnimation]);
+  }, [isTracking, sessionStartTime]);
 
   useEffect(() => {
     if (!isTracking) return;
@@ -158,6 +132,44 @@ export function SleepStageGraph({
       });
     }
   }, [currentStage, isTracking]);
+
+  useEffect(() => {
+    if (!isTracking) return;
+
+    const thresholdTime = INITIAL_DURATION_MS * LIVE_POSITION;
+
+    if (isDarkMode) {
+      if (renderIntervalRef.current) {
+        clearInterval(renderIntervalRef.current);
+        renderIntervalRef.current = null;
+      }
+    } else {
+      const now = Date.now();
+      setCurrentTime(now);
+      const elapsed = now - startTimeRef.current;
+      if (elapsed > thresholdTime) {
+        setCurrentDuration(elapsed / LIVE_POSITION);
+      }
+
+      if (!renderIntervalRef.current) {
+        renderIntervalRef.current = setInterval(() => {
+          const now = Date.now();
+          setCurrentTime(now);
+          const elapsed = now - startTimeRef.current;
+          if (elapsed > thresholdTime) {
+            setCurrentDuration(elapsed / LIVE_POSITION);
+          }
+        }, RENDER_INTERVAL_MS);
+      }
+    }
+
+    return () => {
+      if (renderIntervalRef.current) {
+        clearInterval(renderIntervalRef.current);
+        renderIntervalRef.current = null;
+      }
+    };
+  }, [isDarkMode, isTracking]);
 
   const computedPoints = useMemo(() => {
     if (dataPoints.length === 0) return [];
@@ -174,7 +186,11 @@ export function SleepStageGraph({
     if (isTracking && points.length > 0) {
       const lastPoint = points[points.length - 1];
       const elapsed = currentTime - startTime;
-      const liveX = Math.min((elapsed / currentDuration) * graphWidth, graphWidth);
+      const thresholdTime = INITIAL_DURATION_MS * LIVE_POSITION;
+      const liveX =
+        elapsed <= thresholdTime
+          ? (elapsed / INITIAL_DURATION_MS) * graphWidth
+          : graphWidth * LIVE_POSITION;
       points.push({
         ...lastPoint,
         x: liveX,
@@ -308,10 +324,6 @@ export function SleepStageGraph({
     });
   }, []);
 
-  const scaleStyle = useAnimatedStyle(() => ({
-    transform: [{ scaleX: scaleAnimation.value }],
-  }));
-
   if (!isTracking && stages.length === 0) {
     return (
       <View style={styles.emptyContainer}>
@@ -327,7 +339,7 @@ export function SleepStageGraph({
       <View style={styles.labelsContainer}>{renderStageLabels()}</View>
       <View style={styles.graphArea}>
         {renderGridLines()}
-        <Animated.View style={[styles.pathContainer, scaleStyle]}>{renderPath()}</Animated.View>
+        <View style={styles.pathContainer}>{renderPath()}</View>
       </View>
     </View>
   );

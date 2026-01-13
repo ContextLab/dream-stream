@@ -149,7 +149,7 @@ export function VolumeSetup({ onComplete, onSkip }: VolumeSetupProps) {
               1
             </Text>
           </View>
-          <Text variant="body" color="secondary">
+          <Text variant="body" color="secondary" style={styles.instructionText}>
             Tap play to hear the test audio
           </Text>
         </View>
@@ -159,7 +159,7 @@ export function VolumeSetup({ onComplete, onSkip }: VolumeSetupProps) {
               2
             </Text>
           </View>
-          <Text variant="body" color="secondary">
+          <Text variant="body" color="secondary" style={styles.instructionText}>
             Use your device's volume buttons to adjust
           </Text>
         </View>
@@ -169,7 +169,7 @@ export function VolumeSetup({ onComplete, onSkip }: VolumeSetupProps) {
               3
             </Text>
           </View>
-          <Text variant="body" color="secondary">
+          <Text variant="body" color="secondary" style={styles.instructionText}>
             Set to a level that's audible but won't wake you
           </Text>
         </View>
@@ -255,8 +255,11 @@ const styles = StyleSheet.create({
   },
   instruction: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.md,
+  },
+  instructionText: {
+    flex: 1,
   },
   instructionNumber: {
     width: 28,

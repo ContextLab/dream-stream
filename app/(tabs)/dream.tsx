@@ -50,7 +50,7 @@ export default function DreamScreen() {
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
   const [stageHistory, setStageHistory] = useState<StageHistoryEntry[]>([]);
-  const { showDarkOverlay } = useDarkOverlay();
+  const { showDarkOverlay, isDarkOverlayVisible } = useDarkOverlay();
   const [helpMeFallAsleep, setHelpMeFallAsleep] = useState(false);
   const [isMeditating, setIsMeditating] = useState(false);
   const [isMeditationPaused, setIsMeditationPaused] = useState(false);
@@ -560,6 +560,7 @@ export default function DreamScreen() {
                 stages={stageHistory}
                 currentStage={currentStage}
                 isTracking={isTracking}
+                isDarkMode={isDarkOverlayVisible}
                 sessionStartTime={
                   session?.startTime ? new Date(session.startTime).getTime() : undefined
                 }

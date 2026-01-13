@@ -19,7 +19,7 @@ interface DreamPlayerProps {
   onError?: (error: Error) => void;
 }
 
-function getAudioUrl(dreamId: string, _mode: PlaybackMode): string {
+function getAudioUrl(dreamId: string): string {
   const baseUrl =
     Platform.OS === 'web'
       ? '/dream-stream/audio/dreams'
@@ -46,6 +46,11 @@ export function DreamPlayer({
 
   const soundRef = useRef<Audio.Sound | null>(null);
   const hasCompletedRef = useRef(false);
+  const playbackModeRef = useRef(playbackMode);
+
+  useEffect(() => {
+    playbackModeRef.current = playbackMode;
+  }, [playbackMode]);
 
   useEffect(() => {
     loadAudio();
@@ -66,7 +71,7 @@ export function DreamPlayer({
         shouldDuckAndroid: true,
       });
 
-      const audioUrl = getAudioUrl(dream.id, playbackMode);
+      const audioUrl = getAudioUrl(dream.id);
 
       const { sound } = await Audio.Sound.createAsync(
         { uri: audioUrl },
@@ -91,7 +96,7 @@ export function DreamPlayer({
     }
   };
 
-  const onPlaybackStatusUpdate = (playbackStatus: AVPlaybackStatus) => {
+  const onPlaybackStatusUpdate = async (playbackStatus: AVPlaybackStatus) => {
     if (!playbackStatus.isLoaded) {
       if (playbackStatus.error) {
         console.error('Playback error:', playbackStatus.error);
@@ -101,15 +106,44 @@ export function DreamPlayer({
       return;
     }
 
-    const positionSec = Math.floor(playbackStatus.positionMillis / 1000);
-    const durationSec = playbackStatus.durationMillis
+    const positionSec = playbackStatus.positionMillis / 1000;
+    const fileDurationSec = playbackStatus.durationMillis
       ? Math.floor(playbackStatus.durationMillis / 1000)
       : duration;
+    const isPreview = playbackModeRef.current === 'preview';
+    const previewDuration = dream.preview_duration_seconds;
+    const effectiveDuration = isPreview ? previewDuration : fileDurationSec;
 
-    setCurrentTime(positionSec);
-    setDuration(durationSec);
+    setCurrentTime(Math.min(Math.floor(positionSec), effectiveDuration));
+    setDuration(effectiveDuration);
     setIsPlaying(playbackStatus.isPlaying);
-    onProgress?.(positionSec);
+    onProgress?.(Math.floor(positionSec));
+
+    if (isPreview && soundRef.current) {
+      const FADE_DURATION = 5;
+      const timeRemaining = previewDuration - positionSec;
+
+      if (timeRemaining <= FADE_DURATION && timeRemaining > 0) {
+        const volume = timeRemaining / FADE_DURATION;
+        await soundRef.current.setVolumeAsync(volume);
+      } else if (timeRemaining > FADE_DURATION) {
+        await soundRef.current.setVolumeAsync(1.0);
+      }
+
+      if (positionSec >= previewDuration) {
+        if (!hasCompletedRef.current) {
+          hasCompletedRef.current = true;
+          await soundRef.current.pauseAsync();
+          await soundRef.current.setPositionAsync(0);
+          await soundRef.current.setVolumeAsync(1.0);
+          setIsPlaying(false);
+          setCurrentTime(0);
+          setStatus('paused');
+          onComplete?.();
+        }
+        return;
+      }
+    }
 
     if (playbackStatus.didJustFinish && !hasCompletedRef.current) {
       hasCompletedRef.current = true;
@@ -130,6 +164,7 @@ export function DreamPlayer({
     if (!soundRef.current || status === 'error') return;
 
     try {
+      await soundRef.current.setVolumeAsync(1.0);
       await soundRef.current.playAsync();
       setIsPlaying(true);
       setStatus('playing');
@@ -161,17 +196,23 @@ export function DreamPlayer({
     }
   }, [isPlaying, play, pause]);
 
-  const seekTo = useCallback(async (seconds: number) => {
-    if (!soundRef.current) return;
+  const seekTo = useCallback(
+    async (seconds: number) => {
+      if (!soundRef.current) return;
 
-    try {
-      await soundRef.current.setPositionAsync(seconds * 1000);
-      setCurrentTime(seconds);
-      hasCompletedRef.current = false;
-    } catch (err) {
-      console.error('Seek failed:', err);
-    }
-  }, []);
+      try {
+        const maxPosition =
+          playbackModeRef.current === 'preview' ? dream.preview_duration_seconds : duration;
+        const clampedSeconds = Math.min(seconds, maxPosition);
+        await soundRef.current.setPositionAsync(clampedSeconds * 1000);
+        setCurrentTime(clampedSeconds);
+        hasCompletedRef.current = false;
+      } catch (err) {
+        console.error('Seek failed:', err);
+      }
+    },
+    [dream.preview_duration_seconds, duration]
+  );
 
   const seekRelative = useCallback(
     (delta: number) => {
