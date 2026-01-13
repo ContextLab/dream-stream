@@ -9,8 +9,11 @@ import { Button } from '@/components/ui/Button';
 import { VolumeSetup } from '@/components/VolumeSetup';
 import { MicrophoneTest } from '@/components/MicrophoneTest';
 import { SleepStageGraph } from '@/components/SleepStageGraph';
+import { SleepHistoryCard } from '@/components/SleepHistoryCard';
+import { SleepSessionDetailModal } from '@/components/SleepSessionDetailModal';
 import { useDarkOverlay } from '@/components/DarkOverlayProvider';
 import { useSleepTracking } from '@/hooks/useSleepTracking';
+import type { SleepSession } from '@/services/sleep';
 import { useLaunchQueue } from '@/hooks/useLaunchQueue';
 import {
   getSleepStageDisplayName,
@@ -27,11 +30,12 @@ import type { Dream } from '@/types/database';
 
 export default function DreamScreen() {
   const router = useRouter();
-  const { session, currentStage, isTracking, start, stop } = useSleepTracking();
+  const { session, currentStage, isTracking, start, stop, history } = useSleepTracking();
   const { queue, getNext, complete } = useLaunchQueue();
 
   const [showVolumeSetup, setShowVolumeSetup] = useState(false);
   const [showMicTest, setShowMicTest] = useState(false);
+  const [selectedSession, setSelectedSession] = useState<SleepSession | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentDream, setCurrentDream] = useState<Dream | null>(null);
   const [progress, setProgress] = useState(0);
@@ -610,10 +614,31 @@ export default function DreamScreen() {
                   </Text>
                 </Pressable>
               )}
+
+              {history.length > 0 && (
+                <View style={styles.historySection}>
+                  <Text variant="h4" weight="semibold" color="primary" style={styles.historyTitle}>
+                    Sleep History
+                  </Text>
+                  {history.slice(0, 5).map((pastSession) => (
+                    <SleepHistoryCard
+                      key={pastSession.id}
+                      session={pastSession}
+                      onPress={() => setSelectedSession(pastSession)}
+                    />
+                  ))}
+                </View>
+              )}
             </View>
           )}
         </View>
       </ScrollView>
+
+      <SleepSessionDetailModal
+        session={selectedSession}
+        visible={selectedSession !== null}
+        onClose={() => setSelectedSession(null)}
+      />
 
       <Modal
         visible={showVolumeSetup}
@@ -871,6 +896,13 @@ const styles = StyleSheet.create({
   },
   browseLink: {
     marginTop: spacing.md,
+  },
+  historySection: {
+    width: '100%',
+    marginTop: spacing.xl,
+  },
+  historyTitle: {
+    marginBottom: spacing.md,
   },
   modalContainer: {
     flex: 1,

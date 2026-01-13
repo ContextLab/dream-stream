@@ -125,6 +125,9 @@ export async function startSleepSession(
   currentSession = session;
   await storage.set(STORAGE_KEY_SESSION, session);
 
+  stageHistory = [{ stage: 'awake', timestamp: Date.now() }];
+  notifyStageHistoryChange();
+
   if (source === 'audio') {
     await startAudioDetection();
   }

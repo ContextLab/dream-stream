@@ -83,7 +83,10 @@ export default function SettingsScreen() {
                           healthConnect.status?.sdkStatus === 'available' ? 'success' : 'muted'
                         }
                       >
-                        {healthConnect.status?.sdkStatus || 'checking...'}
+                        {healthConnect.status?.sdkStatus
+                          ? healthConnect.status.sdkStatus.charAt(0).toUpperCase() +
+                            healthConnect.status.sdkStatus.slice(1)
+                          : 'Checking...'}
                       </Text>
                     </View>
                     <View style={styles.statusRow}>
@@ -104,20 +107,26 @@ export default function SettingsScreen() {
                       </Text>
                     )}
 
-                    {healthConnect.vitals && (
+                    {healthConnect.status?.permissionsGranted && (
                       <View style={styles.vitalsContainer}>
                         <View style={styles.vitalItem}>
                           <Ionicons name="heart" size={16} color={colors.primary[500]} />
                           <Text variant="caption" color="primary">
-                            {healthConnect.vitals.heartRate ?? '--'} bpm
+                            {healthConnect.vitals?.heartRate ?? '--'} bpm
                           </Text>
                         </View>
                         <View style={styles.vitalItem}>
                           <Ionicons name="pulse" size={16} color={colors.accent.cyan} />
                           <Text variant="caption" color="primary">
-                            {healthConnect.vitals.hrv?.toFixed(0) ?? '--'} ms HRV
+                            {healthConnect.vitals?.hrv?.toFixed(0) ?? '--'} ms HRV
                           </Text>
                         </View>
+                        <Pressable
+                          style={styles.refreshButton}
+                          onPress={healthConnect.refreshVitals}
+                        >
+                          <Ionicons name="refresh" size={14} color={colors.gray[400]} />
+                        </Pressable>
                       </View>
                     )}
 
@@ -379,6 +388,7 @@ const styles = StyleSheet.create({
   },
   vitalsContainer: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.lg,
     marginVertical: spacing.sm,
   },
@@ -386,6 +396,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+  },
+  refreshButton: {
+    marginLeft: 'auto',
+    padding: spacing.xs,
   },
   testResults: {
     marginTop: spacing.sm,

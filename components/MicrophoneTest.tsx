@@ -18,6 +18,7 @@ import {
   getSleepStageColor,
   type BreathingAnalysis,
 } from '@/services/sleep';
+import { useHealthConnect } from '@/hooks/useHealthConnect';
 import { colors, spacing, borderRadius } from '@/theme/tokens';
 
 interface MicrophoneTestProps {
@@ -35,6 +36,8 @@ export function MicrophoneTest({ onComplete, onSkip }: MicrophoneTestProps) {
   const [testDuration, setTestDuration] = useState(0);
   const [micConfirmedWorking, setMicConfirmedWorking] = useState(false);
 
+  const { vitals, status: hcStatus, refreshVitals, isAndroid } = useHealthConnect();
+
   const unsubscribeBreathingRef = useRef<(() => void) | null>(null);
   const unsubscribeAudioRef = useRef<(() => void) | null>(null);
   const testStartTimeRef = useRef<number>(0);
@@ -48,6 +51,15 @@ export function MicrophoneTest({ onComplete, onSkip }: MicrophoneTestProps) {
       cleanup();
     };
   }, []);
+
+  useEffect(() => {
+    if (status === 'testing' && isAndroid && hcStatus?.permissionsGranted) {
+      const interval = setInterval(() => {
+        refreshVitals();
+      }, 10000);
+      return () => clearInterval(interval);
+    }
+  }, [status, isAndroid, hcStatus?.permissionsGranted, refreshVitals]);
 
   const cleanup = useCallback(() => {
     if (unsubscribeBreathingRef.current) {
@@ -259,6 +271,30 @@ export function MicrophoneTest({ onComplete, onSkip }: MicrophoneTestProps) {
                     {Math.round(confidence * 100)}%
                   </Text>
                 </View>
+                {isAndroid && hcStatus?.permissionsGranted && vitals && (
+                  <>
+                    {vitals.heartRate !== null && (
+                      <View style={styles.statRow}>
+                        <Text variant="caption" color="secondary">
+                          HR
+                        </Text>
+                        <Text variant="caption" style={{ color: colors.error }}>
+                          {vitals.heartRate} bpm
+                        </Text>
+                      </View>
+                    )}
+                    {vitals.hrv !== null && (
+                      <View style={styles.statRow}>
+                        <Text variant="caption" color="secondary">
+                          HRV
+                        </Text>
+                        <Text variant="caption" style={{ color: colors.success }}>
+                          {vitals.hrv} ms
+                        </Text>
+                      </View>
+                    )}
+                  </>
+                )}
               </View>
             </View>
 
