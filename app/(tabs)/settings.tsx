@@ -61,7 +61,7 @@ export default function SettingsScreen() {
           <View style={styles.wearableSection}>
             <MenuRow
               icon="watch-outline"
-              label="Wearable & Health Connect"
+              label="Wearables & Health Connect"
               onPress={() => setShowWearable(!showWearable)}
               badge={healthConnect.status?.permissionsGranted ? 'Connected' : undefined}
             />
@@ -164,7 +164,7 @@ export default function SettingsScreen() {
                             <Ionicons
                               name={step.passed ? 'checkmark-circle' : 'close-circle'}
                               size={16}
-                              color={step.passed ? colors.success[500] : colors.error[500]}
+                              color={step.passed ? colors.success : colors.error}
                             />
                             <View style={styles.testStepContent}>
                               <Text

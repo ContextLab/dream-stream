@@ -174,11 +174,7 @@ export async function checkGrantedPermissions(): Promise<PermissionRecord[]> {
   }
 
   try {
-    const permissions = await healthConnect.requestPermission([
-      { accessType: 'read', recordType: 'HeartRate' },
-      { accessType: 'read', recordType: 'HeartRateVariabilityRmssd' },
-      { accessType: 'read', recordType: 'SleepSession' },
-    ]);
+    const permissions = await healthConnect.getGrantedPermissions();
     return permissions as PermissionRecord[];
   } catch (error) {
     console.error('Failed to check permissions:', error);
