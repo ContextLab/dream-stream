@@ -319,3 +319,213 @@ function countNights(timestamps: Date[]): number {
   }
   return uniqueDays.size;
 }
+
+export interface DebugReport {
+  timestamp: string;
+  platform: string;
+  sleepStages: {
+    total: number;
+    byStage: Record<string, number>;
+    samples: Array<{ stage: string; start: string; end: string; durationMin: number }>;
+  };
+  heartRate: {
+    total: number;
+    oldest: string | null;
+    newest: string | null;
+    samples: Array<{ bpm: number; time: string }>;
+  };
+  hrv: {
+    total: number;
+    oldest: string | null;
+    newest: string | null;
+    samples: Array<{ ms: number; time: string }>;
+  };
+  matching: {
+    stagesWithHR: Record<string, number>;
+    stagesWithHRV: Record<string, number>;
+  };
+  model: LearnedModel | null;
+  errors: string[];
+}
+
+export async function runDebugReport(hoursBack: number = 48): Promise<DebugReport> {
+  const platform = Platform.OS;
+  const errors: string[] = [];
+  const report: DebugReport = {
+    timestamp: new Date().toISOString(),
+    platform,
+    sleepStages: { total: 0, byStage: {}, samples: [] },
+    heartRate: { total: 0, oldest: null, newest: null, samples: [] },
+    hrv: { total: 0, oldest: null, newest: null, samples: [] },
+    matching: { stagesWithHR: {}, stagesWithHRV: {} },
+    model: null,
+    errors: [],
+  };
+
+  if (platform !== 'android' && platform !== 'ios') {
+    errors.push(`Unsupported platform: ${platform}`);
+    report.errors = errors;
+    return report;
+  }
+
+  try {
+    const sleepStages =
+      platform === 'ios'
+        ? await healthKit.getRecentSleepSessions(hoursBack)
+        : await healthConnect.getRecentSleepSessions(hoursBack);
+
+    report.sleepStages.total = sleepStages.length;
+
+    const byStage: Record<string, number> = {};
+    for (const s of sleepStages) {
+      byStage[s.stage] = (byStage[s.stage] || 0) + 1;
+    }
+    report.sleepStages.byStage = byStage;
+
+    report.sleepStages.samples = sleepStages.slice(0, 20).map((s) => ({
+      stage: s.stage,
+      start: s.startTime,
+      end: s.endTime,
+      durationMin: Math.round(
+        (new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 60000
+      ),
+    }));
+
+    const hrSamples =
+      platform === 'ios'
+        ? await healthKit.getRecentHeartRate(hoursBack * 60)
+        : await healthConnect.getRecentHeartRate(hoursBack * 60);
+
+    report.heartRate.total = hrSamples.length;
+    if (hrSamples.length > 0) {
+      const sorted = [...hrSamples].sort(
+        (a, b) => new Date(a.time).getTime() - new Date(b.time).getTime()
+      );
+      report.heartRate.oldest = sorted[0].time;
+      report.heartRate.newest = sorted[sorted.length - 1].time;
+      report.heartRate.samples = hrSamples.slice(0, 10).map((s) => ({
+        bpm: s.beatsPerMinute,
+        time: s.time,
+      }));
+    }
+
+    const hrvSamples =
+      platform === 'ios'
+        ? await healthKit.getRecentHRV(hoursBack * 60)
+        : await healthConnect.getRecentHRV(hoursBack * 60);
+
+    report.hrv.total = hrvSamples.length;
+    if (hrvSamples.length > 0) {
+      const sorted = [...hrvSamples].sort(
+        (a, b) => new Date(a.time).getTime() - new Date(b.time).getTime()
+      );
+      report.hrv.oldest = sorted[0].time;
+      report.hrv.newest = sorted[sorted.length - 1].time;
+      report.hrv.samples = hrvSamples.slice(0, 10).map((s) => ({
+        ms: s.heartRateVariabilityMillis,
+        time: s.time,
+      }));
+    }
+
+    const stagesWithHR: Record<string, number> = {};
+    const stagesWithHRV: Record<string, number> = {};
+
+    for (const stageRecord of sleepStages) {
+      const stageStart = new Date(stageRecord.startTime);
+      const stageEnd = new Date(stageRecord.endTime);
+      const stage = stageRecord.stage;
+
+      const matchingHr = hrSamples.filter((hr) => {
+        const t = new Date(hr.time);
+        return t >= stageStart && t <= stageEnd;
+      });
+      stagesWithHR[stage] = (stagesWithHR[stage] || 0) + matchingHr.length;
+
+      const matchingHrv = hrvSamples.filter((hrv) => {
+        const t = new Date(hrv.time);
+        return t >= stageStart && t <= stageEnd;
+      });
+      stagesWithHRV[stage] = (stagesWithHRV[stage] || 0) + matchingHrv.length;
+    }
+
+    report.matching.stagesWithHR = stagesWithHR;
+    report.matching.stagesWithHRV = stagesWithHRV;
+
+    report.model = await loadModel();
+  } catch (error) {
+    errors.push(`Error: ${error}`);
+  }
+
+  report.errors = errors;
+  return report;
+}
+
+export function formatDebugReport(report: DebugReport): string {
+  const lines: string[] = [];
+
+  lines.push(`=== Sleep Stage Learning Debug Report ===`);
+  lines.push(`Time: ${report.timestamp}`);
+  lines.push(`Platform: ${report.platform}`);
+  lines.push('');
+
+  lines.push(`--- Sleep Stages ---`);
+  lines.push(`Total stages: ${report.sleepStages.total}`);
+  lines.push(`By stage: ${JSON.stringify(report.sleepStages.byStage)}`);
+  if (report.sleepStages.samples.length > 0) {
+    lines.push(`Recent samples:`);
+    for (const s of report.sleepStages.samples.slice(0, 5)) {
+      lines.push(`  ${s.stage}: ${s.durationMin}min (${s.start})`);
+    }
+  }
+  lines.push('');
+
+  lines.push(`--- Heart Rate ---`);
+  lines.push(`Total samples: ${report.heartRate.total}`);
+  if (report.heartRate.oldest && report.heartRate.newest) {
+    lines.push(`Range: ${report.heartRate.oldest} to ${report.heartRate.newest}`);
+  }
+  if (report.heartRate.samples.length > 0) {
+    lines.push(`Recent: ${report.heartRate.samples.map((s) => s.bpm).join(', ')} bpm`);
+  }
+  lines.push('');
+
+  lines.push(`--- HRV ---`);
+  lines.push(`Total samples: ${report.hrv.total}`);
+  if (report.hrv.oldest && report.hrv.newest) {
+    lines.push(`Range: ${report.hrv.oldest} to ${report.hrv.newest}`);
+  }
+  if (report.hrv.samples.length > 0) {
+    lines.push(`Recent: ${report.hrv.samples.map((s) => s.ms).join(', ')} ms`);
+  }
+  lines.push('');
+
+  lines.push(`--- Matching (HR/HRV samples per sleep stage) ---`);
+  lines.push(`HR per stage: ${JSON.stringify(report.matching.stagesWithHR)}`);
+  lines.push(`HRV per stage: ${JSON.stringify(report.matching.stagesWithHRV)}`);
+  lines.push('');
+
+  lines.push(`--- Learned Model ---`);
+  if (report.model) {
+    lines.push(`Last updated: ${report.model.lastUpdated}`);
+    lines.push(`Nights analyzed: ${report.model.nightsAnalyzed}`);
+    for (const [stage, profile] of Object.entries(report.model.profiles)) {
+      if (profile && stage !== 'any') {
+        lines.push(
+          `  ${stage}: HR=${profile.hrMean.toFixed(1)}±${profile.hrStd.toFixed(1)}, HRV=${profile.hrvMean.toFixed(1)}±${profile.hrvStd.toFixed(1)} (n=${profile.sampleCount})`
+        );
+      }
+    }
+  } else {
+    lines.push('No model loaded');
+  }
+  lines.push('');
+
+  if (report.errors.length > 0) {
+    lines.push(`--- Errors ---`);
+    for (const e of report.errors) {
+      lines.push(`  ${e}`);
+    }
+  }
+
+  return lines.join('\n');
+}

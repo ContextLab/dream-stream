@@ -17,14 +17,53 @@ import { VolumeSetup } from '@/components/VolumeSetup';
 import { MicrophoneTest } from '@/components/MicrophoneTest';
 import { useHealth } from '@/hooks/useHealth';
 import { colors, spacing } from '@/theme/tokens';
+import {
+  runDebugReport,
+  formatDebugReport,
+  learnFromRecentNights,
+  clearModel,
+  type DebugReport,
+} from '@/services/sleepStageLearning';
 
 export default function SettingsScreen() {
   const [showSleepDebug, setShowSleepDebug] = useState(false);
   const [showVolumeSetup, setShowVolumeSetup] = useState(false);
   const [showMicTest, setShowMicTest] = useState(false);
   const [showWearable, setShowWearable] = useState(false);
+  const [showModelDebug, setShowModelDebug] = useState(false);
+  const [modelDebugReport, setModelDebugReport] = useState<string | null>(null);
+  const [isLoadingModelDebug, setIsLoadingModelDebug] = useState(false);
 
   const health = useHealth();
+
+  const handleRunModelDebug = async () => {
+    setIsLoadingModelDebug(true);
+    setModelDebugReport(null);
+    try {
+      const report = await runDebugReport(48);
+      setModelDebugReport(formatDebugReport(report));
+    } catch (error) {
+      setModelDebugReport(`Error: ${error}`);
+    } finally {
+      setIsLoadingModelDebug(false);
+    }
+  };
+
+  const handleRetrainModel = async () => {
+    setIsLoadingModelDebug(true);
+    try {
+      await learnFromRecentNights(48);
+      await handleRunModelDebug();
+    } catch (error) {
+      setModelDebugReport(`Retrain error: ${error}`);
+      setIsLoadingModelDebug(false);
+    }
+  };
+
+  const handleClearModel = async () => {
+    await clearModel();
+    setModelDebugReport('Model cleared. Tap "Run Debug Report" to see current state.');
+  };
 
   useEffect(() => {
     if (showWearable && health.status?.permissionsGranted) {
@@ -235,6 +274,64 @@ export default function SettingsScreen() {
             onPress={() => setShowSleepDebug(!showSleepDebug)}
           />
           {showSleepDebug && <SleepDebugPanel />}
+
+          <MenuRow
+            icon="analytics-outline"
+            label="Sleep Model Debug (Fitbit/Wearable)"
+            onPress={() => setShowModelDebug(!showModelDebug)}
+          />
+          {showModelDebug && (
+            <View style={styles.expandedSection}>
+              <View style={styles.debugButtonRow}>
+                <Pressable
+                  style={styles.debugButton}
+                  onPress={handleRunModelDebug}
+                  disabled={isLoadingModelDebug}
+                >
+                  {isLoadingModelDebug ? (
+                    <ActivityIndicator size="small" color={colors.primary[500]} />
+                  ) : (
+                    <Ionicons name="play" size={16} color={colors.primary[500]} />
+                  )}
+                  <Text variant="caption" color="primary">
+                    Run Debug Report
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={styles.debugButton}
+                  onPress={handleRetrainModel}
+                  disabled={isLoadingModelDebug}
+                >
+                  <Ionicons name="refresh" size={16} color={colors.accent.cyan} />
+                  <Text variant="caption" color="primary">
+                    Retrain Model
+                  </Text>
+                </Pressable>
+                <Pressable style={styles.debugButton} onPress={handleClearModel}>
+                  <Ionicons name="trash" size={16} color={colors.error} />
+                  <Text variant="caption" color="primary">
+                    Clear
+                  </Text>
+                </Pressable>
+              </View>
+              {modelDebugReport && (
+                <ScrollView
+                  style={styles.debugOutput}
+                  horizontal={false}
+                  nestedScrollEnabled={true}
+                >
+                  <Text
+                    variant="caption"
+                    color="muted"
+                    style={styles.debugOutputText}
+                    selectable={true}
+                  >
+                    {modelDebugReport}
+                  </Text>
+                </ScrollView>
+              )}
+            </View>
+          )}
         </View>
 
         <View style={styles.versionSection}>
@@ -458,5 +555,31 @@ const styles = StyleSheet.create({
   },
   closeButton: {
     padding: spacing.sm,
+  },
+  debugButtonRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+    flexWrap: 'wrap',
+  },
+  debugButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: '#252542',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: 6,
+  },
+  debugOutput: {
+    maxHeight: 400,
+    backgroundColor: '#1a1a2e',
+    borderRadius: 8,
+    padding: spacing.sm,
+  },
+  debugOutputText: {
+    fontFamily: 'CourierPrime_400Regular',
+    fontSize: 11,
+    lineHeight: 16,
   },
 });
