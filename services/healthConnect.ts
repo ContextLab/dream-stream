@@ -398,13 +398,8 @@ export async function runConnectionTest(): Promise<{
   }
 
   try {
-    const permissions = await healthConnect.requestPermission([
-      { accessType: 'read', recordType: 'HeartRate' },
-      { accessType: 'read', recordType: 'HeartRateVariabilityRmssd' },
-      { accessType: 'read', recordType: 'SleepSession' },
-    ]);
-
-    const grantedTypes = permissions.map((p: PermissionRecord) => p.recordType);
+    const permissions = await healthConnect.getGrantedPermissions();
+    const grantedTypes = (permissions as PermissionRecord[]).map((p) => p.recordType);
     const requiredTypes = ['HeartRate', 'HeartRateVariabilityRmssd', 'SleepSession'];
     const allGranted = requiredTypes.every((type) => grantedTypes.includes(type));
 
@@ -420,7 +415,7 @@ export async function runConnectionTest(): Promise<{
         name: 'Permissions',
         passed: false,
         error: `Missing permissions: ${missing.join(', ')}`,
-        detail: `Granted: ${grantedTypes.join(', ') || 'none'}`,
+        detail: `Granted: ${grantedTypes.join(', ') || 'none'}. Use "Request Permissions" first.`,
       });
       return { success: false, steps };
     }
@@ -428,7 +423,7 @@ export async function runConnectionTest(): Promise<{
     steps.push({
       name: 'Permissions',
       passed: false,
-      error: `Permission error: ${error}`,
+      error: `Permission check error: ${error}`,
     });
     return { success: false, steps };
   }
