@@ -40,8 +40,11 @@ const STAGE_LABELS_WIDTH = 50;
 const USABLE_HEIGHT = GRAPH_HEIGHT - GRAPH_PADDING_TOP - GRAPH_PADDING_BOTTOM;
 
 const INITIAL_DURATION_MS = 10000;
-const UPDATE_INTERVAL_MS = 250;
+const RENDER_INTERVAL_MS = 10;
+const DATA_POINT_INTERVAL_MS = 10000;
+const GROWTH_THRESHOLD = 0.95;
 const GROWTH_FACTOR = 1.05;
+const LINE_THICKNESS = 4;
 const TRANSITION_COLOR = colors.gray[500];
 
 function getYForStage(stage: SleepStage): number {
@@ -66,9 +69,12 @@ export function SleepStageGraph({
   const [graphWidth, setGraphWidth] = useState(300);
   const [dataPoints, setDataPoints] = useState<DataPoint[]>([]);
   const [currentDuration, setCurrentDuration] = useState(INITIAL_DURATION_MS);
+  const [currentTime, setCurrentTime] = useState(Date.now());
   const scaleAnimation = useSharedValue(1);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const renderIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const dataIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number>(0);
+  const lastStageRef = useRef<SleepStage | null>(null);
 
   const handleLayout = useCallback((event: { nativeEvent: { layout: { width: number } } }) => {
     setGraphWidth(event.nativeEvent.layout.width - STAGE_LABELS_WIDTH - spacing.md);
@@ -76,29 +82,39 @@ export function SleepStageGraph({
 
   useEffect(() => {
     if (!isTracking) {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
+      if (renderIntervalRef.current) {
+        clearInterval(renderIntervalRef.current);
+        renderIntervalRef.current = null;
+      }
+      if (dataIntervalRef.current) {
+        clearInterval(dataIntervalRef.current);
+        dataIntervalRef.current = null;
       }
       return;
     }
 
     startTimeRef.current = sessionStartTime ?? Date.now();
+    lastStageRef.current = currentStage;
     setCurrentDuration(INITIAL_DURATION_MS);
     setDataPoints([]);
 
-    const addPoint = () => {
+    const addDataPoint = (stage: SleepStage) => {
       const now = Date.now();
-      const elapsed = now - startTimeRef.current;
-      const stage = currentStage ?? 'awake';
-
       setDataPoints((prev) => {
         const newPoints = [...prev, { x: 0, y: 0, stage, timestamp: now }];
-        return newPoints.slice(-1000);
+        return newPoints.slice(-500);
       });
+    };
 
+    addDataPoint(currentStage ?? 'awake');
+
+    const updateRender = () => {
+      const now = Date.now();
+      setCurrentTime(now);
+
+      const elapsed = now - startTimeRef.current;
       setCurrentDuration((prevDuration) => {
-        if (elapsed >= prevDuration * 0.95) {
+        if (elapsed >= prevDuration * GROWTH_THRESHOLD) {
           const newDuration = prevDuration * GROWTH_FACTOR;
           scaleAnimation.value = withTiming(1, {
             duration: 300,
@@ -110,29 +126,64 @@ export function SleepStageGraph({
       });
     };
 
-    addPoint();
-    intervalRef.current = setInterval(addPoint, UPDATE_INTERVAL_MS);
+    const addPeriodicPoint = () => {
+      const stage = currentStage ?? 'awake';
+      addDataPoint(stage);
+    };
+
+    renderIntervalRef.current = setInterval(updateRender, RENDER_INTERVAL_MS);
+    dataIntervalRef.current = setInterval(addPeriodicPoint, DATA_POINT_INTERVAL_MS);
 
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
+      if (renderIntervalRef.current) {
+        clearInterval(renderIntervalRef.current);
+        renderIntervalRef.current = null;
+      }
+      if (dataIntervalRef.current) {
+        clearInterval(dataIntervalRef.current);
+        dataIntervalRef.current = null;
       }
     };
-  }, [isTracking, sessionStartTime, currentStage, scaleAnimation]);
+  }, [isTracking, sessionStartTime, scaleAnimation]);
+
+  useEffect(() => {
+    if (!isTracking) return;
+
+    if (currentStage !== lastStageRef.current && currentStage !== null) {
+      lastStageRef.current = currentStage;
+      const now = Date.now();
+      setDataPoints((prev) => {
+        const newPoints = [...prev, { x: 0, y: 0, stage: currentStage, timestamp: now }];
+        return newPoints.slice(-500);
+      });
+    }
+  }, [currentStage, isTracking]);
 
   const computedPoints = useMemo(() => {
     if (dataPoints.length === 0) return [];
 
     const startTime = startTimeRef.current || (dataPoints[0]?.timestamp ?? Date.now());
 
-    return dataPoints.map((point) => {
+    const points = dataPoints.map((point) => {
       const elapsed = point.timestamp - startTime;
       const x = (elapsed / currentDuration) * graphWidth;
       const y = getYForStage(point.stage);
       return { ...point, x, y };
     });
-  }, [dataPoints, currentDuration, graphWidth]);
+
+    if (isTracking && points.length > 0) {
+      const lastPoint = points[points.length - 1];
+      const elapsed = currentTime - startTime;
+      const liveX = Math.min((elapsed / currentDuration) * graphWidth, graphWidth);
+      points.push({
+        ...lastPoint,
+        x: liveX,
+        timestamp: currentTime,
+      });
+    }
+
+    return points;
+  }, [dataPoints, currentDuration, graphWidth, currentTime, isTracking]);
 
   const renderPath = useCallback(() => {
     if (computedPoints.length < 2) {
@@ -173,7 +224,7 @@ export function SleepStageGraph({
             d={pathD}
             fill="none"
             stroke={segmentColor}
-            strokeWidth="2.5"
+            strokeWidth={LINE_THICKNESS}
             strokeLinecap="round"
           />
         );
@@ -190,9 +241,9 @@ export function SleepStageGraph({
               styles.lineSegment,
               {
                 left: prev.x,
-                top: prev.y - 1.25,
+                top: prev.y - LINE_THICKNESS / 2,
                 width: length,
-                height: 2.5,
+                height: LINE_THICKNESS,
                 backgroundColor: segmentColor,
                 transform: [{ rotate: `${angle}deg` }],
                 transformOrigin: 'left center',
@@ -339,7 +390,7 @@ const styles = StyleSheet.create({
   },
   lineSegment: {
     position: 'absolute',
-    borderRadius: 1.25,
+    borderRadius: 2,
   },
   currentDot: {
     position: 'absolute',
