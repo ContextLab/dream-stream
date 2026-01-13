@@ -84,10 +84,15 @@ const MOVEMENT_SPIKE_THRESHOLD = 3.0;
 const HR_MOVEMENT_DELTA_THRESHOLD = 8;
 const HR_MOVEMENT_WINDOW_SEC = 30;
 
+const BANDPASS_LOW_FREQ = 150;
+const BANDPASS_HIGH_FREQ = 800;
+const BANDPASS_Q = 0.7;
+
 let currentSession: SleepSession | null = null;
 let recentHRSamples: { hr: number; timestamp: number }[] = [];
 let hrMovementScore = 0;
 let audioContext: AudioContext | null = null;
+let bandpassFilter: BiquadFilterNode | null = null;
 let analyzer: MeydaAnalyzerInstance | null = null;
 let mediaStream: MediaStream | null = null;
 let isAudioRunning = false;
@@ -378,9 +383,17 @@ async function startWebAudioDetection(): Promise<boolean> {
     audioContext = new AudioContext();
     const source = audioContext.createMediaStreamSource(mediaStream);
 
+    const centerFreq = Math.sqrt(BANDPASS_LOW_FREQ * BANDPASS_HIGH_FREQ);
+    bandpassFilter = audioContext.createBiquadFilter();
+    bandpassFilter.type = 'bandpass';
+    bandpassFilter.frequency.value = centerFreq;
+    bandpassFilter.Q.value = BANDPASS_Q;
+
+    source.connect(bandpassFilter);
+
     analyzer = Meyda.createMeydaAnalyzer({
       audioContext,
-      source,
+      source: bandpassFilter,
       bufferSize: 2048,
       featureExtractors: ['rms', 'zcr', 'spectralCentroid', 'spectralFlatness'],
       callback: processAudioFeatures,
@@ -406,6 +419,11 @@ function stopAudioDetection(): void {
   if (analyzer) {
     analyzer.stop();
     analyzer = null;
+  }
+
+  if (bandpassFilter) {
+    bandpassFilter.disconnect();
+    bandpassFilter = null;
   }
 
   if (mediaStream) {
@@ -990,6 +1008,23 @@ export function getDetectionMode(): 'audio' | 'vitals' | 'fused' | 'none' {
   if (isAudioRunning) return 'audio';
   if (useVitalsForDetection) return 'vitals';
   return 'none';
+}
+
+export function getBandpassFilterStatus(): {
+  enabled: boolean;
+  lowFreq: number;
+  highFreq: number;
+  centerFreq: number;
+  q: number;
+} {
+  const centerFreq = Math.sqrt(BANDPASS_LOW_FREQ * BANDPASS_HIGH_FREQ);
+  return {
+    enabled: bandpassFilter !== null,
+    lowFreq: BANDPASS_LOW_FREQ,
+    highFreq: BANDPASS_HIGH_FREQ,
+    centerFreq: Math.round(centerFreq),
+    q: BANDPASS_Q,
+  };
 }
 
 export const sleepService = {
