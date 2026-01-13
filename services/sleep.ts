@@ -99,12 +99,15 @@ let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 const HEARTBEAT_INTERVAL_MS = 30000;
 
 const AGC_WINDOW_MS = 60000;
-const AGC_TARGET_RMS = 0.15;
-const AGC_MIN_GAIN = 0.5;
-const AGC_MAX_GAIN = 10.0;
-const AGC_SMOOTHING = 0.95;
+const AGC_UPDATE_INTERVAL_MS = 1000;
+const AGC_OUTPUT_MIN = 0.05;
+const AGC_OUTPUT_MAX = 0.95;
+const AGC_MIN_GAIN = 0.1;
+const AGC_MAX_GAIN = 20.0;
 let agcHistory: { rms: number; timestamp: number }[] = [];
-let currentGain = 1.0;
+let agcInputMin = 0;
+let agcInputMax = 1;
+let agcLastUpdateTime = 0;
 let agcEnabled = true;
 
 function generateId(): string {
@@ -418,7 +421,9 @@ function stopAudioDetection(): void {
   calibrationRmsValues = [];
   adaptiveRmsThreshold = BASE_RMS_THRESHOLD;
   agcHistory = [];
-  currentGain = 1.0;
+  agcInputMin = 0;
+  agcInputMax = 1;
+  agcLastUpdateTime = 0;
 }
 
 function startHeartbeat(): void {
@@ -481,56 +486,75 @@ function applyAGC(rawRms: number): number {
   agcHistory.push({ rms: rawRms, timestamp: now });
   agcHistory = agcHistory.filter((entry) => now - entry.timestamp < AGC_WINDOW_MS);
 
+  if (now - agcLastUpdateTime >= AGC_UPDATE_INTERVAL_MS) {
+    agcLastUpdateTime = now;
+    updateAGCRange();
+  }
+
   if (agcHistory.length < 10) {
     return rawRms;
   }
 
-  const recentValues = agcHistory.map((h) => h.rms).filter((v) => v > 0.001);
-  if (recentValues.length === 0) {
+  const inputRange = agcInputMax - agcInputMin;
+  if (inputRange < 0.001) {
     return rawRms;
   }
 
-  const sorted = [...recentValues].sort((a, b) => a - b);
-  const p25Idx = Math.floor(sorted.length * 0.25);
-  const p75Idx = Math.floor(sorted.length * 0.75);
-  const p25 = sorted[p25Idx];
-  const p75 = sorted[p75Idx];
+  const normalizedPosition = (rawRms - agcInputMin) / inputRange;
+  const clampedPosition = Math.max(0, Math.min(1, normalizedPosition));
 
-  const iqr = p75 - p25;
-  const filtered = recentValues.filter((v) => v >= p25 - iqr * 1.5 && v <= p75 + iqr * 1.5);
+  const outputRange = AGC_OUTPUT_MAX - AGC_OUTPUT_MIN;
+  const adjustedRms = AGC_OUTPUT_MIN + clampedPosition * outputRange;
 
-  if (filtered.length === 0) {
-    return rawRms;
-  }
+  return adjustedRms;
+}
 
-  const avgRms = filtered.reduce((a, b) => a + b, 0) / filtered.length;
+function updateAGCRange(): void {
+  if (agcHistory.length < 10) return;
 
-  if (avgRms < 0.001) {
-    return rawRms;
-  }
+  const values = agcHistory.map((h) => h.rms).filter((v) => v > 0.0001);
+  if (values.length < 5) return;
 
-  const targetGain = AGC_TARGET_RMS / avgRms;
-  const clampedGain = Math.max(AGC_MIN_GAIN, Math.min(AGC_MAX_GAIN, targetGain));
+  const sorted = [...values].sort((a, b) => a - b);
 
-  currentGain = currentGain * AGC_SMOOTHING + clampedGain * (1 - AGC_SMOOTHING);
+  const p5Idx = Math.floor(sorted.length * 0.05);
+  const p95Idx = Math.floor(sorted.length * 0.95);
+  const newMin = sorted[p5Idx];
+  const newMax = sorted[p95Idx];
 
-  const adjustedRms = rawRms * currentGain;
-  return Math.min(1.0, adjustedRms);
+  if (newMax - newMin < 0.001) return;
+
+  const smoothing = 0.7;
+  agcInputMin = agcInputMin * smoothing + newMin * (1 - smoothing);
+  agcInputMax = agcInputMax * smoothing + newMax * (1 - smoothing);
+
+  agcInputMin = Math.max(0, agcInputMin);
+  agcInputMax = Math.min(1, Math.max(agcInputMin + 0.01, agcInputMax));
 }
 
 export function setAGCEnabled(enabled: boolean): void {
   agcEnabled = enabled;
   if (!enabled) {
-    currentGain = 1.0;
     agcHistory = [];
+    agcInputMin = 0;
+    agcInputMax = 1;
   }
 }
 
-export function getAGCStatus(): { enabled: boolean; currentGain: number; historySize: number } {
+export function getAGCStatus(): {
+  enabled: boolean;
+  currentGain: number;
+  historySize: number;
+  inputRange: [number, number];
+} {
+  const inputRange = agcInputMax - agcInputMin;
+  const effectiveGain = inputRange > 0 ? (AGC_OUTPUT_MAX - AGC_OUTPUT_MIN) / inputRange : 1;
+
   return {
     enabled: agcEnabled,
-    currentGain,
+    currentGain: effectiveGain,
     historySize: agcHistory.length,
+    inputRange: [agcInputMin, agcInputMax],
   };
 }
 
