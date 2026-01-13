@@ -80,8 +80,13 @@ const SLEEP_BREATHING_REGULARITY = 0.85;
 const REM_RRV_THRESHOLD = 0.25;
 const DEEP_SLEEP_RRV_THRESHOLD = 0.1;
 const MOVEMENT_THRESHOLD = 0.15;
+const MOVEMENT_SPIKE_THRESHOLD = 3.0;
+const HR_MOVEMENT_DELTA_THRESHOLD = 8;
+const HR_MOVEMENT_WINDOW_SEC = 30;
 
 let currentSession: SleepSession | null = null;
+let recentHRSamples: { hr: number; timestamp: number }[] = [];
+let hrMovementScore = 0;
 let audioContext: AudioContext | null = null;
 let analyzer: MeydaAnalyzerInstance | null = null;
 let mediaStream: MediaStream | null = null;
@@ -619,16 +624,84 @@ function calculateRRV(intervals: number[]): number {
 function detectMovement(rmsValues: number[]): number {
   if (rmsValues.length < 5) return 0;
 
-  let spikeCount = 0;
-  const avgRms = rmsValues.reduce((a, b) => a + b, 0) / rmsValues.length;
+  const sorted = [...rmsValues].sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)];
+  const p25 = sorted[Math.floor(sorted.length * 0.25)];
+  const baselineRms = (median + p25) / 2;
 
-  for (const rms of rmsValues) {
-    if (rms > avgRms * 3) {
-      spikeCount++;
+  let spikeScore = 0;
+  let sustainedHighScore = 0;
+
+  for (let i = 0; i < rmsValues.length; i++) {
+    const rms = rmsValues[i];
+    const spikeRatio = baselineRms > 0.001 ? rms / baselineRms : 0;
+
+    if (spikeRatio > MOVEMENT_SPIKE_THRESHOLD) {
+      spikeScore += 0.2;
+    }
+
+    if (rms > adaptiveRmsThreshold * 2) {
+      sustainedHighScore += 0.05;
     }
   }
 
-  return spikeCount / rmsValues.length;
+  const audioMovement = Math.min(1, spikeScore + sustainedHighScore);
+  const combinedMovement = Math.max(audioMovement, hrMovementScore * 0.8);
+
+  return combinedMovement;
+}
+
+export function addHRSample(hr: number): void {
+  const now = Date.now();
+  recentHRSamples.push({ hr, timestamp: now });
+  recentHRSamples = recentHRSamples.filter(
+    (s) => now - s.timestamp < HR_MOVEMENT_WINDOW_SEC * 1000
+  );
+
+  updateHRMovementScore();
+}
+
+function updateHRMovementScore(): void {
+  if (recentHRSamples.length < 3) {
+    hrMovementScore = 0;
+    return;
+  }
+
+  const sorted = [...recentHRSamples].sort((a, b) => a.timestamp - b.timestamp);
+  let maxDelta = 0;
+
+  for (let i = 1; i < sorted.length; i++) {
+    const timeDiff = sorted[i].timestamp - sorted[i - 1].timestamp;
+    if (timeDiff > 0 && timeDiff < 60000) {
+      const hrDelta = Math.abs(sorted[i].hr - sorted[i - 1].hr);
+      maxDelta = Math.max(maxDelta, hrDelta);
+    }
+  }
+
+  const minHR = Math.min(...sorted.map((s) => s.hr));
+  const maxHR = Math.max(...sorted.map((s) => s.hr));
+  const hrRange = maxHR - minHR;
+
+  if (maxDelta >= HR_MOVEMENT_DELTA_THRESHOLD || hrRange >= HR_MOVEMENT_DELTA_THRESHOLD * 1.5) {
+    hrMovementScore = Math.min(1, maxDelta / HR_MOVEMENT_DELTA_THRESHOLD);
+  } else {
+    hrMovementScore = hrMovementScore * 0.9;
+  }
+}
+
+export function getMovementIndicators(): {
+  audioMovement: number;
+  hrMovement: number;
+  combined: number;
+} {
+  const recentRms = rmsHistory.slice(-20).map((r) => r.value);
+  const audioMovement = recentRms.length > 0 ? detectMovement(recentRms) : 0;
+
+  return {
+    audioMovement,
+    hrMovement: hrMovementScore,
+    combined: Math.max(audioMovement, hrMovementScore * 0.8),
+  };
 }
 
 function analyzeBreathing(): BreathingAnalysis {
@@ -863,6 +936,10 @@ export async function processVitalsUpdate(vitals: VitalsSnapshot): Promise<void>
   if (!useVitalsForDetection) return;
 
   addVitalsSample(vitals);
+
+  if (vitals.heartRate !== null) {
+    addHRSample(vitals.heartRate);
+  }
 
   if (currentSession?.isActive) {
     const vitalsAnalysis = await analyzeVitalsWithLearning();

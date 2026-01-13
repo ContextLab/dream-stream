@@ -203,31 +203,38 @@ export async function getRecentHeartRate(minutesBack: number = 30): Promise<Hear
     const endTime = new Date().toISOString();
     const startTime = new Date(Date.now() - minutesBack * 60 * 1000).toISOString();
 
-    const result = await healthConnect.readRecords('HeartRate', {
-      timeRangeFilter: {
-        operator: 'between',
-        startTime,
-        endTime,
-      },
-      ascendingOrder: false,
-      pageSize: 100,
-    });
+    const allSamples: HeartRateSample[] = [];
+    let pageToken: string | undefined;
 
-    const samples: HeartRateSample[] = [];
-    for (const record of result.records) {
-      if (record.samples) {
-        for (const sample of record.samples) {
-          samples.push({
-            beatsPerMinute: sample.beatsPerMinute,
-            time: sample.time,
-          });
+    do {
+      const result = await healthConnect.readRecords('HeartRate', {
+        timeRangeFilter: {
+          operator: 'between',
+          startTime,
+          endTime,
+        },
+        ascendingOrder: false,
+        pageSize: 1000,
+        pageToken,
+      });
+
+      for (const record of result.records) {
+        if (record.samples) {
+          for (const sample of record.samples) {
+            allSamples.push({
+              beatsPerMinute: sample.beatsPerMinute,
+              time: sample.time,
+            });
+          }
         }
       }
-    }
 
-    samples.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+      pageToken = result.pageToken;
+    } while (pageToken);
 
-    return samples;
+    allSamples.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+
+    return allSamples;
   } catch (error) {
     console.error('Failed to read heart rate:', error);
     return [];
@@ -243,30 +250,87 @@ export async function getRecentHRV(minutesBack: number = 30): Promise<HRVSample[
     const endTime = new Date().toISOString();
     const startTime = new Date(Date.now() - minutesBack * 60 * 1000).toISOString();
 
-    const result = await healthConnect.readRecords('HeartRateVariabilityRmssd', {
-      timeRangeFilter: {
-        operator: 'between',
-        startTime,
-        endTime,
-      },
-      ascendingOrder: false,
-      pageSize: 100,
-    });
+    const allSamples: HRVSample[] = [];
+    let pageToken: string | undefined;
 
-    const samples: HRVSample[] = result.records.map(
-      (record: { heartRateVariabilityMillis: number; time: string }) => ({
-        heartRateVariabilityMillis: record.heartRateVariabilityMillis,
-        time: record.time,
-      })
-    );
+    do {
+      const result = await healthConnect.readRecords('HeartRateVariabilityRmssd', {
+        timeRangeFilter: {
+          operator: 'between',
+          startTime,
+          endTime,
+        },
+        ascendingOrder: false,
+        pageSize: 1000,
+        pageToken,
+      });
 
-    samples.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+      for (const record of result.records) {
+        allSamples.push({
+          heartRateVariabilityMillis: record.heartRateVariabilityMillis,
+          time: record.time,
+        });
+      }
 
-    return samples;
+      pageToken = result.pageToken;
+    } while (pageToken);
+
+    allSamples.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+
+    return allSamples;
   } catch (error) {
     console.error('Failed to read HRV:', error);
     return [];
   }
+}
+
+type HealthRecordType =
+  | 'HeartRate'
+  | 'HeartRateVariabilityRmssd'
+  | 'SleepSession'
+  | 'RestingHeartRate'
+  | 'OxygenSaturation'
+  | 'RespiratoryRate'
+  | 'Steps'
+  | 'ActiveCaloriesBurned';
+
+export async function getAvailableRecordCounts(): Promise<Record<string, number>> {
+  if (Platform.OS !== 'android' || !healthConnect) {
+    return {};
+  }
+
+  const recordTypes: HealthRecordType[] = [
+    'HeartRate',
+    'HeartRateVariabilityRmssd',
+    'SleepSession',
+    'RestingHeartRate',
+    'OxygenSaturation',
+    'RespiratoryRate',
+    'Steps',
+    'ActiveCaloriesBurned',
+  ];
+
+  const counts: Record<string, number> = {};
+  const endTime = new Date().toISOString();
+  const startTime = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+
+  for (const recordType of recordTypes) {
+    try {
+      const result = await healthConnect.readRecords(recordType, {
+        timeRangeFilter: {
+          operator: 'between',
+          startTime,
+          endTime,
+        },
+        pageSize: 1,
+      });
+      counts[recordType] = result.records?.length > 0 ? 1 : 0;
+    } catch {
+      counts[recordType] = -1;
+    }
+  }
+
+  return counts;
 }
 
 export async function getRecentSleepSessions(hoursBack: number = 12): Promise<SleepStageSample[]> {

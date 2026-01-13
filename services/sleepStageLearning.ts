@@ -323,6 +323,7 @@ function countNights(timestamps: Date[]): number {
 export interface DebugReport {
   timestamp: string;
   platform: string;
+  availableRecords: Record<string, number>;
   sleepStages: {
     total: number;
     byStage: Record<string, number>;
@@ -354,6 +355,7 @@ export async function runDebugReport(hoursBack: number = 48): Promise<DebugRepor
   const report: DebugReport = {
     timestamp: new Date().toISOString(),
     platform,
+    availableRecords: {},
     sleepStages: { total: 0, byStage: {}, samples: [] },
     heartRate: { total: 0, oldest: null, newest: null, samples: [] },
     hrv: { total: 0, oldest: null, newest: null, samples: [] },
