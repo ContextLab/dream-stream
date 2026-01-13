@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -25,6 +25,14 @@ export default function SettingsScreen() {
   const [showWearable, setShowWearable] = useState(false);
 
   const health = useHealth();
+
+  useEffect(() => {
+    if (showWearable && health.status?.permissionsGranted) {
+      health.startVitalsPolling();
+    } else {
+      health.stopVitalsPolling();
+    }
+  }, [showWearable, health.status?.permissionsGranted]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -116,9 +124,12 @@ export default function SettingsScreen() {
                             {health.vitals?.hrv?.toFixed(0) ?? '--'} ms HRV
                           </Text>
                         </View>
-                        <Pressable style={styles.refreshButton} onPress={health.refreshVitals}>
-                          <Ionicons name="refresh" size={14} color={colors.gray[400]} />
-                        </Pressable>
+                        <View style={styles.pollingIndicator}>
+                          {health.isPolling && <View style={styles.pollingDot} />}
+                          <Pressable style={styles.refreshButton} onPress={health.refreshVitals}>
+                            <Ionicons name="refresh" size={14} color={colors.gray[400]} />
+                          </Pressable>
+                        </View>
                       </View>
                     )}
 
@@ -392,8 +403,19 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   refreshButton: {
-    marginLeft: 'auto',
     padding: spacing.xs,
+  },
+  pollingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 'auto',
+    gap: spacing.xs,
+  },
+  pollingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.success,
   },
   testResults: {
     marginTop: spacing.sm,

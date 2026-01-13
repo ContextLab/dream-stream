@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 
 import * as healthConnect from '@/services/healthConnect';
@@ -63,6 +63,9 @@ interface UseHealthReturn {
   testResult: ConnectionTestResult | null;
   supportedDevices: SupportedDevice[];
   openSettings: () => void;
+  startVitalsPolling: () => void;
+  stopVitalsPolling: () => void;
+  isPolling: boolean;
 }
 
 export function useHealth(): UseHealthReturn {
@@ -75,6 +78,9 @@ export function useHealth(): UseHealthReturn {
   const [error, setError] = useState<string | null>(null);
   const [isTestRunning, setIsTestRunning] = useState(false);
   const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null);
+  const [isPolling, setIsPolling] = useState(false);
+  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const POLLING_INTERVAL_MS = 10000;
 
   const refreshStatus = useCallback(async () => {
     if (platform === 'other') return;
@@ -201,6 +207,25 @@ export function useHealth(): UseHealthReturn {
     }
   }, [platform]);
 
+  const startVitalsPolling = useCallback(() => {
+    if (pollingIntervalRef.current || platform === 'other') return;
+
+    setIsPolling(true);
+    refreshVitals();
+
+    pollingIntervalRef.current = setInterval(() => {
+      refreshVitals();
+    }, POLLING_INTERVAL_MS);
+  }, [platform, refreshVitals]);
+
+  const stopVitalsPolling = useCallback(() => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+    setIsPolling(false);
+  }, []);
+
   useEffect(() => {
     if (platform !== 'other') {
       refreshStatus();
@@ -212,6 +237,14 @@ export function useHealth(): UseHealthReturn {
       refreshVitals();
     }
   }, [status?.permissionsGranted, refreshVitals]);
+
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, []);
 
   const supportedDevices =
     platform === 'ios' ? healthKit.SUPPORTED_DEVICES : healthConnect.SUPPORTED_DEVICES;
@@ -233,5 +266,8 @@ export function useHealth(): UseHealthReturn {
     testResult,
     supportedDevices,
     openSettings,
+    startVitalsPolling,
+    stopVitalsPolling,
+    isPolling,
   };
 }

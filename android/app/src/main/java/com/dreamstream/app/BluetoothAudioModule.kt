@@ -211,10 +211,14 @@ class BluetoothAudioModule(reactContext: ReactApplicationContext) : ReactContext
         }
     }
 
+    private var scoConnectionPromise: Promise? = null
+    private var scoConnectionTimeoutHandler: android.os.Handler? = null
+    private var scoConnectionTimeoutRunnable: Runnable? = null
+
     @ReactMethod
     fun startBluetoothSco(promise: Promise) {
         try {
-            if (isScoStarted) {
+            if (isScoStarted && audioManager.isBluetoothScoOn) {
                 promise.resolve(true)
                 return
             }
@@ -224,17 +228,63 @@ class BluetoothAudioModule(reactContext: ReactApplicationContext) : ReactContext
                 return
             }
 
-            registerScoReceiver()
+            scoConnectionPromise = promise
+            registerScoReceiverWithCallback()
 
             audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
             audioManager.startBluetoothSco()
-            audioManager.isBluetoothScoOn = true
             isScoStarted = true
 
-            promise.resolve(true)
+            scoConnectionTimeoutHandler = android.os.Handler(android.os.Looper.getMainLooper())
+            scoConnectionTimeoutRunnable = Runnable {
+                scoConnectionPromise?.let {
+                    audioManager.isBluetoothScoOn = true
+                    it.resolve(true)
+                    scoConnectionPromise = null
+                }
+            }
+            scoConnectionTimeoutHandler?.postDelayed(scoConnectionTimeoutRunnable!!, 3000)
+
         } catch (e: Exception) {
+            scoConnectionPromise = null
             promise.reject("SCO_ERROR", "Failed to start Bluetooth SCO", e)
         }
+    }
+
+    private fun registerScoReceiverWithCallback() {
+        unregisterScoReceiver()
+        
+        scoReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                val state = intent.getIntExtra(AudioManager.EXTRA_SCO_AUDIO_STATE, -1)
+                val params: WritableMap = Arguments.createMap()
+
+                when (state) {
+                    AudioManager.SCO_AUDIO_STATE_CONNECTED -> {
+                        params.putString("state", "connected")
+                        audioManager.isBluetoothScoOn = true
+                        
+                        scoConnectionTimeoutHandler?.removeCallbacks(scoConnectionTimeoutRunnable!!)
+                        scoConnectionPromise?.resolve(true)
+                        scoConnectionPromise = null
+                    }
+                    AudioManager.SCO_AUDIO_STATE_DISCONNECTED -> {
+                        params.putString("state", "disconnected")
+                    }
+                    AudioManager.SCO_AUDIO_STATE_CONNECTING -> {
+                        params.putString("state", "connecting")
+                    }
+                    else -> {
+                        params.putString("state", "unknown")
+                    }
+                }
+
+                sendEvent("BluetoothScoStateChange", params)
+            }
+        }
+
+        val filter = IntentFilter(AudioManager.ACTION_SCO_AUDIO_STATE_UPDATED)
+        reactApplicationContext.registerReceiver(scoReceiver, filter)
     }
 
     @ReactMethod
@@ -279,37 +329,6 @@ class BluetoothAudioModule(reactContext: ReactApplicationContext) : ReactContext
         } catch (e: Exception) {
             promise.reject("AUDIO_ERROR", "Failed to get audio input source", e)
         }
-    }
-
-    private fun registerScoReceiver() {
-        if (scoReceiver != null) return
-
-        scoReceiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context, intent: Intent) {
-                val state = intent.getIntExtra(AudioManager.EXTRA_SCO_AUDIO_STATE, -1)
-                val params: WritableMap = Arguments.createMap()
-
-                when (state) {
-                    AudioManager.SCO_AUDIO_STATE_CONNECTED -> {
-                        params.putString("state", "connected")
-                    }
-                    AudioManager.SCO_AUDIO_STATE_DISCONNECTED -> {
-                        params.putString("state", "disconnected")
-                    }
-                    AudioManager.SCO_AUDIO_STATE_CONNECTING -> {
-                        params.putString("state", "connecting")
-                    }
-                    else -> {
-                        params.putString("state", "unknown")
-                    }
-                }
-
-                sendEvent("BluetoothScoStateChange", params)
-            }
-        }
-
-        val filter = IntentFilter(AudioManager.ACTION_SCO_AUDIO_STATE_UPDATED)
-        reactApplicationContext.registerReceiver(scoReceiver, filter)
     }
 
     private fun unregisterScoReceiver() {

@@ -7,7 +7,11 @@ import com.facebook.react.uimanager.ViewManager
 
 class BluetoothAudioPackage : ReactPackage {
     override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> {
-        return listOf(BluetoothAudioModule(reactContext))
+        return listOf(
+            BluetoothAudioModule(reactContext),
+            ImmersiveModeModule(reactContext),
+            NativeAudioRecorderModule(reactContext)
+        )
     }
 
     override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> {

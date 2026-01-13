@@ -209,7 +209,7 @@ export async function getRecentSleepSessions(hoursBack: number = 12): Promise<Sl
 }
 
 export async function getCurrentVitals(): Promise<VitalsSnapshot> {
-  const [hrSamples, hrvSamples] = await Promise.all([getRecentHeartRate(5), getRecentHRV(5)]);
+  const [hrSamples, hrvSamples] = await Promise.all([getRecentHeartRate(60), getRecentHRV(60)]);
 
   return {
     heartRate: hrSamples.length > 0 ? hrSamples[0].beatsPerMinute : null,

@@ -1,14 +1,10 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
-import { View, StyleSheet, Pressable, Platform, ScrollView } from 'react-native';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { View, StyleSheet, Platform } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
-  withRepeat,
   withTiming,
-  withSequence,
-  interpolate,
-  Extrapolation,
+  Easing,
 } from 'react-native-reanimated';
 import { Text } from '@/components/ui/Text';
 import { colors, spacing, borderRadius } from '@/theme/tokens';
@@ -28,12 +24,12 @@ interface SleepStageGraphProps {
   onStagePress?: (stage: SleepStage, timestamp: number) => void;
 }
 
-const STAGE_ORDER: SleepStage[] = ['awake', 'light', 'deep', 'rem'];
+const STAGE_ORDER: SleepStage[] = ['awake', 'light', 'rem', 'deep'];
 const STAGE_Y_POSITIONS: Record<SleepStage, number> = {
   awake: 0,
   light: 1,
-  deep: 2,
-  rem: 3,
+  rem: 2,
+  deep: 3,
   any: 2,
 };
 
@@ -43,88 +39,22 @@ const GRAPH_PADDING_BOTTOM = 20;
 const STAGE_LABELS_WIDTH = 50;
 const USABLE_HEIGHT = GRAPH_HEIGHT - GRAPH_PADDING_TOP - GRAPH_PADDING_BOTTOM;
 
+const INITIAL_DURATION_MS = 10000;
+const UPDATE_INTERVAL_MS = 250;
+const GROWTH_FACTOR = 1.05;
+const TRANSITION_COLOR = colors.gray[500];
+
 function getYForStage(stage: SleepStage): number {
   const position = STAGE_Y_POSITIONS[stage];
   return GRAPH_PADDING_TOP + (position / 3) * USABLE_HEIGHT;
 }
 
-function formatTime(timestamp: number): string {
-  const date = new Date(timestamp);
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
-
-function PulsingDot({ x, y, color }: { x: number; y: number; color: string }) {
-  const scale = useSharedValue(1);
-  const opacity = useSharedValue(1);
-
-  useEffect(() => {
-    scale.value = withRepeat(
-      withSequence(withTiming(1.5, { duration: 800 }), withTiming(1, { duration: 800 })),
-      -1,
-      false
-    );
-    opacity.value = withRepeat(
-      withSequence(withTiming(0.5, { duration: 800 }), withTiming(1, { duration: 800 })),
-      -1,
-      false
-    );
-  }, []);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-    opacity: opacity.value,
-  }));
-
-  return (
-    <Animated.View
-      style={[
-        styles.currentDot,
-        { left: x - 8, top: y - 8, backgroundColor: color },
-        animatedStyle,
-      ]}
-    />
-  );
-}
-
-function AnimatedDataPoint({
-  x,
-  y,
-  color,
-  delay,
-  onPress,
-}: {
+interface DataPoint {
   x: number;
   y: number;
-  color: string;
-  delay: number;
-  onPress?: () => void;
-}) {
-  const animatedX = useSharedValue(x + 50);
-  const animatedOpacity = useSharedValue(0);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      animatedX.value = withSpring(x, { damping: 15, stiffness: 100 });
-      animatedOpacity.value = withTiming(1, { duration: 300 });
-    }, delay);
-    return () => clearTimeout(timer);
-  }, [x, delay]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    left: animatedX.value - 4,
-    top: y - 4,
-    opacity: animatedOpacity.value,
-  }));
-
-  return (
-    <Pressable onPress={onPress}>
-      <Animated.View style={[styles.dataPoint, { backgroundColor: color }, animatedStyle]} />
-    </Pressable>
-  );
+  stage: SleepStage;
+  timestamp: number;
 }
-
-const PIXELS_PER_MINUTE = 8;
-const MIN_GRAPH_DURATION_MS = 5 * 60 * 1000;
 
 export function SleepStageGraph({
   stages,
@@ -133,144 +63,177 @@ export function SleepStageGraph({
   sessionStartTime,
   onStagePress,
 }: SleepStageGraphProps) {
-  const [selectedPoint, setSelectedPoint] = useState<StageHistoryEntry | null>(null);
   const [graphWidth, setGraphWidth] = useState(300);
-  const [currentTime, setCurrentTime] = useState(Date.now());
-  const scrollViewRef = useRef<any>(null);
-
-  useEffect(() => {
-    if (!isTracking) return;
-
-    const interval = setInterval(() => {
-      setCurrentTime(Date.now());
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [isTracking]);
+  const [dataPoints, setDataPoints] = useState<DataPoint[]>([]);
+  const [currentDuration, setCurrentDuration] = useState(INITIAL_DURATION_MS);
+  const scaleAnimation = useSharedValue(1);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const startTimeRef = useRef<number>(0);
 
   const handleLayout = useCallback((event: { nativeEvent: { layout: { width: number } } }) => {
     setGraphWidth(event.nativeEvent.layout.width - STAGE_LABELS_WIDTH - spacing.md);
   }, []);
 
-  const handlePointPress = useCallback(
-    (entry: StageHistoryEntry) => {
-      setSelectedPoint(entry);
-      onStagePress?.(entry.stage, entry.timestamp);
-      setTimeout(() => setSelectedPoint(null), 3000);
-    },
-    [onStagePress]
-  );
+  useEffect(() => {
+    if (!isTracking) {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      return;
+    }
+
+    startTimeRef.current = sessionStartTime ?? Date.now();
+    setCurrentDuration(INITIAL_DURATION_MS);
+    setDataPoints([]);
+
+    const addPoint = () => {
+      const now = Date.now();
+      const elapsed = now - startTimeRef.current;
+      const stage = currentStage ?? 'awake';
+
+      setDataPoints((prev) => {
+        const newPoints = [...prev, { x: 0, y: 0, stage, timestamp: now }];
+        return newPoints.slice(-1000);
+      });
+
+      setCurrentDuration((prevDuration) => {
+        if (elapsed >= prevDuration * 0.95) {
+          const newDuration = prevDuration * GROWTH_FACTOR;
+          scaleAnimation.value = withTiming(1, {
+            duration: 300,
+            easing: Easing.out(Easing.cubic),
+          });
+          return newDuration;
+        }
+        return prevDuration;
+      });
+    };
+
+    addPoint();
+    intervalRef.current = setInterval(addPoint, UPDATE_INTERVAL_MS);
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [isTracking, sessionStartTime, currentStage, scaleAnimation]);
+
+  const computedPoints = useMemo(() => {
+    if (dataPoints.length === 0) return [];
+
+    const startTime = startTimeRef.current || (dataPoints[0]?.timestamp ?? Date.now());
+
+    return dataPoints.map((point) => {
+      const elapsed = point.timestamp - startTime;
+      const x = (elapsed / currentDuration) * graphWidth;
+      const y = getYForStage(point.stage);
+      return { ...point, x, y };
+    });
+  }, [dataPoints, currentDuration, graphWidth]);
 
   const renderPath = useCallback(() => {
-    if (stages.length === 0 && !isTracking) return null;
+    if (computedPoints.length < 2) {
+      if (computedPoints.length === 1 && isTracking) {
+        const p = computedPoints[0];
+        return (
+          <View
+            style={[
+              styles.currentDot,
+              {
+                left: p.x - 6,
+                top: p.y - 6,
+                backgroundColor: getSleepStageColor(p.stage),
+              },
+            ]}
+          />
+        );
+      }
+      return null;
+    }
 
-    const startTime = sessionStartTime ?? stages[0]?.timestamp ?? Date.now();
-    const endTime = isTracking ? currentTime : (stages[stages.length - 1]?.timestamp ?? Date.now());
-    const elapsedMs = Math.max(endTime - startTime, MIN_GRAPH_DURATION_MS);
-    const elapsedMinutes = elapsedMs / 60000;
-    const calculatedWidth = elapsedMinutes * PIXELS_PER_MINUTE;
-    const effectiveWidth = Math.max(graphWidth, calculatedWidth);
+    const segments: React.ReactNode[] = [];
 
-    const points = stages.map((entry) => {
-      const x = ((entry.timestamp - startTime) / elapsedMs) * effectiveWidth;
-      const y = getYForStage(entry.stage);
-      return { x, y, entry };
-    });
+    for (let i = 1; i < computedPoints.length; i++) {
+      const prev = computedPoints[i - 1];
+      const curr = computedPoints[i];
 
-    const pathD =
-      points.length >= 2
-        ? points
-            .map((p, i) => {
-              if (i === 0) return `M ${p.x} ${p.y}`;
-              const prev = points[i - 1];
-              const midX = (prev.x + p.x) / 2;
-              return `C ${midX} ${prev.y}, ${midX} ${p.y}, ${p.x} ${p.y}`;
-            })
-            .join(' ')
-        : '';
+      const isTransition = prev.stage !== curr.stage;
+      const segmentColor = isTransition ? TRANSITION_COLOR : getSleepStageColor(prev.stage);
 
-    const currentX = isTracking ? effectiveWidth : (points[points.length - 1]?.x ?? 0);
+      if (Platform.OS === 'web') {
+        const midX = (prev.x + curr.x) / 2;
+        const pathD = `M ${prev.x} ${prev.y} C ${midX} ${prev.y}, ${midX} ${curr.y}, ${curr.x} ${curr.y}`;
 
-    return (
-      <ScrollView
-        ref={scrollViewRef}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ width: effectiveWidth, height: GRAPH_HEIGHT }}
-        onContentSizeChange={() => {
-          if (isTracking && scrollViewRef.current) {
-            scrollViewRef.current.scrollToEnd({ animated: true });
-          }
-        }}
-      >
-        <View style={[styles.pathContainer, { width: effectiveWidth }]}>
-          {Platform.OS === 'web' ? (
-            <svg width={effectiveWidth} height={GRAPH_HEIGHT} style={{ position: 'absolute' }}>
-              <defs>
-                <linearGradient id="lineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor={colors.primary[600]} />
-                  <stop offset="100%" stopColor={colors.primary[400]} />
-                </linearGradient>
-              </defs>
-              <path
-                d={pathD}
-                fill="none"
-                stroke="url(#lineGradient)"
-                strokeWidth="2"
-                strokeLinecap="round"
-              />
-            </svg>
-          ) : (
-            points.slice(1).map((p, i) => {
-              const prev = points[i];
-              return (
-                <View
-                  key={i}
-                  style={[
-                    styles.lineSegment,
-                    {
-                      left: prev.x,
-                      top: Math.min(prev.y, p.y),
-                      width: p.x - prev.x,
-                      height: Math.abs(p.y - prev.y) + 2,
-                      backgroundColor: colors.primary[500],
-                    },
-                  ]}
-                />
-              );
-            })
-          )}
+        segments.push(
+          <path
+            key={`seg-${i}`}
+            d={pathD}
+            fill="none"
+            stroke={segmentColor}
+            strokeWidth="2.5"
+            strokeLinecap="round"
+          />
+        );
+      } else {
+        const dx = curr.x - prev.x;
+        const dy = curr.y - prev.y;
+        const length = Math.sqrt(dx * dx + dy * dy);
+        const angle = Math.atan2(dy, dx) * (180 / Math.PI);
 
-          {points.map((p, i) => (
-            <AnimatedDataPoint
-              key={`${p.entry.timestamp}-${i}`}
-              x={p.x}
-              y={p.y}
-              color={getSleepStageColor(p.entry.stage)}
-              delay={i * 50}
-              onPress={() => handlePointPress(p.entry)}
-            />
-          ))}
+        segments.push(
+          <View
+            key={`seg-${i}`}
+            style={[
+              styles.lineSegment,
+              {
+                left: prev.x,
+                top: prev.y - 1.25,
+                width: length,
+                height: 2.5,
+                backgroundColor: segmentColor,
+                transform: [{ rotate: `${angle}deg` }],
+                transformOrigin: 'left center',
+              },
+            ]}
+          />
+        );
+      }
+    }
 
-          {isTracking && currentStage && (
-            <PulsingDot
-              x={currentX}
-              y={getYForStage(currentStage)}
-              color={getSleepStageColor(currentStage)}
-            />
-          )}
-        </View>
-      </ScrollView>
-    );
-  }, [
-    stages,
-    graphWidth,
-    isTracking,
-    currentStage,
-    currentTime,
-    sessionStartTime,
-    handlePointPress,
-  ]);
+    if (isTracking && computedPoints.length > 0) {
+      const last = computedPoints[computedPoints.length - 1];
+      segments.push(
+        <View
+          key="current-dot"
+          style={[
+            styles.currentDot,
+            {
+              left: last.x - 6,
+              top: last.y - 6,
+              backgroundColor: getSleepStageColor(last.stage),
+            },
+          ]}
+        />
+      );
+    }
+
+    if (Platform.OS === 'web') {
+      return (
+        <svg
+          width={graphWidth}
+          height={GRAPH_HEIGHT}
+          style={{ position: 'absolute', left: 0, top: 0 }}
+        >
+          {segments}
+        </svg>
+      );
+    }
+
+    return <>{segments}</>;
+  }, [computedPoints, graphWidth, isTracking]);
 
   const renderGridLines = useCallback(() => {
     return STAGE_ORDER.map((stage) => {
@@ -294,6 +257,10 @@ export function SleepStageGraph({
     });
   }, []);
 
+  const scaleStyle = useAnimatedStyle(() => ({
+    transform: [{ scaleX: scaleAnimation.value }],
+  }));
+
   if (!isTracking && stages.length === 0) {
     return (
       <View style={styles.emptyContainer}>
@@ -309,17 +276,7 @@ export function SleepStageGraph({
       <View style={styles.labelsContainer}>{renderStageLabels()}</View>
       <View style={styles.graphArea}>
         {renderGridLines()}
-        {renderPath()}
-        {selectedPoint && (
-          <View style={styles.tooltip}>
-            <Text variant="caption" color="primary">
-              {getSleepStageColor(selectedPoint.stage) === '#22C55E' ? 'REM' : selectedPoint.stage}
-            </Text>
-            <Text variant="caption" color="muted">
-              {formatTime(selectedPoint.timestamp)}
-            </Text>
-          </View>
-        )}
+        <Animated.View style={[styles.pathContainer, scaleStyle]}>{renderPath()}</Animated.View>
       </View>
     </View>
   );
@@ -382,31 +339,14 @@ const styles = StyleSheet.create({
   },
   lineSegment: {
     position: 'absolute',
-    opacity: 0.6,
-  },
-  dataPoint: {
-    position: 'absolute',
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 1.25,
   },
   currentDot: {
     position: 'absolute',
-    width: 16,
-    height: 16,
-    borderRadius: 8,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
     borderWidth: 2,
     borderColor: '#ffffff',
-  },
-  tooltip: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    backgroundColor: colors.gray[800],
-    padding: spacing.xs,
-    borderRadius: borderRadius.md,
-    gap: 2,
   },
 });

@@ -16,6 +16,7 @@ import {
   onRawAudioLevel,
   getSleepStageDisplayName,
   getSleepStageColor,
+  getAGCStatus,
   type BreathingAnalysis,
 } from '@/services/sleep';
 import {
@@ -42,6 +43,7 @@ export function MicrophoneTest({ onComplete, onSkip }: MicrophoneTestProps) {
   const [micConfirmedWorking, setMicConfirmedWorking] = useState(false);
   const [audioSource, setAudioSource] = useState<AudioSource>('phone');
   const [bluetoothDeviceName, setBluetoothDeviceName] = useState<string | null>(null);
+  const [agcGain, setAgcGain] = useState(1.0);
 
   const { vitals, status: hcStatus, refreshVitals, platform } = useHealth();
   const isNativeMobile = platform === 'ios' || platform === 'android';
@@ -125,6 +127,9 @@ export function MicrophoneTest({ onComplete, onSkip }: MicrophoneTestProps) {
         const normalized = Math.min(rms * 10, 1);
         setAudioLevel(normalized);
         levelHeight.value = withSpring(4 + normalized * 80, { damping: 15, stiffness: 150 });
+
+        const agcStatus = getAGCStatus();
+        setAgcGain(agcStatus.currentGain);
       });
 
       unsubscribeBreathingRef.current = onBreathingAnalysis((analysis) => {
@@ -285,6 +290,14 @@ export function MicrophoneTest({ onComplete, onSkip }: MicrophoneTestProps) {
                   </Text>
                   <Text variant="caption" color="primary">
                     {Math.round(confidence * 100)}%
+                  </Text>
+                </View>
+                <View style={styles.statRow}>
+                  <Text variant="caption" color="secondary">
+                    AGC Gain
+                  </Text>
+                  <Text variant="caption" color={agcGain > 2 ? 'primary' : 'muted'}>
+                    {agcGain.toFixed(1)}x
                   </Text>
                 </View>
                 {isNativeMobile && hcStatus?.permissionsGranted && vitals && (

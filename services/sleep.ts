@@ -6,9 +6,11 @@ import { storage } from '@/lib/storage';
 import {
   addVitalsSample,
   analyzeVitals,
+  analyzeVitalsWithLearning,
   getCurrentVitalsStage,
   resetVitalsWindow,
 } from './vitalsClassifier';
+import { refreshModelIfNeeded } from './sleepStageLearning';
 import { getCurrentVitals, getHealthConnectStatus, type VitalsSnapshot } from './healthConnect';
 import {
   startNativeAudioCapture,
@@ -94,7 +96,16 @@ let remEndCallbacks: Set<() => void> = new Set();
 let adaptiveRmsThreshold = BASE_RMS_THRESHOLD;
 let calibrationRmsValues: number[] = [];
 let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
-const HEARTBEAT_INTERVAL_MS = 30000; // Add graph point every 30 seconds
+const HEARTBEAT_INTERVAL_MS = 30000;
+
+const AGC_WINDOW_MS = 60000;
+const AGC_TARGET_RMS = 0.15;
+const AGC_MIN_GAIN = 0.5;
+const AGC_MAX_GAIN = 10.0;
+const AGC_SMOOTHING = 0.95;
+let agcHistory: { rms: number; timestamp: number }[] = [];
+let currentGain = 1.0;
+let agcEnabled = true;
 
 function generateId(): string {
   return `sleep_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -106,6 +117,8 @@ export async function startSleepSession(
   if (currentSession?.isActive) {
     return currentSession;
   }
+
+  refreshModelIfNeeded().catch(console.error);
 
   const session: SleepSession = {
     id: generateId(),
@@ -404,6 +417,8 @@ function stopAudioDetection(): void {
   stageHistory = [];
   calibrationRmsValues = [];
   adaptiveRmsThreshold = BASE_RMS_THRESHOLD;
+  agcHistory = [];
+  currentGain = 1.0;
 }
 
 function startHeartbeat(): void {
@@ -458,8 +473,71 @@ function recalibrateThreshold(): void {
   calibrationRmsValues = calibrationRmsValues.slice(-100);
 }
 
-function processRmsValue(rms: number): void {
+function applyAGC(rawRms: number): number {
+  if (!agcEnabled) return rawRms;
+
   const now = Date.now();
+
+  agcHistory.push({ rms: rawRms, timestamp: now });
+  agcHistory = agcHistory.filter((entry) => now - entry.timestamp < AGC_WINDOW_MS);
+
+  if (agcHistory.length < 10) {
+    return rawRms;
+  }
+
+  const recentValues = agcHistory.map((h) => h.rms).filter((v) => v > 0.001);
+  if (recentValues.length === 0) {
+    return rawRms;
+  }
+
+  const sorted = [...recentValues].sort((a, b) => a - b);
+  const p25Idx = Math.floor(sorted.length * 0.25);
+  const p75Idx = Math.floor(sorted.length * 0.75);
+  const p25 = sorted[p25Idx];
+  const p75 = sorted[p75Idx];
+
+  const iqr = p75 - p25;
+  const filtered = recentValues.filter((v) => v >= p25 - iqr * 1.5 && v <= p75 + iqr * 1.5);
+
+  if (filtered.length === 0) {
+    return rawRms;
+  }
+
+  const avgRms = filtered.reduce((a, b) => a + b, 0) / filtered.length;
+
+  if (avgRms < 0.001) {
+    return rawRms;
+  }
+
+  const targetGain = AGC_TARGET_RMS / avgRms;
+  const clampedGain = Math.max(AGC_MIN_GAIN, Math.min(AGC_MAX_GAIN, targetGain));
+
+  currentGain = currentGain * AGC_SMOOTHING + clampedGain * (1 - AGC_SMOOTHING);
+
+  const adjustedRms = rawRms * currentGain;
+  return Math.min(1.0, adjustedRms);
+}
+
+export function setAGCEnabled(enabled: boolean): void {
+  agcEnabled = enabled;
+  if (!enabled) {
+    currentGain = 1.0;
+    agcHistory = [];
+  }
+}
+
+export function getAGCStatus(): { enabled: boolean; currentGain: number; historySize: number } {
+  return {
+    enabled: agcEnabled,
+    currentGain,
+    historySize: agcHistory.length,
+  };
+}
+
+function processRmsValue(rawRms: number): void {
+  const now = Date.now();
+
+  const rms = applyAGC(rawRms);
 
   notifyRawAudioLevel(rms);
 
@@ -757,13 +835,13 @@ export function isVitalsPollingActive(): boolean {
   return vitalsPollingInterval !== null;
 }
 
-export function processVitalsUpdate(vitals: VitalsSnapshot): void {
+export async function processVitalsUpdate(vitals: VitalsSnapshot): Promise<void> {
   if (!useVitalsForDetection) return;
 
   addVitalsSample(vitals);
 
   if (currentSession?.isActive) {
-    const vitalsAnalysis = analyzeVitals();
+    const vitalsAnalysis = await analyzeVitalsWithLearning();
 
     if (vitalsAnalysis.confidence > 0.5) {
       const fusedStage = fuseDetectionSources(vitalsAnalysis.estimatedStage);

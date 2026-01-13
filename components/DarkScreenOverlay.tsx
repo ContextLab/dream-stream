@@ -7,6 +7,12 @@ import Animated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { Text } from '@/components/ui/Text';
+import {
+  enableImmersiveMode,
+  disableImmersiveMode,
+  preventScreenSaver,
+  setScreenBrightness,
+} from '@/services/immersiveMode';
 
 interface DarkScreenOverlayProps {
   visible: boolean;
@@ -82,17 +88,34 @@ export function DarkScreenOverlay({ visible, onDismiss }: DarkScreenOverlayProps
 
   useEffect(() => {
     if (visible) {
-      // Remember fullscreen state before we entered dark mode
       wasFullscreenBefore.current = isCurrentlyFullscreen();
-      requestFullscreen();
+
+      if (Platform.OS === 'web') {
+        requestFullscreen();
+      } else {
+        enableImmersiveMode();
+        preventScreenSaver(true);
+        setScreenBrightness(0.01);
+      }
+    } else {
+      if (Platform.OS !== 'web') {
+        disableImmersiveMode();
+        preventScreenSaver(false);
+        setScreenBrightness(-1);
+      }
     }
     opacity.value = withTiming(visible ? 1 : 0, { duration: 300 });
   }, [visible]);
 
   const handleDismiss = useCallback(() => {
-    // Only exit fullscreen if we weren't in fullscreen before dark mode
-    if (!wasFullscreenBefore.current) {
-      exitFullscreen();
+    if (Platform.OS === 'web') {
+      if (!wasFullscreenBefore.current) {
+        exitFullscreen();
+      }
+    } else {
+      disableImmersiveMode();
+      preventScreenSaver(false);
+      setScreenBrightness(-1);
     }
     onDismiss();
   }, [onDismiss]);

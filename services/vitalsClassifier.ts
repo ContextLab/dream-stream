@@ -1,5 +1,11 @@
 import type { SleepStage } from '@/types/database';
 import type { HeartRateSample, HRVSample, VitalsSnapshot } from './healthConnect';
+import {
+  loadModel,
+  isModelValid,
+  classifyWithModel,
+  refreshModelIfNeeded,
+} from './sleepStageLearning';
 
 interface VitalsWindow {
   heartRates: number[];
@@ -37,6 +43,8 @@ let vitalsWindow: VitalsWindow = {
 
 let lastClassifiedStage: SleepStage = 'awake';
 let stageConfidenceHistory: number[] = [];
+let useLearnedModel = true;
+let modelCheckDone = false;
 
 export function addVitalsSample(vitals: VitalsSnapshot): void {
   const { heartRate, hrv, timestamp } = vitals;
@@ -125,6 +133,48 @@ export function analyzeVitals(): VitalsAnalysis {
     estimatedStage: stage,
     confidence,
   };
+}
+
+export async function analyzeVitalsWithLearning(): Promise<VitalsAnalysis> {
+  const basicAnalysis = analyzeVitals();
+
+  if (!useLearnedModel) {
+    return basicAnalysis;
+  }
+
+  if (!modelCheckDone) {
+    modelCheckDone = true;
+    refreshModelIfNeeded().catch(console.error);
+  }
+
+  try {
+    const model = await loadModel();
+    if (!isModelValid(model)) {
+      return basicAnalysis;
+    }
+
+    const { stage: learnedStage, confidence: learnedConfidence } = classifyWithModel(
+      model,
+      basicAnalysis.avgHeartRate,
+      basicAnalysis.heartRateVariability > 0 ? basicAnalysis.heartRateVariability : null
+    );
+
+    if (learnedConfidence > basicAnalysis.confidence) {
+      return {
+        ...basicAnalysis,
+        estimatedStage: learnedStage,
+        confidence: learnedConfidence,
+      };
+    }
+  } catch (error) {
+    console.error('Failed to use learned model:', error);
+  }
+
+  return basicAnalysis;
+}
+
+export function setUseLearnedModel(enabled: boolean): void {
+  useLearnedModel = enabled;
 }
 
 function calculateTrend(values: number[]): 'increasing' | 'decreasing' | 'stable' {
