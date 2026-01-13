@@ -17,8 +17,15 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.dreamstream.app",
       "infoPlist": {
-        "NSHealthShareUsageDescription": "Dream Stream uses sleep data to optimize dream launching during sleep.",
-        "NSHealthUpdateUsageDescription": "Dream Stream records dream launch events to your health data."
+        "NSHealthShareUsageDescription": "Dream Stream uses sleep and heart rate data from your Apple Watch to detect REM sleep and play dream audio at optimal moments.",
+        "NSHealthUpdateUsageDescription": "Dream Stream records dream session events to your health data.",
+        "NSMicrophoneUsageDescription": "Dream Stream uses the microphone for audio-based sleep detection when wearable data is unavailable.",
+        "UIBackgroundModes": ["audio", "processing"]
+      },
+      "entitlements": {
+        "com.apple.developer.healthkit": true,
+        "com.apple.developer.healthkit.background-delivery": true,
+        "com.apple.developer.healthkit.access": []
       }
     },
     "android": {
@@ -60,6 +67,14 @@
         "react-native-health-connect",
         {
           "requestPermissionsRationale": "Dream Stream uses Health Connect to read sleep data from your wearable device for optimal lucid dream induction timing."
+        }
+      ],
+      [
+        "@kingstinct/react-native-healthkit",
+        {
+          "NSHealthShareUsageDescription": "Dream Stream uses sleep and heart rate data from your Apple Watch to detect REM sleep and play dream audio at optimal moments.",
+          "NSHealthUpdateUsageDescription": "Dream Stream records dream session events to your health data.",
+          "background": true
         }
       ]
     ],

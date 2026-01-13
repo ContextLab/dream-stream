@@ -23,7 +23,7 @@ import {
   checkBluetoothAvailability,
   type AudioSource,
 } from '@/services/nativeAudio';
-import { useHealthConnect } from '@/hooks/useHealthConnect';
+import { useHealth } from '@/hooks/useHealth';
 import { colors, spacing, borderRadius } from '@/theme/tokens';
 
 interface MicrophoneTestProps {
@@ -43,7 +43,8 @@ export function MicrophoneTest({ onComplete, onSkip }: MicrophoneTestProps) {
   const [audioSource, setAudioSource] = useState<AudioSource>('phone');
   const [bluetoothDeviceName, setBluetoothDeviceName] = useState<string | null>(null);
 
-  const { vitals, status: hcStatus, refreshVitals, isAndroid } = useHealthConnect();
+  const { vitals, status: hcStatus, refreshVitals, platform } = useHealth();
+  const isNativeMobile = platform === 'ios' || platform === 'android';
 
   const unsubscribeBreathingRef = useRef<(() => void) | null>(null);
   const unsubscribeAudioRef = useRef<(() => void) | null>(null);
@@ -60,13 +61,13 @@ export function MicrophoneTest({ onComplete, onSkip }: MicrophoneTestProps) {
   }, []);
 
   useEffect(() => {
-    if (status === 'testing' && isAndroid && hcStatus?.permissionsGranted) {
+    if (status === 'testing' && isNativeMobile && hcStatus?.permissionsGranted) {
       const interval = setInterval(() => {
         refreshVitals();
       }, 10000);
       return () => clearInterval(interval);
     }
-  }, [status, isAndroid, hcStatus?.permissionsGranted, refreshVitals]);
+  }, [status, isNativeMobile, hcStatus?.permissionsGranted, refreshVitals]);
 
   const cleanup = useCallback(() => {
     if (unsubscribeBreathingRef.current) {
@@ -286,7 +287,7 @@ export function MicrophoneTest({ onComplete, onSkip }: MicrophoneTestProps) {
                     {Math.round(confidence * 100)}%
                   </Text>
                 </View>
-                {isAndroid && hcStatus?.permissionsGranted && vitals && (
+                {isNativeMobile && hcStatus?.permissionsGranted && vitals && (
                   <>
                     {vitals.heartRate !== null && (
                       <View style={styles.statRow}>

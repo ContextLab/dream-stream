@@ -15,7 +15,7 @@ import { Text, Heading } from '@/components/ui/Text';
 import { SleepDebugPanel } from '@/components/SleepDebugPanel';
 import { VolumeSetup } from '@/components/VolumeSetup';
 import { MicrophoneTest } from '@/components/MicrophoneTest';
-import { useHealthConnect } from '@/hooks/useHealthConnect';
+import { useHealth } from '@/hooks/useHealth';
 import { colors, spacing } from '@/theme/tokens';
 
 export default function SettingsScreen() {
@@ -24,7 +24,7 @@ export default function SettingsScreen() {
   const [showMicTest, setShowMicTest] = useState(false);
   const [showWearable, setShowWearable] = useState(false);
 
-  const healthConnect = useHealthConnect();
+  const health = useHealth();
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -57,36 +57,31 @@ export default function SettingsScreen() {
           </Link>
         </View>
 
-        {Platform.OS === 'android' && (
+        {(Platform.OS === 'android' || Platform.OS === 'ios') && (
           <View style={styles.wearableSection}>
             <MenuRow
               icon="watch-outline"
-              label="Wearables & Health Connect"
+              label={Platform.OS === 'ios' ? 'Wearables & HealthKit' : 'Wearables & Health Connect'}
               onPress={() => setShowWearable(!showWearable)}
-              badge={healthConnect.status?.permissionsGranted ? 'Connected' : undefined}
+              badge={health.status?.permissionsGranted ? 'Connected' : undefined}
             />
             {showWearable && (
               <View style={styles.expandedSection}>
-                {!healthConnect.isAndroid ? (
+                {health.platform === 'other' ? (
                   <Text variant="caption" color="muted" style={styles.platformNote}>
-                    Health Connect is only available on Android devices.
+                    Health integration is only available on iOS and Android devices.
                   </Text>
                 ) : (
                   <>
                     <View style={styles.statusRow}>
                       <Text variant="caption" color="muted">
-                        SDK Status:
+                        Status:
                       </Text>
                       <Text
                         variant="caption"
-                        color={
-                          healthConnect.status?.sdkStatus === 'available' ? 'success' : 'muted'
-                        }
+                        color={health.status?.available ? 'success' : 'muted'}
                       >
-                        {healthConnect.status?.sdkStatus
-                          ? healthConnect.status.sdkStatus.charAt(0).toUpperCase() +
-                            healthConnect.status.sdkStatus.slice(1)
-                          : 'Checking...'}
+                        {health.status?.available ? 'Available' : 'Not Available'}
                       </Text>
                     </View>
                     <View style={styles.statusRow}>
@@ -95,48 +90,45 @@ export default function SettingsScreen() {
                       </Text>
                       <Text
                         variant="caption"
-                        color={healthConnect.status?.permissionsGranted ? 'success' : 'muted'}
+                        color={health.status?.permissionsGranted ? 'success' : 'muted'}
                       >
-                        {healthConnect.status?.permissionsGranted ? 'Granted' : 'Not granted'}
+                        {health.status?.permissionsGranted ? 'Granted' : 'Not granted'}
                       </Text>
                     </View>
 
-                    {healthConnect.error && (
+                    {health.error && (
                       <Text variant="caption" color="error" style={styles.errorText}>
-                        {healthConnect.error}
+                        {health.error}
                       </Text>
                     )}
 
-                    {healthConnect.status?.permissionsGranted && (
+                    {health.status?.permissionsGranted && (
                       <View style={styles.vitalsContainer}>
                         <View style={styles.vitalItem}>
                           <Ionicons name="heart" size={16} color={colors.primary[500]} />
                           <Text variant="caption" color="primary">
-                            {healthConnect.vitals?.heartRate ?? '--'} bpm
+                            {health.vitals?.heartRate ?? '--'} bpm
                           </Text>
                         </View>
                         <View style={styles.vitalItem}>
                           <Ionicons name="pulse" size={16} color={colors.accent.cyan} />
                           <Text variant="caption" color="primary">
-                            {healthConnect.vitals?.hrv?.toFixed(0) ?? '--'} ms HRV
+                            {health.vitals?.hrv?.toFixed(0) ?? '--'} ms HRV
                           </Text>
                         </View>
-                        <Pressable
-                          style={styles.refreshButton}
-                          onPress={healthConnect.refreshVitals}
-                        >
+                        <Pressable style={styles.refreshButton} onPress={health.refreshVitals}>
                           <Ionicons name="refresh" size={14} color={colors.gray[400]} />
                         </Pressable>
                       </View>
                     )}
 
-                    {!healthConnect.status?.permissionsGranted && (
+                    {!health.status?.permissionsGranted && (
                       <Pressable
                         style={styles.actionButton}
-                        onPress={healthConnect.requestPermissions}
-                        disabled={healthConnect.isLoading}
+                        onPress={health.requestPermissions}
+                        disabled={health.isLoading}
                       >
-                        {healthConnect.isLoading ? (
+                        {health.isLoading ? (
                           <ActivityIndicator size="small" color={colors.gray[400]} />
                         ) : (
                           <Ionicons name="key-outline" size={18} color={colors.gray[300]} />
@@ -149,10 +141,10 @@ export default function SettingsScreen() {
 
                     <Pressable
                       style={styles.actionButton}
-                      onPress={healthConnect.testConnection}
-                      disabled={healthConnect.isTestRunning}
+                      onPress={health.testConnection}
+                      disabled={health.isTestRunning}
                     >
-                      {healthConnect.isTestRunning ? (
+                      {health.isTestRunning ? (
                         <ActivityIndicator size="small" color={colors.gray[400]} />
                       ) : (
                         <Ionicons
@@ -166,9 +158,9 @@ export default function SettingsScreen() {
                       </Text>
                     </Pressable>
 
-                    {healthConnect.testResult && (
+                    {health.testResult && (
                       <View style={styles.testResults}>
-                        {healthConnect.testResult.steps.map((step, idx) => (
+                        {health.testResult.steps.map((step, idx) => (
                           <View key={idx} style={styles.testStep}>
                             <Ionicons
                               name={step.passed ? 'checkmark-circle' : 'close-circle'}
@@ -199,10 +191,12 @@ export default function SettingsScreen() {
                       </View>
                     )}
 
-                    <Pressable style={styles.actionButton} onPress={healthConnect.openSettings}>
+                    <Pressable style={styles.actionButton} onPress={health.openSettings}>
                       <Ionicons name="settings-outline" size={18} color={colors.gray[300]} />
                       <Text variant="caption" color="primary" style={styles.actionButtonText}>
-                        Open Health Connect Settings
+                        {Platform.OS === 'ios'
+                          ? 'Open Health Settings'
+                          : 'Open Health Connect Settings'}
                       </Text>
                     </Pressable>
 
@@ -210,7 +204,7 @@ export default function SettingsScreen() {
                       <Text variant="caption" color="muted" style={styles.deviceListTitle}>
                         Supported Devices:
                       </Text>
-                      {healthConnect.supportedDevices.slice(0, 3).map((device, idx) => (
+                      {health.supportedDevices.slice(0, 3).map((device, idx) => (
                         <Text key={idx} variant="caption" color="muted" style={styles.deviceItem}>
                           • {device.name}
                         </Text>
