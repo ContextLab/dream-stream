@@ -277,3 +277,5 @@ public/audio/*/*/*.mp3
 public/audio/*/*.mp3
 
 credentials.json
+notes/screenshots/*.png
+hardcoded_findings.txt
