@@ -8,7 +8,7 @@ import { Text, Heading } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
 import { useThemedAlert } from '@/components/ui/ThemedAlert';
 import { VolumeSetup } from '@/components/VolumeSetup';
-import { MicrophoneTest } from '@/components/MicrophoneTest';
+import { SensorCalibration } from '@/components/SensorCalibration';
 import { SleepStageGraph } from '@/components/SleepStageGraph';
 import { SleepHistoryCard } from '@/components/SleepHistoryCard';
 import { SleepSessionDetailModal } from '@/components/SleepSessionDetailModal';
@@ -22,8 +22,12 @@ import {
   onRemStart,
   onRemEnd,
   onStageHistoryChange,
+  onSleepStageChange,
+  startCalibrationTest,
+  stopCalibrationTest,
   type StageHistoryEntry,
 } from '@/services/sleep';
+import type { SleepStage } from '@/types/database';
 import { storage } from '@/lib/storage';
 import { fadeOut, configureSleepAudioSession } from '@/services/volume';
 import { colors, spacing, borderRadius } from '@/theme/tokens';
@@ -37,7 +41,7 @@ export default function DreamScreen() {
   const { queue, getNext, complete } = useLaunchQueue();
 
   const [showVolumeSetup, setShowVolumeSetup] = useState(false);
-  const [showMicTest, setShowMicTest] = useState(false);
+  const [showSensorCalibration, setShowSensorCalibration] = useState(false);
   const [selectedSession, setSelectedSession] = useState<SleepSession | null>(null);
   const [showSleepSummary, setShowSleepSummary] = useState(false);
   const [sleepSummaryData, setSleepSummaryData] = useState<{
@@ -62,7 +66,9 @@ export default function DreamScreen() {
   const remUnsubscribeRef = useRef<(() => void) | null>(null);
   const remEndUnsubscribeRef = useRef<(() => void) | null>(null);
   const stageHistoryUnsubscribeRef = useRef<(() => void) | null>(null);
+  const meditationSleepUnsubscribeRef = useRef<(() => void) | null>(null);
   const currentQueueIdRef = useRef<string | null>(null);
+  const isMeditationFadingRef = useRef(false);
 
   useEffect(() => {
     return () => {
@@ -106,7 +112,52 @@ export default function DreamScreen() {
       } catch {}
       meditationSoundRef.current = null;
     }
+    if (meditationSleepUnsubscribeRef.current) {
+      meditationSleepUnsubscribeRef.current();
+      meditationSleepUnsubscribeRef.current = null;
+    }
+    stopCalibrationTest();
   };
+
+  const handleSleepDetectedDuringMeditation = useCallback(
+    async (stage: SleepStage) => {
+      if (stage === 'awake' || !meditationSoundRef.current || isMeditationFadingRef.current) {
+        return;
+      }
+
+      console.log('[Dream] Sleep detected during meditation:', stage);
+      isMeditationFadingRef.current = true;
+
+      try {
+        const status = await meditationSoundRef.current.getStatusAsync();
+        if (!status.isLoaded) return;
+
+        const currentVolume = status.volume ?? 1.0;
+        await fadeOut(meditationSoundRef.current, currentVolume, 10000);
+
+        await meditationSoundRef.current.stopAsync();
+        await meditationSoundRef.current.unloadAsync();
+        meditationSoundRef.current = null;
+
+        if (meditationSleepUnsubscribeRef.current) {
+          meditationSleepUnsubscribeRef.current();
+          meditationSleepUnsubscribeRef.current = null;
+        }
+        stopCalibrationTest();
+
+        setIsMeditating(false);
+        setIsMeditationPaused(false);
+        setMeditationProgress(0);
+
+        await start('audio');
+      } catch (err) {
+        console.warn('Failed to handle sleep transition:', err);
+      } finally {
+        isMeditationFadingRef.current = false;
+      }
+    },
+    [start]
+  );
 
   const handleRemStart = async () => {
     console.log('[Dream] REM detected - starting playback');
@@ -218,6 +269,11 @@ export default function DreamScreen() {
       try {
         await configureSleepAudioSession();
 
+        await startCalibrationTest();
+        meditationSleepUnsubscribeRef.current = onSleepStageChange(
+          handleSleepDetectedDuringMeditation
+        );
+
         const { sound, status } = await Audio.Sound.createAsync(
           { uri: getMeditationUrl() },
           {
@@ -236,6 +292,11 @@ export default function DreamScreen() {
             }
 
             if (playbackStatus.didJustFinish) {
+              if (meditationSleepUnsubscribeRef.current) {
+                meditationSleepUnsubscribeRef.current();
+                meditationSleepUnsubscribeRef.current = null;
+              }
+              stopCalibrationTest();
               setIsMeditating(false);
               setIsMeditationPaused(false);
               setMeditationProgress(0);
@@ -252,15 +313,25 @@ export default function DreamScreen() {
         setIsMeditationPaused(false);
       } catch (err) {
         console.warn('Failed to play meditation:', err);
+        if (meditationSleepUnsubscribeRef.current) {
+          meditationSleepUnsubscribeRef.current();
+          meditationSleepUnsubscribeRef.current = null;
+        }
+        stopCalibrationTest();
         start('audio').catch(() => {
           showAlert('Error', 'Failed to start sleep tracking.');
         });
       }
     },
-    [start]
+    [start, handleSleepDetectedDuringMeditation]
   );
 
   const skipMeditation = useCallback(async () => {
+    if (meditationSleepUnsubscribeRef.current) {
+      meditationSleepUnsubscribeRef.current();
+      meditationSleepUnsubscribeRef.current = null;
+    }
+    stopCalibrationTest();
     if (meditationSoundRef.current) {
       try {
         await meditationSoundRef.current.stopAsync();
@@ -311,6 +382,11 @@ export default function DreamScreen() {
   }, [playMeditation]);
 
   const stopMeditation = useCallback(async () => {
+    if (meditationSleepUnsubscribeRef.current) {
+      meditationSleepUnsubscribeRef.current();
+      meditationSleepUnsubscribeRef.current = null;
+    }
+    stopCalibrationTest();
     if (meditationSoundRef.current) {
       try {
         await meditationSoundRef.current.stopAsync();
@@ -325,11 +401,11 @@ export default function DreamScreen() {
 
   const handleVolumeComplete = useCallback(() => {
     setShowVolumeSetup(false);
-    setShowMicTest(true);
+    setShowSensorCalibration(true);
   }, []);
 
-  const handleMicTestComplete = useCallback(async () => {
-    setShowMicTest(false);
+  const handleCalibrationComplete = useCallback(async () => {
+    setShowSensorCalibration(false);
 
     if (helpMeFallAsleep) {
       await playMeditation();
@@ -339,14 +415,14 @@ export default function DreamScreen() {
       } catch {
         showAlert(
           'Error',
-          'Failed to start sleep tracking. Please ensure microphone access is enabled.'
+          'Failed to start sleep tracking. Please ensure sensor access is enabled.'
         );
       }
     }
   }, [start, helpMeFallAsleep, playMeditation]);
 
-  const handleMicTestSkip = useCallback(async () => {
-    setShowMicTest(false);
+  const handleCalibrationSkip = useCallback(async () => {
+    setShowSensorCalibration(false);
 
     if (helpMeFallAsleep) {
       await playMeditation();
@@ -356,7 +432,7 @@ export default function DreamScreen() {
       } catch {
         showAlert(
           'Error',
-          'Failed to start sleep tracking. Please ensure microphone access is enabled.'
+          'Failed to start sleep tracking. Please ensure sensor access is enabled.'
         );
       }
     }
@@ -733,25 +809,28 @@ export default function DreamScreen() {
             onComplete={handleVolumeComplete}
             onSkip={() => {
               setShowVolumeSetup(false);
-              setShowMicTest(true);
+              setShowSensorCalibration(true);
             }}
           />
         </SafeAreaView>
       </Modal>
 
       <Modal
-        visible={showMicTest}
+        visible={showSensorCalibration}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setShowMicTest(false)}
+        onRequestClose={() => setShowSensorCalibration(false)}
       >
         <SafeAreaView style={styles.modalContainer} edges={['top', 'bottom']}>
           <View style={styles.modalHeader}>
-            <Pressable onPress={() => setShowMicTest(false)} style={styles.closeButton}>
+            <Pressable onPress={() => setShowSensorCalibration(false)} style={styles.closeButton}>
               <Ionicons name="close" size={24} color={colors.gray[400]} />
             </Pressable>
           </View>
-          <MicrophoneTest onComplete={handleMicTestComplete} onSkip={handleMicTestSkip} />
+          <SensorCalibration
+            onComplete={handleCalibrationComplete}
+            onSkip={handleCalibrationSkip}
+          />
         </SafeAreaView>
       </Modal>
     </SafeAreaView>

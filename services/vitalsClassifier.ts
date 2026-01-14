@@ -4,18 +4,20 @@ import {
   loadModel,
   isModelValid,
   classifyWithModel,
-  refreshModelIfNeeded,
+  learnFromRecentNights,
 } from './sleepStageLearning';
 
 interface VitalsWindow {
   heartRates: number[];
   hrvValues: number[];
+  respiratoryRates: number[];
   timestamps: Date[];
 }
 
 interface VitalsAnalysis {
   avgHeartRate: number;
   heartRateVariability: number;
+  avgRespiratoryRate: number;
   hrvTrend: 'increasing' | 'decreasing' | 'stable';
   hrTrend: 'increasing' | 'decreasing' | 'stable';
   estimatedStage: SleepStage;
@@ -38,6 +40,7 @@ const MIN_SAMPLES_FOR_CLASSIFICATION = 3;
 let vitalsWindow: VitalsWindow = {
   heartRates: [],
   hrvValues: [],
+  respiratoryRates: [],
   timestamps: [],
 };
 
@@ -47,13 +50,16 @@ let useLearnedModel = true;
 let modelCheckDone = false;
 
 export function addVitalsSample(vitals: VitalsSnapshot): void {
-  const { heartRate, hrv, timestamp } = vitals;
+  const { heartRate, hrv, respiratoryRate, timestamp } = vitals;
 
   if (heartRate !== null) {
     vitalsWindow.heartRates.push(heartRate);
   }
   if (hrv !== null) {
     vitalsWindow.hrvValues.push(hrv);
+  }
+  if (respiratoryRate !== null) {
+    vitalsWindow.respiratoryRates.push(respiratoryRate);
   }
   vitalsWindow.timestamps.push(timestamp);
 
@@ -87,17 +93,22 @@ function pruneOldSamples(): void {
     if (vitalsWindow.hrvValues.length > vitalsWindow.timestamps.length) {
       vitalsWindow.hrvValues.shift();
     }
+    if (vitalsWindow.respiratoryRates.length > vitalsWindow.timestamps.length) {
+      vitalsWindow.respiratoryRates.shift();
+    }
   }
 }
 
 export function analyzeVitals(): VitalsAnalysis {
   const hrs = vitalsWindow.heartRates;
   const hrvs = vitalsWindow.hrvValues;
+  const rrs = vitalsWindow.respiratoryRates;
 
   if (hrs.length < MIN_SAMPLES_FOR_CLASSIFICATION) {
     return {
       avgHeartRate: hrs.length > 0 ? hrs[hrs.length - 1] : 0,
       heartRateVariability: hrvs.length > 0 ? hrvs[hrvs.length - 1] : 0,
+      avgRespiratoryRate: rrs.length > 0 ? rrs[rrs.length - 1] : 0,
       hrvTrend: 'stable',
       hrTrend: 'stable',
       estimatedStage: lastClassifiedStage,
@@ -107,6 +118,7 @@ export function analyzeVitals(): VitalsAnalysis {
 
   const avgHeartRate = hrs.reduce((a, b) => a + b, 0) / hrs.length;
   const avgHRV = hrvs.length > 0 ? hrvs.reduce((a, b) => a + b, 0) / hrvs.length : 0;
+  const avgRR = rrs.length > 0 ? rrs.reduce((a, b) => a + b, 0) / rrs.length : 0;
 
   const hrTrend = calculateTrend(hrs);
   const hrvTrend = calculateTrend(hrvs);
@@ -128,6 +140,7 @@ export function analyzeVitals(): VitalsAnalysis {
   return {
     avgHeartRate,
     heartRateVariability: avgHRV,
+    avgRespiratoryRate: avgRR,
     hrvTrend,
     hrTrend,
     estimatedStage: stage,
@@ -144,7 +157,7 @@ export async function analyzeVitalsWithLearning(): Promise<VitalsAnalysis> {
 
   if (!modelCheckDone) {
     modelCheckDone = true;
-    refreshModelIfNeeded().catch(console.error);
+    learnFromRecentNights(48).catch(console.error);
   }
 
   try {
@@ -156,7 +169,8 @@ export async function analyzeVitalsWithLearning(): Promise<VitalsAnalysis> {
     const { stage: learnedStage, confidence: learnedConfidence } = classifyWithModel(
       model,
       basicAnalysis.avgHeartRate,
-      basicAnalysis.heartRateVariability > 0 ? basicAnalysis.heartRateVariability : null
+      basicAnalysis.heartRateVariability > 0 ? basicAnalysis.heartRateVariability : null,
+      basicAnalysis.avgRespiratoryRate > 0 ? basicAnalysis.avgRespiratoryRate : null
     );
 
     if (learnedConfidence > basicAnalysis.confidence) {
@@ -264,6 +278,7 @@ export function resetVitalsWindow(): void {
   vitalsWindow = {
     heartRates: [],
     hrvValues: [],
+    respiratoryRates: [],
     timestamps: [],
   };
   lastClassifiedStage = 'awake';

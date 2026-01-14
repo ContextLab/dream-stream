@@ -31,6 +31,7 @@ export interface HealthStatus {
 export interface VitalsSnapshot {
   heartRate: number | null;
   hrv: number | null;
+  respiratoryRate: number | null;
   timestamp: Date;
 }
 

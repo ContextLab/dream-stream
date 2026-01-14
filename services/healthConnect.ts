@@ -38,7 +38,13 @@ export interface HealthConnectStatus {
 export interface VitalsSnapshot {
   heartRate: number | null;
   hrv: number | null;
+  respiratoryRate: number | null;
   timestamp: Date;
+}
+
+export interface RespiratoryRateSample {
+  rate: number;
+  time: string;
 }
 
 interface PermissionRecord {
@@ -294,7 +300,9 @@ type HealthRecordType =
   | 'Steps'
   | 'ActiveCaloriesBurned';
 
-export async function getAvailableRecordCounts(): Promise<Record<string, number>> {
+export async function getAvailableRecordCounts(
+  hoursBack: number = 48
+): Promise<Record<string, number>> {
   if (Platform.OS !== 'android' || !healthConnect) {
     return {};
   }
@@ -312,19 +320,30 @@ export async function getAvailableRecordCounts(): Promise<Record<string, number>
 
   const counts: Record<string, number> = {};
   const endTime = new Date().toISOString();
-  const startTime = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+  const startTime = new Date(Date.now() - hoursBack * 60 * 60 * 1000).toISOString();
 
   for (const recordType of recordTypes) {
     try {
-      const result = await healthConnect.readRecords(recordType, {
-        timeRangeFilter: {
-          operator: 'between',
-          startTime,
-          endTime,
-        },
-        pageSize: 1,
-      });
-      counts[recordType] = result.records?.length > 0 ? 1 : 0;
+      let totalCount = 0;
+      let pageToken: string | undefined;
+
+      do {
+        const result = await healthConnect.readRecords(recordType, {
+          timeRangeFilter: {
+            operator: 'between',
+            startTime,
+            endTime,
+          },
+          pageSize: 1000,
+          pageToken,
+        });
+
+        totalCount += result.records?.length ?? 0;
+
+        pageToken = result.pageToken;
+      } while (pageToken);
+
+      counts[recordType] = totalCount;
     } catch {
       counts[recordType] = -1;
     }
@@ -374,12 +393,62 @@ export async function getRecentSleepSessions(hoursBack: number = 12): Promise<Sl
   }
 }
 
+export async function getRecentRespiratoryRate(
+  minutesBack: number = 30
+): Promise<RespiratoryRateSample[]> {
+  if (Platform.OS !== 'android' || !healthConnect) {
+    return [];
+  }
+
+  try {
+    const endTime = new Date().toISOString();
+    const startTime = new Date(Date.now() - minutesBack * 60 * 1000).toISOString();
+
+    const allSamples: RespiratoryRateSample[] = [];
+    let pageToken: string | undefined;
+
+    do {
+      const result = await healthConnect.readRecords('RespiratoryRate', {
+        timeRangeFilter: {
+          operator: 'between',
+          startTime,
+          endTime,
+        },
+        ascendingOrder: false,
+        pageSize: 1000,
+        pageToken,
+      });
+
+      for (const record of result.records) {
+        allSamples.push({
+          rate: record.rate,
+          time: record.time,
+        });
+      }
+
+      pageToken = result.pageToken;
+    } while (pageToken);
+
+    allSamples.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+
+    return allSamples;
+  } catch (error) {
+    console.error('Failed to read respiratory rate:', error);
+    return [];
+  }
+}
+
 export async function getCurrentVitals(): Promise<VitalsSnapshot> {
-  const [hrSamples, hrvSamples] = await Promise.all([getRecentHeartRate(60), getRecentHRV(60)]);
+  const [hrSamples, hrvSamples, rrSamples] = await Promise.all([
+    getRecentHeartRate(60),
+    getRecentHRV(60),
+    getRecentRespiratoryRate(60),
+  ]);
 
   return {
     heartRate: hrSamples.length > 0 ? hrSamples[0].beatsPerMinute : null,
     hrv: hrvSamples.length > 0 ? hrvSamples[0].heartRateVariabilityMillis : null,
+    respiratoryRate: rrSamples.length > 0 ? rrSamples[0].rate : null,
     timestamp: new Date(),
   };
 }
@@ -511,6 +580,108 @@ export async function runConnectionTest(): Promise<{
     success: steps.every((s) => s.passed),
     steps,
   };
+}
+
+export interface HealthConnectDebugReport {
+  status: HealthConnectStatus;
+  permissions: PermissionRecord[];
+  recordCounts: Record<string, number>;
+  sampleData: {
+    heartRate: HeartRateSample[];
+    hrv: HRVSample[];
+    respiratoryRate: RespiratoryRateSample[];
+    sleepStages: SleepStageSample[];
+  };
+  timestamp: Date;
+}
+
+export async function runHealthConnectDebugReport(
+  hoursBack: number = 24
+): Promise<HealthConnectDebugReport> {
+  const status = await getHealthConnectStatus();
+  const permissions = await checkGrantedPermissions();
+  const recordCounts = await getAvailableRecordCounts(hoursBack);
+
+  const [hrSamples, hrvSamples, rrSamples, sleepStages] = await Promise.all([
+    getRecentHeartRate(hoursBack * 60),
+    getRecentHRV(hoursBack * 60),
+    getRecentRespiratoryRate(hoursBack * 60),
+    getRecentSleepSessions(hoursBack),
+  ]);
+
+  return {
+    status,
+    permissions,
+    recordCounts,
+    sampleData: {
+      heartRate: hrSamples.slice(0, 10),
+      hrv: hrvSamples.slice(0, 10),
+      respiratoryRate: rrSamples.slice(0, 10),
+      sleepStages: sleepStages.slice(0, 10),
+    },
+    timestamp: new Date(),
+  };
+}
+
+export function formatHealthConnectDebugReport(report: HealthConnectDebugReport): string {
+  const lines: string[] = [];
+
+  lines.push('=== HEALTH CONNECT DEBUG REPORT ===');
+  lines.push(`Generated: ${report.timestamp.toLocaleString()}`);
+  lines.push('');
+
+  lines.push('--- STATUS ---');
+  lines.push(`Available: ${report.status.available}`);
+  lines.push(`Initialized: ${report.status.initialized}`);
+  lines.push(`Permissions Granted: ${report.status.permissionsGranted}`);
+  lines.push(`SDK Status: ${report.status.sdkStatus}`);
+  lines.push('');
+
+  lines.push('--- PERMISSIONS ---');
+  if (report.permissions.length === 0) {
+    lines.push('No permissions granted');
+  } else {
+    for (const perm of report.permissions) {
+      lines.push(`  ${perm.recordType}: ${perm.accessType}`);
+    }
+  }
+  lines.push('');
+
+  lines.push('--- RECORD COUNTS (last 24h) ---');
+  for (const [type, count] of Object.entries(report.recordCounts)) {
+    const status = count === -1 ? 'ERROR' : count === 0 ? 'NONE' : `${count}`;
+    lines.push(`  ${type}: ${status}`);
+  }
+  lines.push('');
+
+  lines.push('--- SAMPLE DATA ---');
+
+  lines.push(`Heart Rate (${report.sampleData.heartRate.length} samples):`);
+  for (const sample of report.sampleData.heartRate.slice(0, 5)) {
+    const time = new Date(sample.time).toLocaleTimeString();
+    lines.push(`  ${time}: ${sample.beatsPerMinute} bpm`);
+  }
+
+  lines.push(`HRV (${report.sampleData.hrv.length} samples):`);
+  for (const sample of report.sampleData.hrv.slice(0, 5)) {
+    const time = new Date(sample.time).toLocaleTimeString();
+    lines.push(`  ${time}: ${sample.heartRateVariabilityMillis.toFixed(1)} ms`);
+  }
+
+  lines.push(`Respiratory Rate (${report.sampleData.respiratoryRate.length} samples):`);
+  for (const sample of report.sampleData.respiratoryRate.slice(0, 5)) {
+    const time = new Date(sample.time).toLocaleTimeString();
+    lines.push(`  ${time}: ${sample.rate.toFixed(1)} bpm`);
+  }
+
+  lines.push(`Sleep Stages (${report.sampleData.sleepStages.length} samples):`);
+  for (const sample of report.sampleData.sleepStages.slice(0, 5)) {
+    const start = new Date(sample.startTime).toLocaleTimeString();
+    const end = new Date(sample.endTime).toLocaleTimeString();
+    lines.push(`  ${start}-${end}: ${sample.stage}`);
+  }
+
+  return lines.join('\n');
 }
 
 export const SUPPORTED_DEVICES = [

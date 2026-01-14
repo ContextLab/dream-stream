@@ -27,6 +27,7 @@ export interface HealthKitStatus {
 export interface VitalsSnapshot {
   heartRate: number | null;
   hrv: number | null;
+  respiratoryRate: number | null;
   timestamp: Date;
 }
 
@@ -214,6 +215,7 @@ export async function getCurrentVitals(): Promise<VitalsSnapshot> {
   return {
     heartRate: hrSamples.length > 0 ? hrSamples[0].beatsPerMinute : null,
     hrv: hrvSamples.length > 0 ? hrvSamples[0].heartRateVariabilityMillis : null,
+    respiratoryRate: null,
     timestamp: new Date(),
   };
 }

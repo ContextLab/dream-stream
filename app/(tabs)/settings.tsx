@@ -24,6 +24,10 @@ import {
   clearModel,
   type DebugReport,
 } from '@/services/sleepStageLearning';
+import {
+  runHealthConnectDebugReport,
+  formatHealthConnectDebugReport,
+} from '@/services/healthConnect';
 
 export default function SettingsScreen() {
   const [showSleepDebug, setShowSleepDebug] = useState(false);
@@ -33,6 +37,9 @@ export default function SettingsScreen() {
   const [showModelDebug, setShowModelDebug] = useState(false);
   const [modelDebugReport, setModelDebugReport] = useState<string | null>(null);
   const [isLoadingModelDebug, setIsLoadingModelDebug] = useState(false);
+  const [showHCDebug, setShowHCDebug] = useState(false);
+  const [hcDebugReport, setHcDebugReport] = useState<string | null>(null);
+  const [isLoadingHCDebug, setIsLoadingHCDebug] = useState(false);
 
   const health = useHealth();
 
@@ -63,6 +70,19 @@ export default function SettingsScreen() {
   const handleClearModel = async () => {
     await clearModel();
     setModelDebugReport('Model cleared. Tap "Run Debug Report" to see current state.');
+  };
+
+  const handleRunHCDebug = async () => {
+    setIsLoadingHCDebug(true);
+    setHcDebugReport(null);
+    try {
+      const report = await runHealthConnectDebugReport(24);
+      setHcDebugReport(formatHealthConnectDebugReport(report));
+    } catch (error) {
+      setHcDebugReport(`Error: ${error}`);
+    } finally {
+      setIsLoadingHCDebug(false);
+    }
   };
 
   useEffect(() => {
@@ -155,12 +175,6 @@ export default function SettingsScreen() {
                           <Ionicons name="heart" size={16} color={colors.primary[500]} />
                           <Text variant="caption" color="primary">
                             {health.vitals?.heartRate ?? '--'} bpm
-                          </Text>
-                        </View>
-                        <View style={styles.vitalItem}>
-                          <Ionicons name="pulse" size={16} color={colors.accent.cyan} />
-                          <Text variant="caption" color="primary">
-                            {health.vitals?.hrv?.toFixed(0) ?? '--'} ms HRV
                           </Text>
                         </View>
                         <View style={styles.pollingIndicator}>
@@ -331,6 +345,55 @@ export default function SettingsScreen() {
                 </ScrollView>
               )}
             </View>
+          )}
+
+          {(Platform.OS === 'android' || Platform.OS === 'ios') && (
+            <>
+              <MenuRow
+                icon="medkit-outline"
+                label="Health Connect Data Debug"
+                onPress={() => setShowHCDebug(!showHCDebug)}
+              />
+              {showHCDebug && (
+                <View style={styles.expandedSection}>
+                  <View style={styles.debugButtonRow}>
+                    <Pressable
+                      style={styles.debugButton}
+                      onPress={handleRunHCDebug}
+                      disabled={isLoadingHCDebug}
+                    >
+                      {isLoadingHCDebug ? (
+                        <ActivityIndicator size="small" color={colors.primary[500]} />
+                      ) : (
+                        <Ionicons name="play" size={16} color={colors.primary[500]} />
+                      )}
+                      <Text variant="caption" color="primary">
+                        Run Debug Report
+                      </Text>
+                    </Pressable>
+                  </View>
+                  <Text variant="caption" color="muted" style={{ marginBottom: spacing.sm }}>
+                    Shows all Health Connect data available from your wearable (last 24h)
+                  </Text>
+                  {hcDebugReport && (
+                    <ScrollView
+                      style={styles.debugOutput}
+                      horizontal={false}
+                      nestedScrollEnabled={true}
+                    >
+                      <Text
+                        variant="caption"
+                        color="muted"
+                        style={styles.debugOutputText}
+                        selectable={true}
+                      >
+                        {hcDebugReport}
+                      </Text>
+                    </ScrollView>
+                  )}
+                </View>
+              )}
+            </>
           )}
         </View>
 

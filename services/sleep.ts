@@ -3,15 +3,15 @@ import Meyda from 'meyda';
 import type { MeydaFeaturesObject } from 'meyda';
 import type { SleepStage } from '@/types/database';
 import { storage } from '@/lib/storage';
-import {
-  addVitalsSample,
-  analyzeVitals,
-  analyzeVitalsWithLearning,
-  getCurrentVitalsStage,
-  resetVitalsWindow,
-} from './vitalsClassifier';
-import { refreshModelIfNeeded } from './sleepStageLearning';
+import { addVitalsSample, resetVitalsWindow } from './vitalsClassifier';
+import { learnFromRecentNights } from './sleepStageLearning';
 import { getCurrentVitals, getHealthConnectStatus, type VitalsSnapshot } from './healthConnect';
+import {
+  classifyHybrid,
+  startHybridSession,
+  stopHybridSession,
+  type HybridClassification,
+} from './hybridClassifier';
 import {
   startNativeAudioCapture,
   stopNativeAudioCapture,
@@ -56,6 +56,8 @@ export interface BreathingAnalysis {
   movementIntensity: number;
   confidenceScore: number;
   estimatedStage: SleepStage;
+  recentBreathTimes: number[];
+  lastBreathTime: number | null;
 }
 
 interface MeydaAnalyzerInstance {
@@ -84,7 +86,7 @@ const MOVEMENT_SPIKE_THRESHOLD = 3.0;
 const HR_MOVEMENT_DELTA_THRESHOLD = 8;
 const HR_MOVEMENT_WINDOW_SEC = 30;
 
-const BANDPASS_LOW_FREQ = 150;
+const BANDPASS_LOW_FREQ = 100;
 const BANDPASS_HIGH_FREQ = 800;
 const BANDPASS_Q = 0.7;
 
@@ -119,6 +121,7 @@ let agcInputMin = 0;
 let agcInputMax = 1;
 let agcLastUpdateTime = 0;
 let agcEnabled = true;
+let lastBreathingAnalysis: BreathingAnalysis | null = null;
 
 function generateId(): string {
   return `sleep_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -131,7 +134,8 @@ export async function startSleepSession(
     return currentSession;
   }
 
-  refreshModelIfNeeded().catch(console.error);
+  learnFromRecentNights(48).catch(console.error);
+  startHybridSession();
 
   const session: SleepSession = {
     id: generateId(),
@@ -170,6 +174,7 @@ export async function endSleepSession(): Promise<SleepSession | null> {
 
   stopHeartbeat();
   stopAudioDetection();
+  stopHybridSession();
 
   const endTime = new Date().toISOString();
 
@@ -607,16 +612,12 @@ function processRmsValue(rawRms: number): void {
 
   if (rmsHistory.length > 20) {
     const analysis = analyzeBreathing();
+    lastBreathingAnalysis = analysis;
 
     notifyBreathingAnalysis(analysis);
 
     if (!calibrationMode && currentSession && currentSession.currentStage) {
-      const stage = inferSleepStage(analysis);
-      if (stage !== currentSession.currentStage) {
-        const previousStage = currentSession.currentStage;
-        updateSleepStage(stage);
-        handleStageTransition(previousStage, stage);
-      }
+      updateStageFromAudio(analysis);
     }
   }
 }
@@ -723,6 +724,10 @@ export function getMovementIndicators(): {
 }
 
 function analyzeBreathing(): BreathingAnalysis {
+  const now = Date.now();
+  const recentBreaths = peakTimestamps.filter((t) => now - t < 30000);
+  const lastBreath = recentBreaths.length > 0 ? recentBreaths[recentBreaths.length - 1] : null;
+
   if (peakTimestamps.length < 3) {
     return {
       isBreathingDetected: false,
@@ -733,6 +738,8 @@ function analyzeBreathing(): BreathingAnalysis {
       movementIntensity: 0,
       confidenceScore: 0,
       estimatedStage: 'awake',
+      recentBreathTimes: recentBreaths,
+      lastBreathTime: lastBreath,
     };
   }
 
@@ -767,7 +774,7 @@ function analyzeBreathing(): BreathingAnalysis {
     ? Math.min(1, (peakTimestamps.length / 10) * regularity)
     : 0;
 
-  const partialAnalysis = {
+  const result: BreathingAnalysis = {
     isBreathingDetected,
     breathsPerMinute: isBreathingDetected ? breathsPerMinute : 0,
     regularity,
@@ -775,12 +782,14 @@ function analyzeBreathing(): BreathingAnalysis {
     respiratoryRateVariability: rrv,
     movementIntensity,
     confidenceScore,
-    estimatedStage: 'awake' as SleepStage,
+    estimatedStage: 'awake',
+    recentBreathTimes: recentBreaths,
+    lastBreathTime: lastBreath,
   };
 
-  partialAnalysis.estimatedStage = inferSleepStage(partialAnalysis);
+  result.estimatedStage = inferSleepStage(result);
 
-  return partialAnalysis;
+  return result;
 }
 
 function inferSleepStage(analysis: BreathingAnalysis): SleepStage {
@@ -832,6 +841,19 @@ function handleStageTransition(previousStage: SleepStage, newStage: SleepStage):
 
   if (previousStage === 'rem' && newStage !== 'rem') {
     remEndCallbacks.forEach((cb) => cb());
+  }
+}
+
+async function updateStageFromAudio(analysis: BreathingAnalysis): Promise<void> {
+  if (!currentSession?.isActive) return;
+
+  const vitals = await getCurrentVitals();
+  const hybrid = await classifyHybrid(analysis, vitals);
+
+  if (hybrid.predictedStage !== currentSession.currentStage) {
+    const previousStage = currentSession.currentStage;
+    updateSleepStage(hybrid.predictedStage);
+    handleStageTransition(previousStage, hybrid.predictedStage);
   }
 }
 
@@ -960,47 +982,16 @@ export async function processVitalsUpdate(vitals: VitalsSnapshot): Promise<void>
   }
 
   if (currentSession?.isActive) {
-    const vitalsAnalysis = await analyzeVitalsWithLearning();
+    const hybrid = await classifyHybrid(lastBreathingAnalysis, vitals);
 
-    if (vitalsAnalysis.confidence > 0.5) {
-      const fusedStage = fuseDetectionSources(vitalsAnalysis.estimatedStage);
-      if (fusedStage !== currentSession.currentStage) {
+    if (hybrid.overallConfidence > 0.3) {
+      if (hybrid.predictedStage !== currentSession.currentStage) {
         const previousStage = currentSession.currentStage;
-        updateSleepStage(fusedStage);
-        handleStageTransition(previousStage, fusedStage);
+        updateSleepStage(hybrid.predictedStage);
+        handleStageTransition(previousStage, hybrid.predictedStage);
       }
     }
   }
-}
-
-function fuseDetectionSources(vitalsStage: SleepStage): SleepStage {
-  if (!isAudioRunning) {
-    return vitalsStage;
-  }
-
-  const audioStage = currentSession?.currentStage ?? 'awake';
-
-  if (vitalsStage === audioStage) {
-    return vitalsStage;
-  }
-
-  if (vitalsStage === 'rem' || audioStage === 'rem') {
-    return 'rem';
-  }
-
-  if (vitalsStage === 'deep' && audioStage !== 'awake') {
-    return 'deep';
-  }
-
-  if (audioStage === 'deep' && vitalsStage !== 'awake') {
-    return 'deep';
-  }
-
-  if (vitalsStage === 'awake' || audioStage === 'awake') {
-    return 'awake';
-  }
-
-  return vitalsStage;
 }
 
 export function getDetectionMode(): 'audio' | 'vitals' | 'fused' | 'none' {

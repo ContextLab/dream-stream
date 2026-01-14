@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet, Platform, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
   useSharedValue,
@@ -26,40 +26,45 @@ import {
   checkBluetoothAvailability,
   type AudioSource,
 } from '@/services/nativeAudio';
+import { useHealth } from '@/hooks/useHealth';
 import { colors, spacing, borderRadius } from '@/theme/tokens';
 
-interface MicrophoneTestProps {
+interface SensorCalibrationProps {
   onComplete: () => void;
   onSkip?: () => void;
 }
 
-type TestStatus = 'idle' | 'requesting' | 'testing' | 'success' | 'error';
+type CalibrationStatus = 'idle' | 'requesting' | 'calibrating' | 'ready' | 'error';
 
 const SIGNAL_THRESHOLD = 0.02;
 
-export function MicrophoneTest({ onComplete, onSkip }: MicrophoneTestProps) {
-  const [status, setStatus] = useState<TestStatus>('idle');
+export function SensorCalibration({ onComplete, onSkip }: SensorCalibrationProps) {
+  const [status, setStatus] = useState<CalibrationStatus>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [audioLevel, setAudioLevel] = useState(0);
   const [breathingData, setBreathingData] = useState<BreathingAnalysis | null>(null);
-  const [testDuration, setTestDuration] = useState(0);
-  const [micConfirmedWorking, setMicConfirmedWorking] = useState(false);
+  const [micDetected, setMicDetected] = useState(false);
+  const [hrDetected, setHrDetected] = useState(false);
   const [audioSource, setAudioSource] = useState<AudioSource>('phone');
   const [bluetoothDeviceName, setBluetoothDeviceName] = useState<string | null>(null);
   const [agcGain, setAgcGain] = useState(1.0);
-  const [lastBreathTime, setLastBreathTime] = useState<number | null>(null);
   const [breathCount, setBreathCount] = useState(0);
+  const [lastBreathTime, setLastBreathTime] = useState<number | null>(null);
   const [timeSinceBreath, setTimeSinceBreath] = useState<number | null>(null);
+
+  const { vitals, status: hcStatus, refreshVitals, platform, requestPermissions } = useHealth();
+  const isNativeMobile = platform === 'ios' || platform === 'android';
 
   const unsubscribeBreathingRef = useRef<(() => void) | null>(null);
   const unsubscribeAudioRef = useRef<(() => void) | null>(null);
-  const testStartTimeRef = useRef<number>(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const levelHeight = useSharedValue(4);
   const stageScale = useSharedValue(1);
   const breathPulseScale = useSharedValue(1);
   const breathPulseOpacity = useSharedValue(0.3);
+
+  const sensorReady = micDetected || hrDetected;
 
   useEffect(() => {
     return () => {
@@ -68,7 +73,34 @@ export function MicrophoneTest({ onComplete, onSkip }: MicrophoneTestProps) {
   }, []);
 
   useEffect(() => {
-    if (status !== 'testing' || lastBreathTime === null) {
+    if (status === 'calibrating' && isNativeMobile && hcStatus?.permissionsGranted) {
+      refreshVitals();
+      const interval = setInterval(() => {
+        refreshVitals();
+      }, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [status, isNativeMobile, hcStatus?.permissionsGranted, refreshVitals]);
+
+  useEffect(() => {
+    if (vitals?.heartRate !== null && vitals?.heartRate !== undefined && vitals.heartRate > 0) {
+      if (!hrDetected) {
+        setHrDetected(true);
+        stageScale.value = withTiming(1.08, { duration: 300 }, () => {
+          stageScale.value = withTiming(1, { duration: 300 });
+        });
+      }
+    }
+  }, [vitals?.heartRate, hrDetected, stageScale]);
+
+  useEffect(() => {
+    if (sensorReady && status === 'calibrating') {
+      setStatus('ready');
+    }
+  }, [sensorReady, status]);
+
+  useEffect(() => {
+    if (status !== 'calibrating' || lastBreathTime === null) {
       setTimeSinceBreath(null);
       return;
     }
@@ -97,12 +129,12 @@ export function MicrophoneTest({ onComplete, onSkip }: MicrophoneTestProps) {
     stopCalibrationTest();
   }, []);
 
-  const startTest = useCallback(async () => {
+  const startCalibration = useCallback(async () => {
     setStatus('requesting');
     setErrorMessage(null);
     setBreathingData(null);
-    setTestDuration(0);
-    setMicConfirmedWorking(false);
+    setMicDetected(false);
+    setHrDetected(false);
 
     try {
       const success = await startCalibrationTest();
@@ -113,14 +145,13 @@ export function MicrophoneTest({ onComplete, onSkip }: MicrophoneTestProps) {
           setErrorMessage('Could not access microphone. Please check your browser settings.');
         } else {
           setErrorMessage(
-            'Microphone access not available. Please ensure the app has microphone permission in your device settings.'
+            'Microphone access not available. Please ensure the app has microphone permission.'
           );
         }
         return;
       }
 
-      setStatus('testing');
-      testStartTimeRef.current = Date.now();
+      setStatus('calibrating');
 
       if (Platform.OS !== 'web') {
         setAudioSource(getCurrentAudioSource());
@@ -130,10 +161,6 @@ export function MicrophoneTest({ onComplete, onSkip }: MicrophoneTestProps) {
         }
       }
 
-      timerRef.current = setInterval(() => {
-        setTestDuration(Math.floor((Date.now() - testStartTimeRef.current) / 1000));
-      }, 1000);
-
       unsubscribeAudioRef.current = onRawAudioLevel((rms) => {
         const normalized = Math.min(rms * 10, 1);
         setAudioLevel(normalized);
@@ -142,8 +169,8 @@ export function MicrophoneTest({ onComplete, onSkip }: MicrophoneTestProps) {
         const agcStatus = getAGCStatus();
         setAgcGain(agcStatus.currentGain);
 
-        if (!micConfirmedWorking && normalized > SIGNAL_THRESHOLD) {
-          setMicConfirmedWorking(true);
+        if (!micDetected && normalized > SIGNAL_THRESHOLD) {
+          setMicDetected(true);
           stageScale.value = withTiming(1.08, { duration: 300 }, () => {
             stageScale.value = withTiming(1, { duration: 300 });
           });
@@ -171,30 +198,22 @@ export function MicrophoneTest({ onComplete, onSkip }: MicrophoneTestProps) {
         }
       });
     } catch (err) {
-      console.warn('Microphone access error:', err);
+      console.warn('Sensor calibration error:', err);
       setStatus('error');
 
       if (err instanceof DOMException) {
         if (err.name === 'NotAllowedError') {
-          setErrorMessage(
-            'Microphone access denied. Please allow microphone access in your device settings.'
-          );
+          setErrorMessage('Microphone access denied. Please allow access in device settings.');
         } else if (err.name === 'NotFoundError') {
           setErrorMessage('No microphone found. Please connect a microphone and try again.');
         } else {
           setErrorMessage('Could not access microphone. Please check your device settings.');
         }
       } else {
-        if (Platform.OS === 'web') {
-          setErrorMessage('An unexpected error occurred. Please try again.');
-        } else {
-          setErrorMessage(
-            'Microphone feature requires native audio permissions. Please check app permissions in device settings.'
-          );
-        }
+        setErrorMessage('An unexpected error occurred. Please try again.');
       }
     }
-  }, [levelHeight, stageScale, micConfirmedWorking, breathPulseScale, breathPulseOpacity]);
+  }, [levelHeight, stageScale, micDetected, breathPulseScale, breathPulseOpacity]);
 
   const handleComplete = useCallback(() => {
     cleanup();
@@ -222,18 +241,22 @@ export function MicrophoneTest({ onComplete, onSkip }: MicrophoneTestProps) {
   const estimatedStage = breathingData?.estimatedStage ?? 'awake';
   const regularity = breathingData?.regularity ?? 0;
   const confidence = breathingData?.confidenceScore ?? 0;
-  const stageColor = getSleepStageColor(estimatedStage);
-  const stageName = getSleepStageDisplayName(estimatedStage);
+  const stageColor = getSleepStageColor(sensorReady ? estimatedStage : 'awake');
+  const stageName = sensorReady ? getSleepStageDisplayName(estimatedStage) : 'Awake';
+
+  const isCalibrating = status === 'calibrating' || status === 'ready';
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Ionicons name="mic" size={48} color={colors.primary[400]} />
+        <Ionicons name="pulse" size={48} color={colors.primary[400]} />
         <Text variant="h3" weight="bold" color="primary" style={styles.title}>
-          Microphone Test
+          Sensor Calibration
         </Text>
         <Text variant="body" color="secondary" align="center" style={styles.description}>
-          Testing your microphone to ensure it can detect audio for sleep tracking.
+          {isNativeMobile
+            ? 'Calibrating microphone and heart rate sensors for sleep tracking.'
+            : 'Calibrating microphone for sleep tracking.'}
         </Text>
       </View>
 
@@ -242,12 +265,13 @@ export function MicrophoneTest({ onComplete, onSkip }: MicrophoneTestProps) {
           <>
             <View style={styles.instructions}>
               <Text variant="bodySmall" color="muted" align="center">
-                This test verifies your microphone is working. Make some noise or speak to confirm
-                audio detection.
+                {isNativeMobile
+                  ? 'Place your device nearby and ensure your wearable is connected. The calibration will detect your breathing and heart rate.'
+                  : 'Place your device nearby. The calibration will detect ambient audio to prepare for sleep tracking.'}
               </Text>
             </View>
-            <Button variant="primary" onPress={startTest} style={styles.testButton}>
-              Start Test
+            <Button variant="primary" onPress={startCalibration} style={styles.testButton}>
+              Start Calibration
             </Button>
           </>
         )}
@@ -256,7 +280,7 @@ export function MicrophoneTest({ onComplete, onSkip }: MicrophoneTestProps) {
           <>
             <Ionicons name="hourglass-outline" size={64} color={colors.gray[400]} />
             <Text variant="body" color="secondary" align="center">
-              Requesting microphone access...
+              Requesting sensor access...
             </Text>
             <Text variant="caption" color="muted" align="center">
               Please allow access when prompted
@@ -264,7 +288,7 @@ export function MicrophoneTest({ onComplete, onSkip }: MicrophoneTestProps) {
           </>
         )}
 
-        {status === 'testing' && (
+        {isCalibrating && (
           <>
             <View style={styles.visualizationRow}>
               <View style={styles.levelSection}>
@@ -285,25 +309,25 @@ export function MicrophoneTest({ onComplete, onSkip }: MicrophoneTestProps) {
                   <View
                     style={[
                       styles.stageInner,
-                      { borderColor: micConfirmedWorking ? stageColor : colors.gray[700] },
+                      { borderColor: sensorReady ? stageColor : colors.gray[700] },
                     ]}
                   >
                     <Text
                       variant="body"
                       weight="bold"
                       style={{
-                        color: micConfirmedWorking ? stageColor : colors.gray[500],
+                        color: sensorReady ? stageColor : colors.gray[500],
                       }}
                     >
-                      {micConfirmedWorking ? stageName : 'Listening...'}
+                      {sensorReady ? stageName : 'Calibrating...'}
                     </Text>
-                    {micConfirmedWorking && breathingData?.breathsPerMinute ? (
+                    {sensorReady && breathingData?.breathsPerMinute ? (
                       <Text variant="caption" style={{ color: colors.info }}>
                         {Math.round(breathingData.breathsPerMinute)} BPM
                       </Text>
                     ) : (
-                      <Text variant="caption" color={micConfirmedWorking ? 'secondary' : 'muted'}>
-                        {micConfirmedWorking ? 'Est. Stage' : 'Make a sound'}
+                      <Text variant="caption" color={sensorReady ? 'secondary' : 'muted'}>
+                        {sensorReady ? 'Sleep Stage' : 'Waiting...'}
                       </Text>
                     )}
                   </View>
@@ -355,20 +379,48 @@ export function MicrophoneTest({ onComplete, onSkip }: MicrophoneTestProps) {
                     </Text>
                   </View>
                 )}
+                {isNativeMobile &&
+                  vitals?.heartRate !== null &&
+                  vitals?.heartRate !== undefined && (
+                    <View style={styles.statRow}>
+                      <Text variant="caption" color="secondary">
+                        HR
+                      </Text>
+                      <Text variant="caption" style={{ color: colors.error }}>
+                        {vitals.heartRate} bpm
+                      </Text>
+                    </View>
+                  )}
               </View>
             </View>
 
             <View style={styles.statusContainer}>
               <View style={styles.statusIndicator}>
                 <Ionicons
-                  name={micConfirmedWorking ? 'checkmark-circle' : 'mic-outline'}
+                  name={micDetected ? 'checkmark-circle' : 'mic-outline'}
                   size={18}
-                  color={micConfirmedWorking ? colors.success : colors.gray[400]}
+                  color={micDetected ? colors.success : colors.gray[400]}
                 />
-                <Text variant="caption" color={micConfirmedWorking ? 'primary' : 'muted'}>
-                  {micConfirmedWorking ? 'Microphone detected' : 'Waiting for signal...'}
+                <Text variant="caption" color={micDetected ? 'primary' : 'muted'}>
+                  {micDetected ? 'Mic ready' : 'Mic...'}
                 </Text>
               </View>
+              {isNativeMobile && (
+                <View style={styles.statusIndicator}>
+                  <Ionicons
+                    name={hrDetected ? 'checkmark-circle' : 'heart-outline'}
+                    size={18}
+                    color={hrDetected ? colors.success : colors.gray[400]}
+                  />
+                  <Text variant="caption" color={hrDetected ? 'primary' : 'muted'}>
+                    {hrDetected
+                      ? `HR: ${vitals?.heartRate ?? '--'}`
+                      : hcStatus?.permissionsGranted
+                        ? 'HR...'
+                        : 'No permission'}
+                  </Text>
+                </View>
+              )}
             </View>
 
             {Platform.OS !== 'web' && (
@@ -386,22 +438,31 @@ export function MicrophoneTest({ onComplete, onSkip }: MicrophoneTestProps) {
               </View>
             )}
 
+            {isNativeMobile && !hcStatus?.permissionsGranted && (
+              <Pressable style={styles.permissionButton} onPress={requestPermissions}>
+                <Ionicons name="key-outline" size={16} color={colors.primary[400]} />
+                <Text variant="caption" color="primary">
+                  Grant Health Permissions
+                </Text>
+              </Pressable>
+            )}
+
             <Text variant="caption" color="muted" align="center" style={styles.hint}>
-              {!micConfirmedWorking && audioLevel < 0.01
-                ? 'No audio detected. Check your microphone is not muted.'
-                : !micConfirmedWorking
-                  ? 'Speak or make a sound near your device.'
-                  : 'Microphone working! You can continue or keep testing.'}
+              {!sensorReady
+                ? isNativeMobile
+                  ? 'Waiting for microphone or heart rate signal...'
+                  : 'Waiting for microphone signal...'
+                : 'Sensors ready! You can start sleep tracking.'}
             </Text>
 
             <View style={styles.buttonRow}>
-              {micConfirmedWorking && (
+              {sensorReady && (
                 <Button variant="primary" onPress={handleComplete}>
-                  Continue
+                  Start Sleep Tracking
                 </Button>
               )}
               <Button variant="outline" onPress={handleSkip}>
-                {micConfirmedWorking ? 'Skip' : 'Skip Test'}
+                {sensorReady ? 'Cancel' : 'Skip Calibration'}
               </Button>
             </View>
           </>
@@ -413,7 +474,7 @@ export function MicrophoneTest({ onComplete, onSkip }: MicrophoneTestProps) {
               <Ionicons name="alert" size={48} color={colors.error} />
             </View>
             <Text variant="h4" weight="semibold" color="primary" align="center">
-              Microphone Issue
+              Calibration Failed
             </Text>
             {errorMessage && (
               <Text variant="body" color="secondary" align="center" style={styles.errorMessage}>
@@ -421,7 +482,7 @@ export function MicrophoneTest({ onComplete, onSkip }: MicrophoneTestProps) {
               </Text>
             )}
             <View style={styles.buttonRow}>
-              <Button variant="primary" onPress={startTest}>
+              <Button variant="primary" onPress={startCalibration}>
                 Try Again
               </Button>
               {onSkip && (
@@ -563,6 +624,17 @@ const styles = StyleSheet.create({
   },
   hint: {
     maxWidth: 280,
+  },
+  permissionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.primary[500],
   },
   buttonRow: {
     flexDirection: 'row',
