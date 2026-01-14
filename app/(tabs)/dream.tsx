@@ -840,7 +840,7 @@ export default function DreamScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f0f1a',
+    backgroundColor: colors.gray[950],
   },
   scrollContent: {
     flexGrow: 1,
@@ -858,7 +858,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   trackingActive: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.gray[900],
     borderRadius: borderRadius.xl,
     padding: spacing.lg,
     gap: spacing.lg,
@@ -1005,7 +1005,7 @@ const styles = StyleSheet.create({
     maxWidth: 300,
   },
   featureList: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.gray[900],
     borderRadius: borderRadius.xl,
     padding: spacing.lg,
     gap: spacing.md,
@@ -1062,7 +1062,7 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: '#0f0f1a',
+    backgroundColor: colors.gray[950],
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1081,7 +1081,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
   },
   summaryModal: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.gray[900],
     borderRadius: borderRadius.xl,
     padding: spacing.xl,
     alignItems: 'center',

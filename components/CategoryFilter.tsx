@@ -1,11 +1,5 @@
 import { useCallback, memo } from 'react';
-import {
-  ScrollView,
-  View,
-  Pressable,
-  StyleSheet,
-  ActivityIndicator,
-} from 'react-native';
+import { ScrollView, View, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import type { Category } from '@/types/database';
 import { colors, spacing, borderRadius, touchTargetMinSize } from '@/theme/tokens';
@@ -41,11 +35,7 @@ export function CategoryFilter({
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={styles.container}
     >
-      <CategoryChip
-        label="All"
-        isSelected={!hasSelection}
-        onPress={onClearAll}
-      />
+      <CategoryChip label="All" isSelected={!hasSelection} onPress={onClearAll} />
       {categories.map((category) => (
         <CategoryChip
           key={category.id}
@@ -66,7 +56,12 @@ interface CategoryChipProps {
   onPress: () => void;
 }
 
-const CategoryChip = memo(function CategoryChip({ label, color, isSelected, onPress }: CategoryChipProps) {
+const CategoryChip = memo(function CategoryChip({
+  label,
+  color,
+  isSelected,
+  onPress,
+}: CategoryChipProps) {
   return (
     <Pressable
       onPress={onPress}
@@ -105,7 +100,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: borderRadius.full,
-    backgroundColor: '#252542',
+    backgroundColor: colors.gray[800],
     minHeight: 36,
   },
   chipSelected: {

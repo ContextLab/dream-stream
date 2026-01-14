@@ -16,7 +16,7 @@ import { SleepDebugPanel } from '@/components/SleepDebugPanel';
 import { VolumeSetup } from '@/components/VolumeSetup';
 import { MicrophoneTest } from '@/components/MicrophoneTest';
 import { useHealth } from '@/hooks/useHealth';
-import { colors, spacing } from '@/theme/tokens';
+import { colors, spacing, fontFamily } from '@/theme/tokens';
 import {
   runDebugReport,
   formatDebugReport,
@@ -322,7 +322,7 @@ export default function SettingsScreen() {
                   </Text>
                 </Pressable>
                 <Pressable style={styles.debugButton} onPress={handleClearModel}>
-                  <Ionicons name="trash" size={16} color={colors.error} />
+                  <Ionicons name="trash-outline" size={16} color={colors.error} />
                   <Text variant="caption" color="primary">
                     Clear
                   </Text>
@@ -474,7 +474,7 @@ function MenuRow({ icon, label, onPress, badge }: MenuRowProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f0f1a',
+    backgroundColor: colors.gray[950],
   },
   scrollContent: {
     flexGrow: 1,
@@ -488,9 +488,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: '#252542',
+    borderTopColor: colors.gray[800],
     borderBottomWidth: 1,
-    borderBottomColor: '#252542',
+    borderBottomColor: colors.gray[800],
   },
   menuRow: {
     flexDirection: 'row',
@@ -502,7 +502,7 @@ const styles = StyleSheet.create({
     marginLeft: spacing.md,
   },
   badge: {
-    backgroundColor: '#252542',
+    backgroundColor: colors.gray[800],
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
     borderRadius: 4,
@@ -516,13 +516,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: '#252542',
+    borderTopColor: colors.gray[800],
   },
   debugSection: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: '#252542',
+    borderTopColor: colors.gray[800],
   },
   expandedSection: {
     paddingVertical: spacing.md,
@@ -542,7 +542,7 @@ const styles = StyleSheet.create({
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#252542',
+    backgroundColor: colors.gray[800],
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     borderRadius: 8,
@@ -608,7 +608,7 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: '#0f0f1a',
+    backgroundColor: colors.gray[950],
   },
   modalHeader: {
     flexDirection: 'row',
@@ -629,19 +629,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    backgroundColor: '#252542',
+    backgroundColor: colors.gray[800],
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     borderRadius: 6,
   },
   debugOutput: {
     maxHeight: 400,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.gray[900],
     borderRadius: 8,
     padding: spacing.sm,
   },
   debugOutputText: {
-    fontFamily: 'CourierPrime_400Regular',
+    fontFamily: fontFamily.regular,
     fontSize: 11,
     lineHeight: 16,
   },

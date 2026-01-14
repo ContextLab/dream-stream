@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
   },
   container: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.gray[900],
     borderRadius: borderRadius.xl,
     width: '100%',
     maxWidth: 320,

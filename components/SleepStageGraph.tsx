@@ -348,13 +348,13 @@ export function SleepStageGraph({
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(26, 26, 46, 0.8)',
+    backgroundColor: colors.gray[900],
     borderRadius: borderRadius.xl,
     padding: spacing.md,
     height: GRAPH_HEIGHT + spacing.md * 2,
   },
   emptyContainer: {
-    backgroundColor: 'rgba(26, 26, 46, 0.8)',
+    backgroundColor: colors.gray[900],
     borderRadius: borderRadius.xl,
     padding: spacing.lg,
     height: GRAPH_HEIGHT,

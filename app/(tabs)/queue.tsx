@@ -171,10 +171,10 @@ export default function QueueScreen() {
               <Button
                 variant="primary"
                 onPress={() => router.push('/(tabs)/dream')}
-                leftIcon={<Ionicons name="play" size={20} color="#ffffff" />}
+                leftIcon={<Ionicons name="play" size={20} color={colors.gray[50]} />}
                 style={styles.playQueueButton}
               >
-                Start Dream Mode
+                Start Sleep Tracking
               </Button>
               <Text variant="caption" color="muted" style={styles.dragHint}>
                 Drag to reorder
@@ -197,7 +197,7 @@ export default function QueueScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f0f1a',
+    backgroundColor: colors.gray[950],
   },
   scrollContent: {
     flexGrow: 1,
@@ -220,7 +220,7 @@ const styles = StyleSheet.create({
   controlsRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.gray[900],
     borderRadius: borderRadius.xl,
     padding: spacing.sm,
   },

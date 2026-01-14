@@ -125,6 +125,83 @@ export function useLaunchQueue() {
 - `className` prop on all components
 - Courier Prime font family for text (`fontFamily: 'CourierPrime_400Regular'`)
 
+## Design System Audit (January 2026)
+
+### Theme Tokens (`theme/tokens.ts`)
+
+| Category      | Token                  | Values            |
+| ------------- | ---------------------- | ----------------- |
+| Primary       | `colors.primary[500]`  | `#22c55e` (Green) |
+| Background    | `darkTheme.background` | `#09090b`         |
+| Surface       | `darkTheme.surface`    | `#18181b`         |
+| Surface Alt   | `darkTheme.surfaceAlt` | `#27272a`         |
+| Spacing       | `xs/sm/md/lg/xl`       | 4/8/16/24/32px    |
+| Border Radius | `sm/md/lg/xl/full`     | 2/4/8/12/9999px   |
+
+### KNOWN ISSUES (To Fix)
+
+#### HIGH PRIORITY
+
+1. **Color Identity Conflict**: `tailwind.config.js` defines primary as BLUE (`#6366f1`) but `theme/tokens.ts` defines it as GREEN (`#22c55e`). Components using NativeWind appear blue, StyleSheet components appear green.
+
+2. **Hardcoded Background Colors**: Many files use hardcoded hex instead of tokens:
+   - `#0f0f1a` - Should be `darkTheme.background` or `colors.gray[950]`
+   - `#1a1a2e` - Should be `darkTheme.surface`
+   - `#252542` - Should be `darkTheme.surfaceAlt`
+
+3. **Missing Accessibility Labels**: Icon-only buttons in `LaunchQueueCard`, `DraggableQueueList`, `SleepHistoryCard`, and home screen info button lack `accessibilityLabel`.
+
+#### MEDIUM PRIORITY
+
+4. **Terminology Inconsistency**:
+   - Use "Browse Dreams" (not "Explore Dreams")
+   - Use "Start Sleep Tracking" (not "Start Dream Mode")
+
+5. **Capitalization Inconsistency**: Empty states mix Title Case and Sentence case. Standardize on Sentence case.
+
+6. **Icon Style Inconsistency**: Trash icon uses both `trash` and `trash-outline`. Standardize on `trash-outline`.
+
+7. **Modal Close Button**: Placement varies (left in `SleepSessionDetailModal`, right elsewhere). Standardize on right side.
+
+8. **Missing 12px Spacing Token**: Add `smd: 12` to spacing scale.
+
+9. **Back Button Navigation**: `app/dream/[id].tsx` uses `router.replace('/')` instead of `router.back()`.
+
+#### LOW PRIORITY
+
+10. **Redundant Screen**: `app/sleep/index.tsx` duplicates functionality of `app/(tabs)/dream.tsx`.
+
+11. **Hardcoded Font Family**: Some files use `'CourierPrime_400Regular'` string instead of `fontFamily.regular` token.
+
+### Screen Inventory
+
+| Tab       | File                       | Purpose                   |
+| --------- | -------------------------- | ------------------------- |
+| Home      | `app/(tabs)/index.tsx`     | Browse dreams by category |
+| Search    | `app/(tabs)/search.tsx`    | Full-text dream search    |
+| Favorites | `app/(tabs)/favorites.tsx` | Saved dreams              |
+| Queue     | `app/(tabs)/queue.tsx`     | Sleep session queue       |
+| Dream     | `app/(tabs)/dream.tsx`     | Sleep tracking control    |
+| Settings  | `app/(tabs)/settings.tsx`  | Calibration & debug       |
+
+| Modal/Detail | File                   | Purpose               |
+| ------------ | ---------------------- | --------------------- |
+| Dream Detail | `app/dream/[id].tsx`   | Dream info and player |
+| Dream Launch | `app/dream/launch.tsx` | Active dream session  |
+| About        | `app/about.tsx`        | Instructions          |
+
+### Component Categories
+
+| Category         | Components                                                                  |
+| ---------------- | --------------------------------------------------------------------------- |
+| Base UI          | `ui/Button`, `ui/Card`, `ui/Input`, `ui/Text`, `ui/ThemedAlert`             |
+| Dream Display    | `DreamCard`, `DreamPlayer`, `DreamFeed`, `DreamCardSkeleton`                |
+| Queue Management | `LaunchQueueCard`, `DraggableQueueList`, `QueueButton`                      |
+| Sleep Tracking   | `SleepModePlayer`, `SleepStageGraph`, `SleepHistoryCard`, `SleepDebugPanel` |
+| Calibration      | `VolumeSetup`, `MicrophoneTest`, `SensorCalibration`                        |
+| Navigation       | `CategoryFilter`, `SearchBar`                                               |
+| Overlays         | `DarkScreenOverlay`, `SleepSessionDetailModal`                              |
+
 ## DO NOT
 
 - Use `as any`, `@ts-ignore`, or `@ts-expect-error`
@@ -247,4 +324,4 @@ When rebuilding Android support:
 
 ---
 
-_Last updated: 2026-01-11_
+_Last updated: 2026-01-13_

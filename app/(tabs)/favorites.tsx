@@ -50,14 +50,14 @@ export default function FavoritesScreen() {
         <View style={styles.centerContent}>
           <Ionicons name="heart-outline" size={64} color={colors.gray[500]} />
           <Text variant="h4" color="primary" style={styles.emptyTitle}>
-            No Favorites Yet
+            No favorites yet
           </Text>
           <Text variant="body" color="secondary" align="center" style={styles.emptySubtitle}>
             Tap the heart icon on any dream to save it here
           </Text>
           <Link href="/(tabs)" asChild>
             <Button variant="primary" style={styles.signInButton}>
-              Explore Dreams
+              Browse Dreams
             </Button>
           </Link>
         </View>
@@ -91,7 +91,7 @@ export default function FavoritesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f0f1a',
+    backgroundColor: colors.gray[950],
   },
   header: {
     paddingHorizontal: spacing.md,

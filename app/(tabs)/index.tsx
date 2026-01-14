@@ -58,7 +58,12 @@ export default function HomeScreen() {
             dream_stream
           </Text>
           <Link href={'/about' as any} asChild>
-            <Pressable style={styles.aboutButton} hitSlop={8}>
+            <Pressable
+              style={styles.aboutButton}
+              hitSlop={8}
+              accessibilityLabel="About dream_stream"
+              accessibilityRole="button"
+            >
               <Ionicons name="information-circle-outline" size={24} color={colors.gray[400]} />
             </Pressable>
           </Link>

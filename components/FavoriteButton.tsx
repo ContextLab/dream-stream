@@ -58,7 +58,7 @@ export function FavoriteButton({
         <Ionicons
           name={isFavorited ? 'heart' : 'heart-outline'}
           size={size}
-          color={isFavorited ? colors.error : '#ffffff'}
+          color={isFavorited ? colors.error : colors.gray[400]}
         />
       </Animated.View>
     </Pressable>

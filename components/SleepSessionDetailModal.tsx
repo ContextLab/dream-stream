@@ -107,13 +107,18 @@ export function SleepSessionDetailModal({
     >
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <View style={styles.header}>
-          <Pressable onPress={onClose} style={styles.closeButton}>
-            <Ionicons name="close" size={24} color={colors.gray[400]} />
-          </Pressable>
+          <View style={styles.closeButton} />
           <Heading variant="h3" color="primary">
             Sleep Details
           </Heading>
-          <View style={styles.closeButton} />
+          <Pressable
+            onPress={onClose}
+            style={styles.closeButton}
+            accessibilityLabel="Close sleep details"
+            accessibilityRole="button"
+          >
+            <Ionicons name="close" size={24} color={colors.gray[400]} />
+          </Pressable>
         </View>
 
         <ScrollView contentContainerStyle={styles.content}>
@@ -257,7 +262,7 @@ export function SleepSessionDetailModal({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f0f1a',
+    backgroundColor: colors.gray[950],
   },
   header: {
     flexDirection: 'row',
@@ -289,7 +294,7 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     flex: 1,
-    backgroundColor: 'rgba(26, 26, 46, 0.8)',
+    backgroundColor: colors.gray[900],
     borderRadius: borderRadius.lg,
     padding: spacing.md,
     alignItems: 'center',
@@ -302,7 +307,7 @@ const styles = StyleSheet.create({
   },
   graphContainer: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(26, 26, 46, 0.8)',
+    backgroundColor: colors.gray[900],
     borderRadius: borderRadius.lg,
     padding: spacing.md,
     overflow: 'hidden',
@@ -346,7 +351,7 @@ const styles = StyleSheet.create({
     borderRadius: 1,
   },
   breakdownSection: {
-    backgroundColor: 'rgba(26, 26, 46, 0.8)',
+    backgroundColor: colors.gray[900],
     borderRadius: borderRadius.lg,
     padding: spacing.md,
   },

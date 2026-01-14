@@ -13,7 +13,14 @@ import { Text } from '@/components/ui/Text';
 import { MarqueeText } from '@/components/ui/MarqueeText';
 import { type QueuedDream } from '@/services/launchQueue';
 import { getSleepStageDisplayName } from '@/services/sleep';
-import { colors, spacing, borderRadius, shadows, touchTargetMinSize } from '@/theme/tokens';
+import {
+  colors,
+  spacing,
+  borderRadius,
+  shadows,
+  touchTargetMinSize,
+  fontFamily,
+} from '@/theme/tokens';
 
 const CARD_HEIGHT = 100;
 const CARD_GAP = 16;
@@ -176,7 +183,13 @@ function DraggableCard({
           </View>
         </View>
 
-        <Pressable style={styles.removeButton} onPress={onRemove} hitSlop={8}>
+        <Pressable
+          style={styles.removeButton}
+          onPress={onRemove}
+          hitSlop={8}
+          accessibilityLabel="Remove from queue"
+          accessibilityRole="button"
+        >
           <Ionicons name="close" size={20} color={colors.gray[400]} />
         </Pressable>
       </Animated.View>
@@ -236,7 +249,7 @@ const styles = StyleSheet.create({
   },
   card: {
     flexDirection: 'row',
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.gray[900],
     borderRadius: borderRadius.xl,
     overflow: 'hidden',
     padding: spacing.sm,
@@ -263,7 +276,7 @@ const styles = StyleSheet.create({
   },
   durationText: {
     marginTop: 4,
-    fontFamily: 'CourierPrime_400Regular',
+    fontFamily: fontFamily.regular,
     fontSize: 10,
   },
   content: {

@@ -11,7 +11,14 @@ import Animated, {
 import { Text } from '@/components/ui/Text';
 import { getStatusDisplayName, getStatusColor } from '@/services/launchQueue';
 import { getSleepStageDisplayName } from '@/services/sleep';
-import { colors, spacing, borderRadius, shadows, touchTargetMinSize } from '@/theme/tokens';
+import {
+  colors,
+  spacing,
+  borderRadius,
+  shadows,
+  touchTargetMinSize,
+  fontFamily,
+} from '@/theme/tokens';
 import type { QueuedDream } from '@/services/launchQueue';
 
 const CARD_HEIGHT = 100;
@@ -105,6 +112,8 @@ export const LaunchQueueCard = memo(function LaunchQueueCard({
               style={[styles.reorderButton, !canMoveUp && styles.reorderButtonDisabled]}
               onPress={canMoveUp ? onMoveUp : undefined}
               disabled={!canMoveUp}
+              accessibilityLabel="Move up"
+              accessibilityRole="button"
             >
               <Ionicons
                 name="chevron-up"
@@ -119,6 +128,8 @@ export const LaunchQueueCard = memo(function LaunchQueueCard({
               style={[styles.reorderButton, !canMoveDown && styles.reorderButtonDisabled]}
               onPress={canMoveDown ? onMoveDown : undefined}
               disabled={!canMoveDown}
+              accessibilityLabel="Move down"
+              accessibilityRole="button"
             >
               <Ionicons
                 name="chevron-down"
@@ -176,7 +187,13 @@ export const LaunchQueueCard = memo(function LaunchQueueCard({
             )}
 
             {onRemove && item.status !== 'launched' && (
-              <Pressable style={styles.removeButton} onPress={onRemove} hitSlop={8}>
+              <Pressable
+                style={styles.removeButton}
+                onPress={onRemove}
+                hitSlop={8}
+                accessibilityLabel="Remove from queue"
+                accessibilityRole="button"
+              >
                 <Ionicons name="close" size={18} color={colors.gray[400]} />
               </Pressable>
             )}
@@ -190,7 +207,7 @@ export const LaunchQueueCard = memo(function LaunchQueueCard({
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.gray[900],
     borderRadius: borderRadius.xl,
     overflow: 'hidden',
     padding: spacing.sm,
@@ -210,7 +227,7 @@ const styles = StyleSheet.create({
   },
   durationText: {
     marginTop: 4,
-    fontFamily: 'CourierPrime_400Regular',
+    fontFamily: fontFamily.regular,
     fontSize: 10,
   },
   content: {
@@ -289,7 +306,7 @@ const styles = StyleSheet.create({
     opacity: 0.3,
   },
   orderNumber: {
-    fontFamily: 'CourierPrime_400Regular',
+    fontFamily: fontFamily.regular,
     fontSize: 11,
   },
 });

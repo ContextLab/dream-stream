@@ -80,6 +80,8 @@ export function SleepHistoryCard({ session, onPress, onDelete }: SleepHistoryCar
                 onDelete();
               }}
               hitSlop={8}
+              accessibilityLabel="Delete sleep session"
+              accessibilityRole="button"
             >
               <Ionicons name="trash-outline" size={16} color={colors.gray[500]} />
             </Pressable>
@@ -141,7 +143,7 @@ export function SleepHistoryCard({ session, onPress, onDelete }: SleepHistoryCar
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: 'rgba(26, 26, 46, 0.8)',
+    backgroundColor: colors.gray[900],
     borderRadius: borderRadius.lg,
     padding: spacing.sm,
     marginBottom: spacing.sm,

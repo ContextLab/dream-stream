@@ -112,8 +112,14 @@ export default function DreamDetailScreen() {
       <Stack.Screen options={{ headerShown: false }} />
 
       <SafeAreaView edges={['top']} style={styles.header} pointerEvents="box-none">
-        <Pressable onPress={() => router.replace('/')} style={styles.headerButton} hitSlop={8}>
-          <Ionicons name="arrow-back" size={24} color="#ffffff" />
+        <Pressable
+          onPress={() => router.back()}
+          style={styles.headerButton}
+          hitSlop={8}
+          accessibilityLabel="Go back"
+          accessibilityRole="button"
+        >
+          <Ionicons name="arrow-back" size={24} color={colors.gray[50]} />
         </Pressable>
         <View style={styles.headerSpacer} pointerEvents="none" />
         <View style={styles.headerActions}>
@@ -322,7 +328,7 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: '#0f0f1a',
+    backgroundColor: colors.gray[950],
   },
   modalHeader: {
     flexDirection: 'row',

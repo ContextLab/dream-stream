@@ -3,7 +3,7 @@ import { View, StyleSheet, ActivityIndicator, Pressable, Platform } from 'react-
 import { Audio, AVPlaybackStatus } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
-import { colors, spacing } from '@/theme/tokens';
+import { colors, spacing, fontFamily } from '@/theme/tokens';
 import type { Dream, PlaybackMode } from '@/types/database';
 
 type PlayerStatus = 'idle' | 'loading' | 'ready' | 'playing' | 'paused' | 'error';
@@ -366,7 +366,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   timeText: {
-    fontFamily: 'CourierPrime_400Regular',
+    fontFamily: fontFamily.regular,
   },
   buttonRow: {
     flexDirection: 'row',

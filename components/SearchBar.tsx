@@ -112,7 +112,7 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#252542',
+    backgroundColor: colors.gray[800],
     borderRadius: borderRadius.xl,
     paddingHorizontal: 16,
     minHeight: touchTargetMinSize,

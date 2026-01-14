@@ -61,7 +61,7 @@ export default function DreamLaunchScreen() {
         <StatusBar style="light" />
         <View style={styles.centeredContent}>
           <Text variant="h4" color="primary" align="center">
-            No Dream Ready
+            No dream ready
           </Text>
           <Text variant="body" color="secondary" align="center" style={styles.noItemMessage}>
             Queue a dream and mark it as ready to launch it here
@@ -112,7 +112,7 @@ export default function DreamLaunchScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a0a14',
+    backgroundColor: colors.gray[950],
   },
   centeredContent: {
     flex: 1,
