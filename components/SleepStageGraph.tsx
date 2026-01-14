@@ -4,7 +4,8 @@ import { View, StyleSheet, Platform } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { colors, spacing, borderRadius } from '@/theme/tokens';
 import type { SleepStage } from '@/types/database';
-import { getSleepStageColor } from '@/services/sleep';
+
+type DisplayStage = 'awake' | 'nrem' | 'rem';
 
 interface StageHistoryEntry {
   stage: SleepStage;
@@ -20,14 +21,36 @@ interface SleepStageGraphProps {
   onStagePress?: (stage: SleepStage, timestamp: number) => void;
 }
 
-const STAGE_ORDER: SleepStage[] = ['awake', 'light', 'rem', 'deep'];
-const STAGE_Y_POSITIONS: Record<SleepStage, number> = {
+const STAGE_ORDER: DisplayStage[] = ['awake', 'nrem', 'rem'];
+const STAGE_Y_POSITIONS: Record<DisplayStage, number> = {
   awake: 0,
-  light: 1,
+  nrem: 1,
   rem: 2,
-  deep: 3,
-  any: 2,
 };
+
+function toDisplayStage(stage: SleepStage): DisplayStage {
+  switch (stage) {
+    case 'awake':
+      return 'awake';
+    case 'light':
+    case 'deep':
+    case 'any':
+      return 'nrem';
+    case 'rem':
+      return 'rem';
+  }
+}
+
+function getDisplayStageColor(stage: DisplayStage): string {
+  switch (stage) {
+    case 'awake':
+      return colors.warning;
+    case 'nrem':
+      return colors.accent.cyan;
+    case 'rem':
+      return colors.primary[500];
+  }
+}
 
 const GRAPH_HEIGHT = 160;
 const GRAPH_PADDING_TOP = 20;
@@ -43,8 +66,14 @@ const LINE_THICKNESS = 4;
 const TRANSITION_COLOR = colors.gray[500];
 
 function getYForStage(stage: SleepStage): number {
+  const displayStage = toDisplayStage(stage);
+  const position = STAGE_Y_POSITIONS[displayStage];
+  return GRAPH_PADDING_TOP + (position / 2) * USABLE_HEIGHT;
+}
+
+function getYForDisplayStage(stage: DisplayStage): number {
   const position = STAGE_Y_POSITIONS[stage];
-  return GRAPH_PADDING_TOP + (position / 3) * USABLE_HEIGHT;
+  return GRAPH_PADDING_TOP + (position / 2) * USABLE_HEIGHT;
 }
 
 interface DataPoint {
@@ -212,7 +241,7 @@ export function SleepStageGraph({
               {
                 left: p.x - 6,
                 top: p.y - 6,
-                backgroundColor: getSleepStageColor(p.stage),
+                backgroundColor: getDisplayStageColor(toDisplayStage(p.stage)),
               },
             ]}
           />
@@ -227,8 +256,10 @@ export function SleepStageGraph({
       const prev = computedPoints[i - 1];
       const curr = computedPoints[i];
 
-      const isTransition = prev.stage !== curr.stage;
-      const segmentColor = isTransition ? TRANSITION_COLOR : getSleepStageColor(prev.stage);
+      const prevDisplay = toDisplayStage(prev.stage);
+      const currDisplay = toDisplayStage(curr.stage);
+      const isTransition = prevDisplay !== currDisplay;
+      const segmentColor = isTransition ? TRANSITION_COLOR : getDisplayStageColor(prevDisplay);
 
       if (Platform.OS === 'web') {
         const midX = (prev.x + curr.x) / 2;
@@ -280,7 +311,7 @@ export function SleepStageGraph({
             {
               left: last.x - 6,
               top: last.y - 6,
-              backgroundColor: getSleepStageColor(last.stage),
+              backgroundColor: getDisplayStageColor(toDisplayStage(last.stage)),
             },
           ]}
         />
@@ -304,18 +335,18 @@ export function SleepStageGraph({
 
   const renderGridLines = useCallback(() => {
     return STAGE_ORDER.map((stage) => {
-      const y = getYForStage(stage);
+      const y = getYForDisplayStage(stage);
       return <View key={stage} style={[styles.gridLine, { top: y }]} />;
     });
   }, []);
 
   const renderStageLabels = useCallback(() => {
     return STAGE_ORDER.map((stage) => {
-      const y = getYForStage(stage);
-      const label = stage === 'rem' ? 'REM' : stage.charAt(0).toUpperCase() + stage.slice(1);
+      const y = getYForDisplayStage(stage);
+      const label = stage === 'rem' ? 'REM' : stage === 'nrem' ? 'NREM' : 'Awake';
       return (
         <View key={stage} style={[styles.stageLabel, { top: y - 8 }]}>
-          <View style={[styles.stageDot, { backgroundColor: getSleepStageColor(stage) }]} />
+          <View style={[styles.stageDot, { backgroundColor: getDisplayStageColor(stage) }]} />
           <Text variant="caption" color="muted" style={styles.stageLabelText}>
             {label}
           </Text>

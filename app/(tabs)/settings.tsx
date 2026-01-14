@@ -29,12 +29,12 @@ import {
   formatHealthConnectDebugReport,
 } from '@/services/healthConnect';
 import {
-  trainAndValidate,
-  loadEnhancedModel,
-  clearEnhancedModel,
-  type EnhancedModel,
-  type ValidationResult,
-} from '@/services/enhancedSleepClassifier';
+  trainRemOptimizedModel,
+  loadRemOptimizedModel,
+  clearRemOptimizedModel,
+  formatTrainingReport,
+  type TrainingReport,
+} from '@/services/remOptimizedClassifier';
 
 export default function SettingsScreen() {
   const [showSleepDebug, setShowSleepDebug] = useState(false);
@@ -47,9 +47,9 @@ export default function SettingsScreen() {
   const [showHCDebug, setShowHCDebug] = useState(false);
   const [hcDebugReport, setHcDebugReport] = useState<string | null>(null);
   const [isLoadingHCDebug, setIsLoadingHCDebug] = useState(false);
-  const [showEnhancedTraining, setShowEnhancedTraining] = useState(false);
-  const [enhancedModelStatus, setEnhancedModelStatus] = useState<string | null>(null);
-  const [isTrainingEnhanced, setIsTrainingEnhanced] = useState(false);
+  const [showRemOptimized, setShowRemOptimized] = useState(false);
+  const [remOptimizedReport, setRemOptimizedReport] = useState<string | null>(null);
+  const [isTrainingRemOptimized, setIsTrainingRemOptimized] = useState(false);
 
   const health = useHealth();
 
@@ -95,80 +95,47 @@ export default function SettingsScreen() {
     }
   };
 
-  const formatEnhancedModelStatus = (
-    model: EnhancedModel | null,
-    validation?: ValidationResult
-  ) => {
-    if (!model) return 'No enhanced model trained yet.';
-
-    let status = `ENHANCED MODEL STATUS\n`;
-    status += `━━━━━━━━━━━━━━━━━━━━━\n`;
-    status += `Nights analyzed: ${model.nightsAnalyzed}\n`;
-    status += `Last updated: ${new Date(model.lastUpdated).toLocaleString()}\n`;
-    status += `Temporal smoothing: ${model.temporalSmoothingStrength.toFixed(2)}\n\n`;
-
-    status += `FEATURE WEIGHTS\n`;
-    status += `HR: ${model.featureWeights.hr.toFixed(2)}, HRV: ${model.featureWeights.hrv.toFixed(2)}\n`;
-    status += `HRV Est: ${model.featureWeights.hrvEst.toFixed(2)}, RR: ${model.featureWeights.rr.toFixed(2)}\n\n`;
-
-    if (model.validationAccuracy !== null) {
-      status += `VALIDATION ACCURACY\n`;
-      status += `━━━━━━━━━━━━━━━━━━━━━\n`;
-      status += `Overall: ${(model.validationAccuracy * 100).toFixed(1)}%\n\n`;
-      status += `Per-Stage:\n`;
-      status += `  Awake: ${(model.perStageAccuracy.awake * 100).toFixed(1)}%\n`;
-      status += `  Light: ${(model.perStageAccuracy.light * 100).toFixed(1)}%\n`;
-      status += `  Deep:  ${(model.perStageAccuracy.deep * 100).toFixed(1)}%\n`;
-      status += `  REM:   ${(model.perStageAccuracy.rem * 100).toFixed(1)}%\n`;
-    }
-
-    if (validation) {
-      status += `\nCONFUSION MATRIX (rows=actual, cols=predicted)\n`;
-      status += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-      const stages: Array<'awake' | 'light' | 'deep' | 'rem'> = ['awake', 'light', 'deep', 'rem'];
-      status += `       awake  light  deep   rem\n`;
-      for (const actual of stages) {
-        status += `${actual.padEnd(6)}`;
-        for (const predicted of stages) {
-          status += `${validation.confusionMatrix[actual][predicted].toString().padStart(6)}`;
-        }
-        status += '\n';
-      }
-      status += `\nTotal samples: ${validation.totalSamples}\n`;
-    }
-
-    return status;
-  };
-
-  const handleLoadEnhancedModel = async () => {
-    const model = await loadEnhancedModel();
-    setEnhancedModelStatus(formatEnhancedModelStatus(model));
-  };
-
-  const handleTrainEnhanced = async () => {
-    setIsTrainingEnhanced(true);
-    setEnhancedModelStatus('Starting training...');
+  const handleTrainRemOptimized = async () => {
+    setIsTrainingRemOptimized(true);
+    setRemOptimizedReport('Starting REM-optimized (3-class) training...');
     try {
-      const { model, validation, bestParams } = await trainAndValidate((message) => {
-        setEnhancedModelStatus(message);
-      });
-      let status = formatEnhancedModelStatus(model, validation);
-      status += `\nBEST PARAMETERS FOUND\n`;
-      status += `━━━━━━━━━━━━━━━━━━━━━\n`;
-      status += `Temporal smoothing: ${bestParams.temporalSmoothing}\n`;
-      status += `HR weight: ${bestParams.hrWeight}\n`;
-      status += `HRV weight: ${bestParams.hrvWeight}\n`;
-      setEnhancedModelStatus(status);
+      const { model, report } = await trainRemOptimizedModel(48);
+      setRemOptimizedReport(formatTrainingReport(report));
     } catch (error) {
-      setEnhancedModelStatus(`Training failed: ${error}`);
+      setRemOptimizedReport(`Training failed: ${error}`);
     } finally {
-      setIsTrainingEnhanced(false);
+      setIsTrainingRemOptimized(false);
     }
   };
 
-  const handleClearEnhanced = async () => {
-    await clearEnhancedModel();
-    setEnhancedModelStatus('Enhanced model cleared.');
+  const handleLoadRemOptimized = async () => {
+    const model = await loadRemOptimizedModel();
+    if (model) {
+      let status = '╔══════════════════════════════════════════╗\n';
+      status += '║   REM-OPTIMIZED MODEL STATUS (3-CLASS)   ║\n';
+      status += '╚══════════════════════════════════════════╝\n\n';
+      status += `Nights analyzed: ${model.nightsAnalyzed}\n`;
+      status += `Last updated: ${new Date(model.lastUpdated).toLocaleString()}\n\n`;
+
+      if (model.validationAccuracy !== null) {
+        status += `Overall Accuracy: ${(model.validationAccuracy * 100).toFixed(1)}%\n`;
+        status += `REM Sensitivity: ${((model.remSensitivity ?? 0) * 100).toFixed(1)}%\n`;
+        status += `REM Specificity: ${((model.remSpecificity ?? 0) * 100).toFixed(1)}%\n\n`;
+        status += `Per-Stage Accuracy:\n`;
+        status += `  Awake: ${(model.perStageAccuracy.awake * 100).toFixed(1)}%\n`;
+        status += `  NREM:  ${(model.perStageAccuracy.nrem * 100).toFixed(1)}%\n`;
+        status += `  REM:   ${(model.perStageAccuracy.rem * 100).toFixed(1)}%\n`;
+      }
+
+      setRemOptimizedReport(status);
+    } else {
+      setRemOptimizedReport('No REM-optimized model trained yet.\nTap "Train 3-Class" to begin.');
+    }
+  };
+
+  const handleClearRemOptimized = async () => {
+    await clearRemOptimizedModel();
+    setRemOptimizedReport('REM-optimized model cleared.');
   };
 
   useEffect(() => {
@@ -440,50 +407,50 @@ export default function SettingsScreen() {
           {(Platform.OS === 'android' || Platform.OS === 'ios') && (
             <>
               <MenuRow
-                icon="fitness-outline"
-                label="Sleep Stage Classifier Training"
+                icon="moon-outline"
+                label="Sleep Stage Classifier"
                 onPress={() => {
-                  setShowEnhancedTraining(!showEnhancedTraining);
-                  if (!showEnhancedTraining && !enhancedModelStatus) {
-                    handleLoadEnhancedModel();
+                  setShowRemOptimized(!showRemOptimized);
+                  if (!showRemOptimized && !remOptimizedReport) {
+                    handleLoadRemOptimized();
                   }
                 }}
               />
-              {showEnhancedTraining && (
+              {showRemOptimized && (
                 <View style={styles.expandedSection}>
                   <Text variant="caption" color="muted" style={{ marginBottom: spacing.sm }}>
-                    Learn your personal sleep patterns from your wearable data to improve REM
-                    detection accuracy.
+                    Train a personalized REM detector using your wearable sleep data. Uses 90-minute
+                    ultradian cycles and HR variability patterns to predict REM windows.
                   </Text>
                   <View style={styles.debugButtonRow}>
                     <Pressable
                       style={styles.debugButton}
-                      onPress={handleLoadEnhancedModel}
-                      disabled={isTrainingEnhanced}
+                      onPress={handleLoadRemOptimized}
+                      disabled={isTrainingRemOptimized}
                     >
                       <Ionicons name="information-circle" size={16} color={colors.primary[500]} />
                       <Text variant="caption" color="primary">
-                        Check Status
+                        Status
                       </Text>
                     </Pressable>
                     <Pressable
                       style={[styles.debugButton, styles.trainButton]}
-                      onPress={handleTrainEnhanced}
-                      disabled={isTrainingEnhanced}
+                      onPress={handleTrainRemOptimized}
+                      disabled={isTrainingRemOptimized}
                     >
-                      {isTrainingEnhanced ? (
+                      {isTrainingRemOptimized ? (
                         <ActivityIndicator size="small" color={colors.gray[950]} />
                       ) : (
                         <Ionicons name="flash" size={16} color={colors.gray[950]} />
                       )}
                       <Text variant="caption" style={{ color: colors.gray[950] }}>
-                        Train Model
+                        Train
                       </Text>
                     </Pressable>
                     <Pressable
                       style={styles.debugButton}
-                      onPress={handleClearEnhanced}
-                      disabled={isTrainingEnhanced}
+                      onPress={handleClearRemOptimized}
+                      disabled={isTrainingRemOptimized}
                     >
                       <Ionicons name="trash-outline" size={16} color={colors.error} />
                       <Text variant="caption" color="primary">
@@ -491,7 +458,7 @@ export default function SettingsScreen() {
                       </Text>
                     </Pressable>
                   </View>
-                  {enhancedModelStatus && (
+                  {remOptimizedReport && (
                     <ScrollView
                       style={styles.debugOutput}
                       horizontal={false}
@@ -503,7 +470,7 @@ export default function SettingsScreen() {
                         style={styles.debugOutputText}
                         selectable={true}
                       >
-                        {enhancedModelStatus}
+                        {remOptimizedReport}
                       </Text>
                     </ScrollView>
                   )}

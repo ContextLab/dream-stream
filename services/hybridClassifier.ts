@@ -1,19 +1,14 @@
 import type { SleepStage } from '@/types/database';
 import type { BreathingAnalysis } from './sleep';
 import type { VitalsSnapshot } from './healthConnect';
+import { getStageProportions } from './sleepStageLearning';
 import {
-  loadModel,
-  isModelValid,
-  classifyWithModel,
-  getStageProportions,
-  type StageProportions,
-} from './sleepStageLearning';
-import {
-  loadEnhancedModel,
-  classifyWithTemporal,
-  resetTemporalState,
-  type EnhancedModel,
-} from './enhancedSleepClassifier';
+  loadRemOptimizedModel,
+  classifyRemOptimized,
+  startRemOptimizedSession,
+  stopRemOptimizedSession,
+  type RemOptimizedModel,
+} from './remOptimizedClassifier';
 
 export interface StageProbabilities {
   awake: number;
@@ -41,18 +36,18 @@ const STAGES: ClassifiableStage[] = ['awake', 'light', 'deep', 'rem'];
 
 let sessionStartTime: number | null = null;
 const AWAKE_PRIOR_FADE_MS = 5 * 60 * 1000;
-let enhancedModel: EnhancedModel | null = null;
+let remOptimizedModel: RemOptimizedModel | null = null;
 
 export async function startHybridSession(): Promise<void> {
   sessionStartTime = Date.now();
-  enhancedModel = await loadEnhancedModel();
-  resetTemporalState();
+  remOptimizedModel = await loadRemOptimizedModel();
+  startRemOptimizedSession();
 }
 
 export function stopHybridSession(): void {
   sessionStartTime = null;
-  enhancedModel = null;
-  resetTemporalState();
+  remOptimizedModel = null;
+  stopRemOptimizedSession();
 }
 
 function getAwakePrior(): StageProbabilities {
@@ -110,15 +105,26 @@ function classifyFromAudio(analysis: BreathingAnalysis | null): SourceClassifica
     probs.light = 0.2;
     probs.deep = 0.05;
     probs.rem = 0.05;
-  } else if (regularity > 0.85 && rrv < 0.1 && breathsPerMinute < 12) {
+  } else if (regularity > 0.85 && rrv < 0.1 && breathsPerMinute < 14) {
     probs.deep = 0.6;
     probs.light = 0.25;
     probs.rem = 0.1;
     probs.awake = 0.05;
-  } else if (regularity > 0.7 && rrv > 0.25 && breathsPerMinute > 16 && movementIntensity < 0.08) {
-    probs.rem = 0.55;
-    probs.light = 0.25;
-    probs.deep = 0.1;
+  } else if (
+    regularity > 0.7 &&
+    rrv > 0.25 &&
+    breathsPerMinute > 14 &&
+    breathsPerMinute < 24 &&
+    movementIntensity < 0.05
+  ) {
+    probs.rem = 0.65;
+    probs.light = 0.2;
+    probs.deep = 0.05;
+    probs.awake = 0.1;
+  } else if (regularity > 0.65 && rrv > 0.2 && movementIntensity < 0.08) {
+    probs.rem = 0.45;
+    probs.light = 0.3;
+    probs.deep = 0.15;
     probs.awake = 0.1;
   } else if (regularity > 0.7 && regularity < 0.85) {
     probs.light = 0.5;
@@ -141,7 +147,7 @@ function classifyFromAudio(analysis: BreathingAnalysis | null): SourceClassifica
   };
 }
 
-async function classifyFromVitals(vitals: VitalsSnapshot | null): Promise<SourceClassification> {
+function classifyFromVitals(vitals: VitalsSnapshot | null): SourceClassification {
   if (!vitals || vitals.heartRate === null) {
     return {
       probabilities: { awake: 0.25, light: 0.25, deep: 0.25, rem: 0.25 },
@@ -150,92 +156,20 @@ async function classifyFromVitals(vitals: VitalsSnapshot | null): Promise<Source
     };
   }
 
-  let probs: StageProbabilities = { awake: 0, light: 0, deep: 0, rem: 0 };
-  let confidence = 0;
+  const result = classifyRemOptimized(vitals.heartRate, vitals.hrv ?? null, vitals.timestamp);
 
-  // Use enhanced model if available (has temporal smoothing + better accuracy)
-  if (enhancedModel && enhancedModel.validationAccuracy !== null) {
-    const result = classifyWithTemporal(
-      enhancedModel,
-      vitals.heartRate,
-      vitals.hrv ?? null,
-      null, // hrvEstimated computed internally
-      vitals.respiratoryRate ?? null
-    );
-
-    probs = {
-      awake: result.probabilities.awake,
-      light: result.probabilities.light,
-      deep: result.probabilities.deep,
-      rem: result.probabilities.rem,
-    };
-    confidence = result.confidence;
-
-    return {
-      probabilities: normalizeProbabilities(probs),
-      confidence,
-      available: true,
-    };
-  }
-
-  // Fallback to basic model
-  const model = await loadModel();
-
-  if (isModelValid(model)) {
-    for (const stage of STAGES) {
-      const result = classifyWithModel(
-        model,
-        vitals.heartRate,
-        vitals.hrv ?? null,
-        vitals.respiratoryRate ?? null
-      );
-      if (result.stage === stage) {
-        probs[stage] = result.confidence;
-      }
-    }
-
-    const totalScore = STAGES.reduce((sum, stage) => sum + probs[stage], 0);
-    if (totalScore > 0) {
-      for (const stage of STAGES) {
-        probs[stage] = probs[stage] / totalScore;
-      }
-    }
-
-    const bestResult = classifyWithModel(
-      model,
-      vitals.heartRate,
-      vitals.hrv ?? null,
-      vitals.respiratoryRate ?? null
-    );
-    confidence = bestResult.confidence;
-
-    if (totalScore === 0 && bestResult.stage !== 'any') {
-      const resultStage = bestResult.stage;
-      probs[resultStage] = 0.6;
-      const remaining = 0.4 / 3;
-      for (const stage of STAGES) {
-        if (stage !== resultStage) {
-          probs[stage] = remaining;
-        }
-      }
-    }
-  } else {
-    const hr = vitals.heartRate;
-    if (hr >= 65) {
-      probs = { awake: 0.6, light: 0.25, deep: 0.1, rem: 0.05 };
-    } else if (hr <= 50) {
-      probs = { awake: 0.1, light: 0.3, deep: 0.5, rem: 0.1 };
-    } else if (hr >= 55 && hr <= 65) {
-      probs = { awake: 0.15, light: 0.4, deep: 0.2, rem: 0.25 };
-    } else {
-      probs = { awake: 0.2, light: 0.4, deep: 0.25, rem: 0.15 };
-    }
-    confidence = 0.4;
-  }
+  const probs: StageProbabilities = {
+    awake: result.probabilities.awake,
+    light:
+      result.stage === 'nrem' ? result.probabilities.nrem * 0.7 : result.probabilities.nrem * 0.3,
+    deep:
+      result.stage === 'nrem' ? result.probabilities.nrem * 0.3 : result.probabilities.nrem * 0.7,
+    rem: result.probabilities.rem,
+  };
 
   return {
     probabilities: normalizeProbabilities(probs),
-    confidence,
+    confidence: result.confidence,
     available: true,
   };
 }
@@ -247,7 +181,7 @@ export async function classifyHybrid(
   vitals: VitalsSnapshot | null
 ): Promise<HybridClassification> {
   const audioResult = classifyFromAudio(audioAnalysis);
-  const vitalsResult = await classifyFromVitals(vitals);
+  const vitalsResult = classifyFromVitals(vitals);
 
   const awakePrior = getAwakePrior();
   const historicalPrior = getStageProportions();
