@@ -135,7 +135,7 @@ export async function startSleepSession(
   }
 
   learnFromRecentNights(48).catch(console.error);
-  startHybridSession();
+  await startHybridSession();
 
   const session: SleepSession = {
     id: generateId(),

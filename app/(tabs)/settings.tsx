@@ -28,6 +28,13 @@ import {
   runHealthConnectDebugReport,
   formatHealthConnectDebugReport,
 } from '@/services/healthConnect';
+import {
+  trainAndValidate,
+  loadEnhancedModel,
+  clearEnhancedModel,
+  type EnhancedModel,
+  type ValidationResult,
+} from '@/services/enhancedSleepClassifier';
 
 export default function SettingsScreen() {
   const [showSleepDebug, setShowSleepDebug] = useState(false);
@@ -40,6 +47,9 @@ export default function SettingsScreen() {
   const [showHCDebug, setShowHCDebug] = useState(false);
   const [hcDebugReport, setHcDebugReport] = useState<string | null>(null);
   const [isLoadingHCDebug, setIsLoadingHCDebug] = useState(false);
+  const [showEnhancedTraining, setShowEnhancedTraining] = useState(false);
+  const [enhancedModelStatus, setEnhancedModelStatus] = useState<string | null>(null);
+  const [isTrainingEnhanced, setIsTrainingEnhanced] = useState(false);
 
   const health = useHealth();
 
@@ -83,6 +93,82 @@ export default function SettingsScreen() {
     } finally {
       setIsLoadingHCDebug(false);
     }
+  };
+
+  const formatEnhancedModelStatus = (
+    model: EnhancedModel | null,
+    validation?: ValidationResult
+  ) => {
+    if (!model) return 'No enhanced model trained yet.';
+
+    let status = `ENHANCED MODEL STATUS\n`;
+    status += `━━━━━━━━━━━━━━━━━━━━━\n`;
+    status += `Nights analyzed: ${model.nightsAnalyzed}\n`;
+    status += `Last updated: ${new Date(model.lastUpdated).toLocaleString()}\n`;
+    status += `Temporal smoothing: ${model.temporalSmoothingStrength.toFixed(2)}\n\n`;
+
+    status += `FEATURE WEIGHTS\n`;
+    status += `HR: ${model.featureWeights.hr.toFixed(2)}, HRV: ${model.featureWeights.hrv.toFixed(2)}\n`;
+    status += `HRV Est: ${model.featureWeights.hrvEst.toFixed(2)}, RR: ${model.featureWeights.rr.toFixed(2)}\n\n`;
+
+    if (model.validationAccuracy !== null) {
+      status += `VALIDATION ACCURACY\n`;
+      status += `━━━━━━━━━━━━━━━━━━━━━\n`;
+      status += `Overall: ${(model.validationAccuracy * 100).toFixed(1)}%\n\n`;
+      status += `Per-Stage:\n`;
+      status += `  Awake: ${(model.perStageAccuracy.awake * 100).toFixed(1)}%\n`;
+      status += `  Light: ${(model.perStageAccuracy.light * 100).toFixed(1)}%\n`;
+      status += `  Deep:  ${(model.perStageAccuracy.deep * 100).toFixed(1)}%\n`;
+      status += `  REM:   ${(model.perStageAccuracy.rem * 100).toFixed(1)}%\n`;
+    }
+
+    if (validation) {
+      status += `\nCONFUSION MATRIX (rows=actual, cols=predicted)\n`;
+      status += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+      const stages: Array<'awake' | 'light' | 'deep' | 'rem'> = ['awake', 'light', 'deep', 'rem'];
+      status += `       awake  light  deep   rem\n`;
+      for (const actual of stages) {
+        status += `${actual.padEnd(6)}`;
+        for (const predicted of stages) {
+          status += `${validation.confusionMatrix[actual][predicted].toString().padStart(6)}`;
+        }
+        status += '\n';
+      }
+      status += `\nTotal samples: ${validation.totalSamples}\n`;
+    }
+
+    return status;
+  };
+
+  const handleLoadEnhancedModel = async () => {
+    const model = await loadEnhancedModel();
+    setEnhancedModelStatus(formatEnhancedModelStatus(model));
+  };
+
+  const handleTrainEnhanced = async () => {
+    setIsTrainingEnhanced(true);
+    setEnhancedModelStatus('Starting training...');
+    try {
+      const { model, validation, bestParams } = await trainAndValidate((message) => {
+        setEnhancedModelStatus(message);
+      });
+      let status = formatEnhancedModelStatus(model, validation);
+      status += `\nBEST PARAMETERS FOUND\n`;
+      status += `━━━━━━━━━━━━━━━━━━━━━\n`;
+      status += `Temporal smoothing: ${bestParams.temporalSmoothing}\n`;
+      status += `HR weight: ${bestParams.hrWeight}\n`;
+      status += `HRV weight: ${bestParams.hrvWeight}\n`;
+      setEnhancedModelStatus(status);
+    } catch (error) {
+      setEnhancedModelStatus(`Training failed: ${error}`);
+    } finally {
+      setIsTrainingEnhanced(false);
+    }
+  };
+
+  const handleClearEnhanced = async () => {
+    await clearEnhancedModel();
+    setEnhancedModelStatus('Enhanced model cleared.');
   };
 
   useEffect(() => {
@@ -282,16 +368,20 @@ export default function SettingsScreen() {
         )}
 
         <View style={styles.debugSection}>
-          <MenuRow
-            icon="bug-outline"
-            label="Sleep Detection Debug"
-            onPress={() => setShowSleepDebug(!showSleepDebug)}
-          />
-          {showSleepDebug && <SleepDebugPanel />}
+          {Platform.OS === 'web' && (
+            <>
+              <MenuRow
+                icon="pulse-outline"
+                label="Test Sleep Detection"
+                onPress={() => setShowSleepDebug(!showSleepDebug)}
+              />
+              {showSleepDebug && <SleepDebugPanel />}
+            </>
+          )}
 
           <MenuRow
             icon="analytics-outline"
-            label="Sleep Model Debug (Fitbit/Wearable)"
+            label="Wearable Sleep Insights"
             onPress={() => setShowModelDebug(!showModelDebug)}
           />
           {showModelDebug && (
@@ -305,10 +395,10 @@ export default function SettingsScreen() {
                   {isLoadingModelDebug ? (
                     <ActivityIndicator size="small" color={colors.primary[500]} />
                   ) : (
-                    <Ionicons name="play" size={16} color={colors.primary[500]} />
+                    <Ionicons name="eye-outline" size={16} color={colors.primary[500]} />
                   )}
                   <Text variant="caption" color="primary">
-                    Run Debug Report
+                    View Analysis
                   </Text>
                 </Pressable>
                 <Pressable
@@ -318,13 +408,13 @@ export default function SettingsScreen() {
                 >
                   <Ionicons name="refresh" size={16} color={colors.accent.cyan} />
                   <Text variant="caption" color="primary">
-                    Retrain Model
+                    Refresh
                   </Text>
                 </Pressable>
                 <Pressable style={styles.debugButton} onPress={handleClearModel}>
                   <Ionicons name="trash-outline" size={16} color={colors.error} />
                   <Text variant="caption" color="primary">
-                    Clear
+                    Reset
                   </Text>
                 </Pressable>
               </View>
@@ -350,12 +440,86 @@ export default function SettingsScreen() {
           {(Platform.OS === 'android' || Platform.OS === 'ios') && (
             <>
               <MenuRow
-                icon="medkit-outline"
-                label="Health Connect Data Debug"
+                icon="fitness-outline"
+                label="Sleep Stage Classifier Training"
+                onPress={() => {
+                  setShowEnhancedTraining(!showEnhancedTraining);
+                  if (!showEnhancedTraining && !enhancedModelStatus) {
+                    handleLoadEnhancedModel();
+                  }
+                }}
+              />
+              {showEnhancedTraining && (
+                <View style={styles.expandedSection}>
+                  <Text variant="caption" color="muted" style={{ marginBottom: spacing.sm }}>
+                    Learn your personal sleep patterns from your wearable data to improve REM
+                    detection accuracy.
+                  </Text>
+                  <View style={styles.debugButtonRow}>
+                    <Pressable
+                      style={styles.debugButton}
+                      onPress={handleLoadEnhancedModel}
+                      disabled={isTrainingEnhanced}
+                    >
+                      <Ionicons name="information-circle" size={16} color={colors.primary[500]} />
+                      <Text variant="caption" color="primary">
+                        Check Status
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.debugButton, styles.trainButton]}
+                      onPress={handleTrainEnhanced}
+                      disabled={isTrainingEnhanced}
+                    >
+                      {isTrainingEnhanced ? (
+                        <ActivityIndicator size="small" color={colors.gray[950]} />
+                      ) : (
+                        <Ionicons name="flash" size={16} color={colors.gray[950]} />
+                      )}
+                      <Text variant="caption" style={{ color: colors.gray[950] }}>
+                        Train Model
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.debugButton}
+                      onPress={handleClearEnhanced}
+                      disabled={isTrainingEnhanced}
+                    >
+                      <Ionicons name="trash-outline" size={16} color={colors.error} />
+                      <Text variant="caption" color="primary">
+                        Clear
+                      </Text>
+                    </Pressable>
+                  </View>
+                  {enhancedModelStatus && (
+                    <ScrollView
+                      style={styles.debugOutput}
+                      horizontal={false}
+                      nestedScrollEnabled={true}
+                    >
+                      <Text
+                        variant="caption"
+                        color="muted"
+                        style={styles.debugOutputText}
+                        selectable={true}
+                      >
+                        {enhancedModelStatus}
+                      </Text>
+                    </ScrollView>
+                  )}
+                </View>
+              )}
+
+              <MenuRow
+                icon="heart-outline"
+                label="View Health Data"
                 onPress={() => setShowHCDebug(!showHCDebug)}
               />
               {showHCDebug && (
                 <View style={styles.expandedSection}>
+                  <Text variant="caption" color="muted" style={{ marginBottom: spacing.sm }}>
+                    Recent health data from your wearable (last 24 hours)
+                  </Text>
                   <View style={styles.debugButtonRow}>
                     <Pressable
                       style={styles.debugButton}
@@ -365,16 +529,13 @@ export default function SettingsScreen() {
                       {isLoadingHCDebug ? (
                         <ActivityIndicator size="small" color={colors.primary[500]} />
                       ) : (
-                        <Ionicons name="play" size={16} color={colors.primary[500]} />
+                        <Ionicons name="refresh-outline" size={16} color={colors.primary[500]} />
                       )}
                       <Text variant="caption" color="primary">
-                        Run Debug Report
+                        Load Data
                       </Text>
                     </Pressable>
                   </View>
-                  <Text variant="caption" color="muted" style={{ marginBottom: spacing.sm }}>
-                    Shows all Health Connect data available from your wearable (last 24h)
-                  </Text>
                   {hcDebugReport && (
                     <ScrollView
                       style={styles.debugOutput}
@@ -633,6 +794,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     borderRadius: 6,
+  },
+  trainButton: {
+    backgroundColor: colors.primary[500],
   },
   debugOutput: {
     maxHeight: 400,

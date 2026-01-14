@@ -8,6 +8,12 @@ import {
   getStageProportions,
   type StageProportions,
 } from './sleepStageLearning';
+import {
+  loadEnhancedModel,
+  classifyWithTemporal,
+  resetTemporalState,
+  type EnhancedModel,
+} from './enhancedSleepClassifier';
 
 export interface StageProbabilities {
   awake: number;
@@ -35,13 +41,18 @@ const STAGES: ClassifiableStage[] = ['awake', 'light', 'deep', 'rem'];
 
 let sessionStartTime: number | null = null;
 const AWAKE_PRIOR_FADE_MS = 5 * 60 * 1000;
+let enhancedModel: EnhancedModel | null = null;
 
-export function startHybridSession(): void {
+export async function startHybridSession(): Promise<void> {
   sessionStartTime = Date.now();
+  enhancedModel = await loadEnhancedModel();
+  resetTemporalState();
 }
 
 export function stopHybridSession(): void {
   sessionStartTime = null;
+  enhancedModel = null;
+  resetTemporalState();
 }
 
 function getAwakePrior(): StageProbabilities {
@@ -139,9 +150,36 @@ async function classifyFromVitals(vitals: VitalsSnapshot | null): Promise<Source
     };
   }
 
-  const model = await loadModel();
   let probs: StageProbabilities = { awake: 0, light: 0, deep: 0, rem: 0 };
   let confidence = 0;
+
+  // Use enhanced model if available (has temporal smoothing + better accuracy)
+  if (enhancedModel && enhancedModel.validationAccuracy !== null) {
+    const result = classifyWithTemporal(
+      enhancedModel,
+      vitals.heartRate,
+      vitals.hrv ?? null,
+      null, // hrvEstimated computed internally
+      vitals.respiratoryRate ?? null
+    );
+
+    probs = {
+      awake: result.probabilities.awake,
+      light: result.probabilities.light,
+      deep: result.probabilities.deep,
+      rem: result.probabilities.rem,
+    };
+    confidence = result.confidence;
+
+    return {
+      probabilities: normalizeProbabilities(probs),
+      confidence,
+      available: true,
+    };
+  }
+
+  // Fallback to basic model
+  const model = await loadModel();
 
   if (isModelValid(model)) {
     for (const stage of STAGES) {
