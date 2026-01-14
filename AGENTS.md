@@ -270,57 +270,66 @@ const SLEEP_BREATHING_REGULARITY = 0.85;
 
 ## Android Build
 
-### Current Status: REMOVED (Nuclear Reset)
+### Current Status: WORKING
 
-**WARNING**: As of January 12, 2026, the Android-specific code has been REMOVED from this codebase due to intractable build issues. The web app is the primary platform.
+Android builds are functional as of January 2026. The previous AGP/Material compatibility issues have been resolved.
 
-### CRITICAL: NEVER Propose EAS Cloud Builds
+### Build Commands
 
-**DO NOT suggest EAS cloud builds as a solution.** Cloud builds will NOT work if we cannot get the build working locally. This has been attempted and failed. The root cause is a fundamental incompatibility between:
+```bash
+# Build and run on connected device/emulator
+npx expo run:android
 
-- React Native 0.81+ / Expo SDK 54+
-- react-native-screens 4.19+
-- Material Components 1.13.0
-- Android Gradle Plugin AAPT2 resource compiler
+# Build APK only
+cd android && ./gradlew assembleDebug
 
-### Historical Context (Pre-Reset)
-
-Android builds were blocked by a bug in Android Gradle Plugin's AAPT2 resource compiler that fails to parse color resources from Material library.
-
-**Error:**
-
-```
-material-1.13.0/res/values/values.xml:364:4: Invalid <color> for given resource value.
-java.lang.IllegalStateException: Can not extract resource from com.android.aaptcompiler.ParsedResource
+# APK output location
+android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-**Root Cause**: Health Connect integration (`expo-health-connect`, `react-native-health-connect`) required `react-native-screens@4.19.0` which depends on Material 1.13.0. Material 1.13.0 uses M3 Design Tokens with `<macro>` XML tags that AGP's AAPT2 cannot parse.
+### Build Configuration
 
-### AGP Versions Tested (All Failed)
+| Component  | Version       |
+| ---------- | ------------- |
+| buildTools | 36.0.0        |
+| minSdk     | 26            |
+| compileSdk | 36            |
+| targetSdk  | 36            |
+| NDK        | 27.1.12297006 |
+| Kotlin     | 2.1.20        |
+| Gradle     | 8.14.3        |
 
-| AGP           | Gradle | Material  | Result                            |
-| ------------- | ------ | --------- | --------------------------------- |
-| 8.7.3         | 8.13   | 1.13.0    | Version mismatch                  |
-| 8.10.2        | 8.13   | 1.9.0     | Missing react-native-screens APIs |
-| 8.10.2        | 8.13   | 1.10-1.12 | Invalid color error               |
-| 8.11.0        | 8.14.3 | 1.13.0    | Invalid color error               |
-| 8.13.0-8.13.2 | 8.13   | 1.12.0    | Invalid color error               |
+### Health Connect Integration
 
-### Future Android Implementation
+Health Connect is integrated and working:
 
-When rebuilding Android support:
+- Permissions: Heart rate, respiratory rate, sleep data
+- Status shown in Settings > Wearables & Health Connect
+- Debug data available in Settings > Health Connect Data Debug
 
-1. Start from a working web-only codebase
-2. Use `npx expo prebuild --platform android` to generate fresh native files
-3. Add native features ONE AT A TIME, testing build after each
-4. Avoid Health Connect until the AGP/Material bug is resolved upstream
-5. Test build locally BEFORE committing any native changes
+### Testing on Emulator
 
-### EAS Configuration (Reference Only)
+```bash
+# List available emulators
+~/Library/Android/sdk/emulator/emulator -list-avds
+
+# Start emulator
+~/Library/Android/sdk/emulator/emulator -avd Medium_Phone_API_35
+
+# Check connected devices
+~/Library/Android/sdk/platform-tools/adb devices
+
+# Install APK
+~/Library/Android/sdk/platform-tools/adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+
+# Take screenshot
+~/Library/Android/sdk/platform-tools/adb exec-out screencap -p > screenshot.png
+```
+
+### EAS Configuration
 
 - Project ID: `8d6aab43-b375-4a93-86a2-bb5d4e407871`
 - Owner: `contextlab`
-- **DO NOT USE** until local builds work first
 
 ---
 
