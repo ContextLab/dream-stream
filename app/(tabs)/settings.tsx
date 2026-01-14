@@ -33,7 +33,8 @@ import {
   loadRemOptimizedModel,
   clearRemOptimizedModel,
   formatTrainingReport,
-  type TrainingReport,
+  exportTrainingData,
+  formatExportedData,
 } from '@/services/remOptimizedClassifier';
 
 export default function SettingsScreen() {
@@ -103,6 +104,19 @@ export default function SettingsScreen() {
       setRemOptimizedReport(formatTrainingReport(report));
     } catch (error) {
       setRemOptimizedReport(`Training failed: ${error}`);
+    } finally {
+      setIsTrainingRemOptimized(false);
+    }
+  };
+
+  const handleAnalyzeData = async () => {
+    setIsTrainingRemOptimized(true);
+    setRemOptimizedReport('Analyzing training data...');
+    try {
+      const data = await exportTrainingData(48);
+      setRemOptimizedReport(formatExportedData(data));
+    } catch (error) {
+      setRemOptimizedReport(`Analysis failed: ${error}`);
     } finally {
       setIsTrainingRemOptimized(false);
     }
@@ -445,6 +459,16 @@ export default function SettingsScreen() {
                       )}
                       <Text variant="caption" style={{ color: colors.gray[950] }}>
                         Train
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.debugButton}
+                      onPress={handleAnalyzeData}
+                      disabled={isTrainingRemOptimized}
+                    >
+                      <Ionicons name="analytics-outline" size={16} color={colors.accent.cyan} />
+                      <Text variant="caption" color="primary">
+                        Analyze
                       </Text>
                     </Pressable>
                     <Pressable

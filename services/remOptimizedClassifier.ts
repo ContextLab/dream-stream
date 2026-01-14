@@ -355,6 +355,178 @@ export function to4Class(stage3: SleepStage3): SleepStage {
 }
 
 // ============================================================================
+// Feature Extraction from HR Samples
+// ============================================================================
+
+interface HRFeatures {
+  meanHR: number;
+  stdHR: number;
+  rangeHR: number;
+  pseudoRMSSD: number;
+  coefficientOfVariation: number;
+  sampleCount: number;
+}
+
+function extractHRFeatures(hrSamples: Array<{ beatsPerMinute: number; time: string }>): HRFeatures {
+  if (hrSamples.length === 0) {
+    return {
+      meanHR: 0,
+      stdHR: 0,
+      rangeHR: 0,
+      pseudoRMSSD: 0,
+      coefficientOfVariation: 0,
+      sampleCount: 0,
+    };
+  }
+
+  const hrs = hrSamples.map((s) => s.beatsPerMinute);
+  const meanHR = mean(hrs);
+  const stdHR = std(hrs);
+  const rangeHR = Math.max(...hrs) - Math.min(...hrs);
+  const coefficientOfVariation = meanHR > 0 ? stdHR / meanHR : 0;
+
+  let pseudoRMSSD = 0;
+  if (hrSamples.length >= 2) {
+    const sortedSamples = [...hrSamples].sort(
+      (a, b) => new Date(a.time).getTime() - new Date(b.time).getTime()
+    );
+
+    const rrIntervals: number[] = [];
+    for (const sample of sortedSamples) {
+      if (sample.beatsPerMinute > 0) {
+        rrIntervals.push(60000 / sample.beatsPerMinute);
+      }
+    }
+
+    if (rrIntervals.length >= 2) {
+      const successiveDiffs: number[] = [];
+      for (let i = 1; i < rrIntervals.length; i++) {
+        successiveDiffs.push(Math.pow(rrIntervals[i] - rrIntervals[i - 1], 2));
+      }
+      if (successiveDiffs.length > 0) {
+        pseudoRMSSD = Math.sqrt(mean(successiveDiffs));
+      }
+    }
+  }
+
+  return {
+    meanHR,
+    stdHR,
+    rangeHR,
+    pseudoRMSSD,
+    coefficientOfVariation,
+    sampleCount: hrSamples.length,
+  };
+}
+
+// ============================================================================
+// Data Export for Local Analysis
+// ============================================================================
+
+export interface ExportedTrainingData {
+  exportTime: string;
+  sleepStages: Array<{ stage: string; startTime: string; endTime: string }>;
+  hrSamples: Array<{ beatsPerMinute: number; time: string }>;
+  stageFeatures: Record<
+    string,
+    {
+      hrFeatures: HRFeatures;
+      durationMinutes: number;
+      sampleCount: number;
+    }
+  >;
+}
+
+export async function exportTrainingData(hoursBack: number = 48): Promise<ExportedTrainingData> {
+  const platform = Platform.OS;
+
+  const [sleepStages, hrSamples] = await Promise.all([
+    platform === 'ios'
+      ? healthKit.getRecentSleepSessions(hoursBack)
+      : healthConnect.getRecentSleepSessions(hoursBack),
+    platform === 'ios'
+      ? healthKit.getRecentHeartRate(hoursBack * 60)
+      : healthConnect.getRecentHeartRate(hoursBack * 60),
+  ]);
+
+  const stageFeatures: ExportedTrainingData['stageFeatures'] = {};
+  const STAGES: SleepStage3[] = ['awake', 'nrem', 'rem'];
+
+  for (const stage3 of STAGES) {
+    const matchingHRs: Array<{ beatsPerMinute: number; time: string }> = [];
+    let totalDurationMs = 0;
+
+    for (const stageRecord of sleepStages) {
+      const stageStart = new Date(stageRecord.startTime);
+      const stageEnd = new Date(stageRecord.endTime);
+      const recordStage = to3Class(stageRecord.stage as SleepStage);
+
+      if (recordStage === stage3) {
+        totalDurationMs += stageEnd.getTime() - stageStart.getTime();
+
+        const matching = hrSamples.filter((hr) => {
+          const t = new Date(hr.time);
+          return t >= stageStart && t <= stageEnd;
+        });
+        matchingHRs.push(...matching);
+      }
+    }
+
+    stageFeatures[stage3] = {
+      hrFeatures: extractHRFeatures(matchingHRs),
+      durationMinutes: totalDurationMs / 60000,
+      sampleCount: matchingHRs.length,
+    };
+  }
+
+  return {
+    exportTime: new Date().toISOString(),
+    sleepStages: sleepStages.map((s) => ({
+      stage: s.stage,
+      startTime: s.startTime,
+      endTime: s.endTime,
+    })),
+    hrSamples: hrSamples.map((h) => ({
+      beatsPerMinute: h.beatsPerMinute,
+      time: h.time,
+    })),
+    stageFeatures,
+  };
+}
+
+export function formatExportedData(data: ExportedTrainingData): string {
+  const lines: string[] = [];
+  lines.push('╔══════════════════════════════════════════════════════════════╗');
+  lines.push('║              EXPORTED TRAINING DATA ANALYSIS                 ║');
+  lines.push('╚══════════════════════════════════════════════════════════════╝');
+  lines.push('');
+  lines.push(`Export Time: ${data.exportTime}`);
+  lines.push(`Sleep Stages: ${data.sleepStages.length}`);
+  lines.push(`HR Samples: ${data.hrSamples.length}`);
+  lines.push('');
+
+  lines.push('┌─────────────────────────────────────────────────────────────┐');
+  lines.push('│ FEATURES BY STAGE                                           │');
+  lines.push('├─────────────────────────────────────────────────────────────┤');
+
+  for (const [stage, features] of Object.entries(data.stageFeatures)) {
+    const f = features.hrFeatures;
+    lines.push(`│ ${stage.toUpperCase()}`);
+    lines.push(
+      `│   Duration: ${features.durationMinutes.toFixed(1)} min (${features.sampleCount} HR samples)`
+    );
+    lines.push(`│   HR Mean±Std: ${f.meanHR.toFixed(1)}±${f.stdHR.toFixed(1)} bpm`);
+    lines.push(`│   HR Range: ${f.rangeHR.toFixed(1)} bpm`);
+    lines.push(`│   Pseudo-RMSSD: ${f.pseudoRMSSD.toFixed(1)} ms`);
+    lines.push(`│   CV: ${(f.coefficientOfVariation * 100).toFixed(2)}%`);
+    lines.push('│');
+  }
+  lines.push('└─────────────────────────────────────────────────────────────┘');
+
+  return lines.join('\n');
+}
+
+// ============================================================================
 // Training from Historical Data
 // ============================================================================
 
