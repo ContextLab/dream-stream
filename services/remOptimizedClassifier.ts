@@ -122,7 +122,7 @@ const MAX_RECENT_HR_SAMPLES = 20;
 let rmssdHistory: number[] = [];
 const MAX_RMSSD_HISTORY = 10;
 let consecutiveRemSignals = 0;
-const CV_THRESHOLD = 0.3;
+const CV_THRESHOLD = 0.2;
 const REM_CONSECUTIVE_REQUIRED = 2;
 
 // ============================================================================
