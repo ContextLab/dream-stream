@@ -916,10 +916,12 @@ async function runValidation(
     const stageEnd = new Date(stageRecord.endTime);
     const actualStage = to3Class(stageRecord.stage as SleepStage);
 
-    const matchingHr = hrSamples.filter((hr) => {
-      const t = new Date(hr.time);
-      return t >= stageStart && t <= stageEnd;
-    });
+    const matchingHr = hrSamples
+      .filter((hr) => {
+        const t = new Date(hr.time);
+        return t >= stageStart && t <= stageEnd;
+      })
+      .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
 
     for (const hr of matchingHr) {
       const hrTime = new Date(hr.time);
