@@ -46,9 +46,8 @@ export interface Stage3Statistics {
   hrvStd: number;
   rrMean: number;
   rrStd: number;
-  // REM-specific features from literature
-  rmssdMean: number; // Lower in REM (20-40ms) vs Deep (50-90ms)
-  rmssdStd: number;
+  pseudoRMSSD: number;
+  coefficientOfVariation: number;
   count: number;
 }
 
@@ -117,7 +116,7 @@ let previousProbabilities: Stage3Probabilities = { awake: 0.5, nrem: 0.3, rem: 0
 let baselineHRSamples: number[] = [];
 let baselineHRVSamples: number[] = [];
 let lastVitalsTimestamp: Date | null = null;
-let recentHRSamples: number[] = [];
+let recentHRWithTime: Array<{ beatsPerMinute: number; time: string }> = [];
 const MAX_RECENT_HR_SAMPLES = 20;
 
 // ============================================================================
@@ -274,7 +273,7 @@ export function startRemOptimizedSession(): void {
   previousProbabilities = { awake: 0.5, nrem: 0.3, rem: 0.2 };
   baselineHRSamples = [];
   baselineHRVSamples = [];
-  recentHRSamples = [];
+  recentHRWithTime = [];
   lastVitalsTimestamp = null;
 }
 
@@ -282,7 +281,7 @@ export function stopRemOptimizedSession(): void {
   sessionStartTime = null;
   baselineHRSamples = [];
   baselineHRVSamples = [];
-  recentHRSamples = [];
+  recentHRWithTime = [];
 }
 
 export function getSessionStartTime(): Date | null {
@@ -437,7 +436,7 @@ export interface ExportedTrainingData {
   >;
 }
 
-export async function exportTrainingData(hoursBack: number = 48): Promise<ExportedTrainingData> {
+export async function exportTrainingData(hoursBack: number = 720): Promise<ExportedTrainingData> {
   const platform = Platform.OS;
 
   const [sleepStages, hrSamples] = await Promise.all([
@@ -530,10 +529,20 @@ export function formatExportedData(data: ExportedTrainingData): string {
 // Training from Historical Data
 // ============================================================================
 
-export async function trainRemOptimizedModel(hoursBack: number = 48): Promise<{
+export type TrainingProgressCallback = (progress: {
+  stage: 'fetching' | 'processing' | 'validating' | 'complete';
+  message: string;
+  percent: number;
+}) => void;
+
+export async function trainRemOptimizedModel(
+  hoursBack: number = 720,
+  onProgress?: TrainingProgressCallback
+): Promise<{
   model: RemOptimizedModel;
   report: TrainingReport;
 }> {
+  const progress = onProgress ?? (() => {});
   const platform = Platform.OS;
   const report: TrainingReport = {
     timestamp: new Date().toISOString(),
@@ -558,6 +567,7 @@ export async function trainRemOptimizedModel(hoursBack: number = 48): Promise<{
 
   try {
     // Fetch all data
+    progress({ stage: 'fetching', message: 'Fetching sleep data from wearable...', percent: 5 });
     const [sleepStages, hrSamples, hrvSamples, rrSamples] = await Promise.all([
       platform === 'ios'
         ? healthKit.getRecentSleepSessions(hoursBack)
@@ -578,6 +588,12 @@ export async function trainRemOptimizedModel(hoursBack: number = 48): Promise<{
     report.hrvSamplesFound = hrvSamples.length;
     report.rrSamplesFound = rrSamples.length;
 
+    progress({
+      stage: 'fetching',
+      message: `Found ${sleepStages.length} sleep stages, ${hrSamples.length} HR samples`,
+      percent: 20,
+    });
+
     if (sleepStages.length === 0) {
       report.warnings.push('No sleep stages found in Health Connect');
       return { model: createEmptyModel(), report };
@@ -587,11 +603,15 @@ export async function trainRemOptimizedModel(hoursBack: number = 48): Promise<{
       report.warnings.push('No heart rate samples found');
     }
 
-    // Collect data per 3-class stage
-    const stageData: Record<SleepStage3, { hrs: number[]; hrvs: number[]; rrs: number[] }> = {
-      awake: { hrs: [], hrvs: [], rrs: [] },
-      nrem: { hrs: [], hrvs: [], rrs: [] },
-      rem: { hrs: [], hrvs: [], rrs: [] },
+    progress({ stage: 'processing', message: 'Processing sleep stages...', percent: 25 });
+
+    const stageData: Record<
+      SleepStage3,
+      { hrSamples: Array<{ beatsPerMinute: number; time: string }>; hrvs: number[]; rrs: number[] }
+    > = {
+      awake: { hrSamples: [], hrvs: [], rrs: [] },
+      nrem: { hrSamples: [], hrvs: [], rrs: [] },
+      rem: { hrSamples: [], hrvs: [], rrs: [] },
     };
 
     // Track transitions for transition matrix
@@ -605,8 +625,20 @@ export async function trainRemOptimizedModel(hoursBack: number = 48): Promise<{
     let totalDuration = 0;
     const stageDurations: Record<SleepStage3, number> = { awake: 0, nrem: 0, rem: 0 };
 
-    // Process sleep stages
-    for (const stageRecord of sleepStages) {
+    const totalStages = sleepStages.length;
+    const progressInterval = Math.max(1, Math.floor(totalStages / 10));
+
+    for (let idx = 0; idx < sleepStages.length; idx++) {
+      const stageRecord = sleepStages[idx];
+      const shouldReportProgress = idx % progressInterval === 0;
+      if (shouldReportProgress) {
+        const pct = 25 + Math.floor((idx / totalStages) * 25);
+        progress({
+          stage: 'processing',
+          message: `Processing stage ${idx + 1}/${totalStages}...`,
+          percent: pct,
+        });
+      }
       const stageStart = new Date(stageRecord.startTime);
       const stageEnd = new Date(stageRecord.endTime);
       const stage4 = stageRecord.stage as SleepStage;
@@ -622,14 +654,11 @@ export async function trainRemOptimizedModel(hoursBack: number = 48): Promise<{
       }
       prevStage3 = stage3;
 
-      // Match HR samples to this stage
       const matchingHr = hrSamples.filter((hr) => {
         const t = new Date(hr.time);
         return t >= stageStart && t <= stageEnd;
       });
-      for (const hr of matchingHr) {
-        stageData[stage3].hrs.push(hr.beatsPerMinute);
-      }
+      stageData[stage3].hrSamples.push(...matchingHr);
 
       // Match HRV samples
       const matchingHrv = hrvSamples.filter((hrv) => {
@@ -650,11 +679,10 @@ export async function trainRemOptimizedModel(hoursBack: number = 48): Promise<{
       }
     }
 
-    // Report matched samples
     report.matchedSamplesPerStage = {
-      awake: stageData.awake.hrs.length,
-      nrem: stageData.nrem.hrs.length,
-      rem: stageData.rem.hrs.length,
+      awake: stageData.awake.hrSamples.length,
+      nrem: stageData.nrem.hrSamples.length,
+      rem: stageData.rem.hrSamples.length,
     };
 
     // Report stage distribution
@@ -666,7 +694,8 @@ export async function trainRemOptimizedModel(hoursBack: number = 48): Promise<{
       };
     }
 
-    // Compute statistics for each stage
+    progress({ stage: 'processing', message: 'Computing stage statistics...', percent: 55 });
+
     const stageStats: Record<SleepStage3, Stage3Statistics | null> = {
       awake: null,
       nrem: null,
@@ -676,21 +705,22 @@ export async function trainRemOptimizedModel(hoursBack: number = 48): Promise<{
     const STAGES: SleepStage3[] = ['awake', 'nrem', 'rem'];
     for (const stage of STAGES) {
       const data = stageData[stage];
-      if (data.hrs.length >= MIN_SAMPLES_PER_STAGE) {
+      if (data.hrSamples.length >= MIN_SAMPLES_PER_STAGE) {
+        const hrFeatures = extractHRFeatures(data.hrSamples);
         stageStats[stage] = {
-          hrMean: mean(data.hrs),
-          hrStd: Math.max(1, std(data.hrs)),
+          hrMean: hrFeatures.meanHR,
+          hrStd: Math.max(1, hrFeatures.stdHR),
           hrvMean: data.hrvs.length > 0 ? mean(data.hrvs) : 0,
           hrvStd: data.hrvs.length > 0 ? Math.max(1, std(data.hrvs)) : 1,
           rrMean: data.rrs.length > 0 ? mean(data.rrs) : 0,
           rrStd: data.rrs.length > 0 ? Math.max(1, std(data.rrs)) : 1,
-          rmssdMean: data.hrvs.length > 0 ? mean(data.hrvs) : 0, // Approximation
-          rmssdStd: data.hrvs.length > 0 ? Math.max(1, std(data.hrvs)) : 1,
-          count: data.hrs.length,
+          pseudoRMSSD: hrFeatures.pseudoRMSSD,
+          coefficientOfVariation: hrFeatures.coefficientOfVariation,
+          count: data.hrSamples.length,
         };
       } else {
         report.warnings.push(
-          `Insufficient samples for ${stage}: ${data.hrs.length} (need ${MIN_SAMPLES_PER_STAGE})`
+          `Insufficient samples for ${stage}: ${data.hrSamples.length} (need ${MIN_SAMPLES_PER_STAGE})`
         );
       }
     }
@@ -718,7 +748,8 @@ export async function trainRemOptimizedModel(hoursBack: number = 48): Promise<{
       }
     }
 
-    // Run validation
+    progress({ stage: 'validating', message: 'Running validation...', percent: 70 });
+
     const validationResults = await runValidation(
       sleepStages,
       hrSamples,
@@ -728,7 +759,8 @@ export async function trainRemOptimizedModel(hoursBack: number = 48): Promise<{
     );
     report.validationResults = validationResults;
 
-    // Build model
+    progress({ stage: 'validating', message: 'Building model...', percent: 90 });
+
     const model: RemOptimizedModel = {
       stageStats,
       transitionMatrix,
@@ -771,6 +803,13 @@ export async function trainRemOptimizedModel(hoursBack: number = 48): Promise<{
     };
 
     await saveRemOptimizedModel(model);
+
+    progress({
+      stage: 'complete',
+      message: `Training complete! Accuracy: ${(validationResults.overallAccuracy * 100).toFixed(1)}%`,
+      percent: 100,
+    });
+
     return { model, report };
   } catch (error) {
     report.errors.push(`Training error: ${error}`);
@@ -920,69 +959,121 @@ function classifyWithStatsInternal(
   const cyclePosition =
     (minutesSinceSleepStart % ULTRADIAN_CYCLE_MINUTES) / ULTRADIAN_CYCLE_MINUTES;
   const isInRemWindow = cyclePosition >= REM_WINDOW_START;
-  const remPropensity = getRemPropensity(minutesSinceSleepStart);
+  const cycleNumber = Math.floor(minutesSinceSleepStart / ULTRADIAN_CYCLE_MINUTES);
 
-  const localHRStd = recentHRs.length >= 5 ? std(recentHRs) : 10;
   const localHRMean = recentHRs.length >= 3 ? mean(recentHRs) : heartRate;
+  const awakeStats = stageStats.awake;
 
   let scores: number[] = [0, 0, 0];
 
   for (let i = 0; i < STAGES.length; i++) {
     const stage = STAGES[i];
-    const stats = stageStats[stage];
-
-    if (!stats) {
-      scores[i] = stage === 'nrem' ? 0.3 : 0.1;
-      continue;
-    }
-
     let score = 0;
 
     if (stage === 'rem') {
-      if (minutesSinceSleepStart >= FIRST_REM_LATENCY_MINUTES) {
-        score += remPropensity * 0.4;
-
-        if (isInRemWindow) {
-          score += 0.35;
-        }
-
-        if (localHRStd < stats.hrStd * 0.8 && localHRStd < 6) {
-          score += 0.15;
-        }
-
-        if (hrv !== null && stats.hrvMean > 0) {
-          const hrvDiff = Math.abs(hrv - stats.hrvMean) / stats.hrvStd;
-          if (hrvDiff < 1.5) {
-            score += 0.1;
-          }
+      if (minutesSinceSleepStart < FIRST_REM_LATENCY_MINUTES) {
+        score = 0.02;
+      } else if (isInRemWindow) {
+        score = 0.5 + cycleNumber * 0.08;
+        if (prevStage === 'nrem') {
+          score += 0.1;
         }
       } else {
-        score = 0.05;
+        score = 0.1 + cycleNumber * 0.03;
       }
     } else if (stage === 'nrem') {
-      if (minutesSinceSleepStart < 60) {
-        score += 0.5;
+      if (minutesSinceSleepStart < FIRST_REM_LATENCY_MINUTES) {
+        score = 0.7;
       } else if (!isInRemWindow) {
-        score += 0.4;
+        score = 0.55;
       } else {
-        score += 0.2;
-      }
-
-      if (localHRStd > 5) {
-        score += 0.1;
+        score = 0.25 - cycleNumber * 0.03;
       }
     } else {
-      if (heartRate > localHRMean + 8 || localHRStd > 12) {
-        score += 0.4;
-      } else if (minutesSinceSleepStart < 15) {
-        score += 0.3;
+      if (heartRate > localHRMean + 10) {
+        score = 0.5;
+      } else if (minutesSinceSleepStart < 20) {
+        score = 0.3;
       } else {
-        score += 0.1;
+        score = 0.08;
+      }
+      if (awakeStats && heartRate > awakeStats.hrMean) {
+        score += 0.15;
       }
     }
 
     const transitionProb = transitionMatrix[prevStage][stage];
     score += transitionProb * 0.15;
+
+    scores[i] = score;
+  }
+
+  let bestIdx = 0;
+  for (let i = 1; i < scores.length; i++) {
+    if (scores[i] > scores[bestIdx]) {
+      bestIdx = i;
+    }
+  }
+
+  return STAGES[bestIdx];
+}
+
+    let score = 0;
+
+    if (stage === 'rem') {
+      if (minutesSinceSleepStart < FIRST_REM_LATENCY_MINUTES) {
+        score = 0.05;
+      } else {
+        score += remPropensity * 0.25;
+
+        if (isInRemWindow) {
+          score += 0.2;
+        }
+
+        if (localHRStd < hrStdThreshold) {
+          const hrStdScore = 1 - localHRStd / hrStdThreshold;
+          score += hrStdScore * 0.4;
+        }
+
+        if (localHRStd < remHRStd * 1.3) {
+          score += 0.15;
+        }
+      }
+    } else if (stage === 'nrem') {
+      if (minutesSinceSleepStart < 60) {
+        score += 0.35;
+      } else if (!isInRemWindow) {
+        score += 0.25;
+      } else {
+        score += 0.1;
+      }
+
+      if (localHRStd > hrStdThreshold) {
+        const hrStdScore = Math.min(1, (localHRStd - hrStdThreshold) / hrStdThreshold);
+        score += hrStdScore * 0.35;
+      }
+
+      if (localHRStd > nremHRStd * 0.7) {
+        score += 0.1;
+      }
+    } else {
+      if (heartRate > localHRMean + 8) {
+        score += 0.4;
+      } else if (localHRStd > 12) {
+        score += 0.3;
+      } else if (minutesSinceSleepStart < 15) {
+        score += 0.25;
+      } else {
+        score += 0.1;
+      }
+
+      if (heartRate > (awakeStats?.hrMean ?? 50) - 2) {
+        score += 0.1;
+      }
+    }
+
+    const transitionProb = transitionMatrix[prevStage][stage];
+    score += transitionProb * 0.1;
 
     scores[i] = score;
   }
@@ -1123,13 +1214,23 @@ function classifyWithModel(
 ): { stage: SleepStage3; confidence: number; probabilities: Stage3Probabilities } {
   const STAGES: SleepStage3[] = ['awake', 'nrem', 'rem'];
 
-  recentHRSamples.push(heartRate);
-  if (recentHRSamples.length > MAX_RECENT_HR_SAMPLES) {
-    recentHRSamples.shift();
+  const now = new Date().toISOString();
+  recentHRWithTime.push({ beatsPerMinute: heartRate, time: now });
+  if (recentHRWithTime.length > MAX_RECENT_HR_SAMPLES) {
+    recentHRWithTime.shift();
   }
 
-  const localHRStd = recentHRSamples.length >= 5 ? std(recentHRSamples) : 10;
-  const localHRMean = recentHRSamples.length >= 3 ? mean(recentHRSamples) : heartRate;
+  const localFeatures = extractHRFeatures(recentHRWithTime);
+  const localHRStd = localFeatures.stdHR;
+  const localHRMean = localFeatures.meanHR;
+
+  const remStats = model.stageStats.rem;
+  const nremStats = model.stageStats.nrem;
+  const awakeStats = model.stageStats.awake;
+
+  const remHRStd = remStats?.hrStd ?? 5;
+  const nremHRStd = nremStats?.hrStd ?? 9;
+  const hrStdThreshold = (remHRStd + nremHRStd) / 2;
 
   let scores: number[] = [0, 0, 0];
 
@@ -1145,50 +1246,59 @@ function classifyWithModel(
     let score = 0;
 
     if (stage === 'rem') {
-      if (temporal.minutesSinceSleepStart >= FIRST_REM_LATENCY_MINUTES) {
-        score += temporal.remPropensity * 0.4;
+      if (temporal.minutesSinceSleepStart < FIRST_REM_LATENCY_MINUTES) {
+        score = 0.05;
+      } else {
+        score += temporal.remPropensity * 0.25;
 
         if (temporal.isInRemWindow) {
-          score += 0.35;
+          score += 0.2;
         }
 
-        if (localHRStd < stats.hrStd * 0.8 && localHRStd < 6) {
+        if (localHRStd < hrStdThreshold) {
+          const hrStdScore = 1 - localHRStd / hrStdThreshold;
+          score += hrStdScore * 0.4;
+        }
+
+        if (localHRStd < remHRStd * 1.3) {
           score += 0.15;
         }
-
-        if (hrv !== null && stats.hrvMean > 0) {
-          const hrvDiff = Math.abs(hrv - stats.hrvMean) / stats.hrvStd;
-          if (hrvDiff < 1.5) {
-            score += 0.1;
-          }
-        }
-      } else {
-        score = 0.05;
       }
     } else if (stage === 'nrem') {
       if (temporal.minutesSinceSleepStart < 60) {
-        score += 0.5;
+        score += 0.35;
       } else if (!temporal.isInRemWindow) {
-        score += 0.4;
+        score += 0.25;
       } else {
-        score += 0.2;
+        score += 0.1;
       }
 
-      if (localHRStd > 5) {
+      if (localHRStd > hrStdThreshold) {
+        const hrStdScore = Math.min(1, (localHRStd - hrStdThreshold) / hrStdThreshold);
+        score += hrStdScore * 0.35;
+      }
+
+      if (localHRStd > nremHRStd * 0.7) {
         score += 0.1;
       }
     } else {
-      if (heartRate > localHRMean + 8 || localHRStd > 12) {
+      if (heartRate > localHRMean + 8) {
         score += 0.4;
-      } else if (temporal.minutesSinceSleepStart < 15) {
+      } else if (localHRStd > 12) {
         score += 0.3;
+      } else if (temporal.minutesSinceSleepStart < 15) {
+        score += 0.25;
       } else {
+        score += 0.1;
+      }
+
+      if (awakeStats && heartRate > awakeStats.hrMean - 2) {
         score += 0.1;
       }
     }
 
     const transitionProb = model.transitionMatrix[prevStage][stage];
-    score += transitionProb * 0.15;
+    score += transitionProb * 0.1;
 
     scores[i] = score;
   }

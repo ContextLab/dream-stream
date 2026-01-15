@@ -35,6 +35,7 @@ import {
   formatTrainingReport,
   exportTrainingData,
   formatExportedData,
+  type TrainingProgressCallback,
 } from '@/services/remOptimizedClassifier';
 
 export default function SettingsScreen() {
@@ -51,6 +52,10 @@ export default function SettingsScreen() {
   const [showRemOptimized, setShowRemOptimized] = useState(false);
   const [remOptimizedReport, setRemOptimizedReport] = useState<string | null>(null);
   const [isTrainingRemOptimized, setIsTrainingRemOptimized] = useState(false);
+  const [trainingProgress, setTrainingProgress] = useState<{
+    message: string;
+    percent: number;
+  } | null>(null);
 
   const health = useHealth();
 
@@ -98,14 +103,19 @@ export default function SettingsScreen() {
 
   const handleTrainRemOptimized = async () => {
     setIsTrainingRemOptimized(true);
-    setRemOptimizedReport('Starting REM-optimized (3-class) training...');
+    setTrainingProgress({ message: 'Initializing...', percent: 0 });
+    setRemOptimizedReport(null);
     try {
-      const { model, report } = await trainRemOptimizedModel(48);
+      const onProgress: TrainingProgressCallback = (progress) => {
+        setTrainingProgress({ message: progress.message, percent: progress.percent });
+      };
+      const { model, report } = await trainRemOptimizedModel(720, onProgress);
       setRemOptimizedReport(formatTrainingReport(report));
     } catch (error) {
       setRemOptimizedReport(`Training failed: ${error}`);
     } finally {
       setIsTrainingRemOptimized(false);
+      setTrainingProgress(null);
     }
   };
 
@@ -482,6 +492,21 @@ export default function SettingsScreen() {
                       </Text>
                     </Pressable>
                   </View>
+                  {trainingProgress && (
+                    <View style={styles.progressContainer}>
+                      <View style={styles.progressBarBackground}>
+                        <View
+                          style={[
+                            styles.progressBarFill,
+                            { width: `${trainingProgress.percent}%` },
+                          ]}
+                        />
+                      </View>
+                      <Text variant="caption" color="muted" style={styles.progressText}>
+                        {trainingProgress.message} ({trainingProgress.percent}%)
+                      </Text>
+                    </View>
+                  )}
                   {remOptimizedReport && (
                     <ScrollView
                       style={styles.debugOutput}
@@ -799,5 +824,23 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.regular,
     fontSize: 11,
     lineHeight: 16,
+  },
+  progressContainer: {
+    marginBottom: spacing.md,
+  },
+  progressBarBackground: {
+    height: 8,
+    backgroundColor: colors.gray[800],
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: colors.primary[500],
+    borderRadius: 4,
+  },
+  progressText: {
+    marginTop: spacing.xs,
+    textAlign: 'center',
   },
 });
