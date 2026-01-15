@@ -908,6 +908,8 @@ async function runValidation(
   }
 
   const sleepSessionStart = new Date(sleepStages[0].startTime);
+  const validationRmssdHistory: number[] = [];
+  let validationConsecutiveRemSignals = 0;
 
   for (const stageRecord of sleepStages) {
     const stageStart = new Date(stageRecord.startTime);
@@ -928,26 +930,26 @@ async function runValidation(
         recentHRs.shift();
       }
 
-      const matchingHrv = hrvSamples.find((hrv) => {
-        const t = new Date(hrv.time);
-        return Math.abs(t.getTime() - hrTime.getTime()) < 60000;
-      });
+      const rmssd = computeRmssd(recentHRs);
+      validationRmssdHistory.push(rmssd);
+      if (validationRmssdHistory.length > MAX_RMSSD_HISTORY) {
+        validationRmssdHistory.shift();
+      }
 
-      const predictedStage = classifyWithStatsInternal(
-        stageStats,
-        transitionMatrix,
-        hr.beatsPerMinute,
-        matchingHrv?.heartRateVariabilityMillis ?? null,
-        prevStage,
+      const result = classifyWithStatsInternal(
         minutesSinceSleepStart,
-        [...recentHRs]
+        validationRmssdHistory,
+        validationConsecutiveRemSignals,
+        prevStage,
+        recentHRs
       );
 
-      confusionMatrix[actualStage][predictedStage]++;
-      if (actualStage === predictedStage) correct++;
+      confusionMatrix[actualStage][result.stage]++;
+      if (actualStage === result.stage) correct++;
       total++;
 
-      prevStage = predictedStage;
+      prevStage = result.stage;
+      validationConsecutiveRemSignals = result.consecutiveRemSignals;
     }
   }
 
@@ -1020,83 +1022,49 @@ function getTimeBasedRemProbability(minutesSinceSleepStart: number): number {
 }
 
 function classifyWithStatsInternal(
-  stageStats: Record<SleepStage3, Stage3Statistics | null>,
-  transitionMatrix: Record<SleepStage3, Record<SleepStage3, number>>,
-  heartRate: number,
-  hrv: number | null,
-  prevStage: SleepStage3,
   minutesSinceSleepStart: number,
+  rmssdHistoryInput: number[],
+  prevConsecutiveRemSignals: number,
+  prevStage: SleepStage3,
   recentHRs: number[]
-): SleepStage3 {
-  const STAGES: SleepStage3[] = ['awake', 'nrem', 'rem'];
+): { stage: SleepStage3; consecutiveRemSignals: number } {
+  const cv = computeCV(rmssdHistoryInput);
+  const timeRemProb = getTimeBasedRemProbability(minutesSinceSleepStart);
 
-  const localRmssd = computeRmssd(recentHRs);
-  const localHRMean = recentHRs.length >= 3 ? mean(recentHRs) : heartRate;
+  const cvRemSignal = cv < CV_THRESHOLD ? 1.0 : 0.0;
+  const strongCvSignal = cv < CV_THRESHOLD * 0.7;
 
-  const remRmssd = stageStats.rem?.pseudoRMSSD ?? 3.0;
-  const nremRmssd = stageStats.nrem?.pseudoRMSSD ?? 4.3;
-  const awakeRmssd = stageStats.awake?.pseudoRMSSD ?? 8.6;
+  const remScore = 0.5 * timeRemProb + 0.5 * cvRemSignal * 0.5 + (strongCvSignal ? 0.15 : 0);
 
-  const remNremThreshold = (remRmssd + nremRmssd) / 2;
-  const nremAwakeThreshold = (nremRmssd + awakeRmssd) / 2;
+  let stage: SleepStage3;
+  let newConsecutiveRemSignals = prevConsecutiveRemSignals;
 
-  let scores: number[] = [0, 0, 0];
-
-  for (let i = 0; i < STAGES.length; i++) {
-    const stage = STAGES[i];
-    let score = 0;
-
-    if (stage === 'rem') {
-      if (minutesSinceSleepStart < FIRST_REM_LATENCY_MINUTES) {
-        score = 0.05;
-      } else if (localRmssd < remNremThreshold) {
-        const rmssdScore = 1 - localRmssd / remNremThreshold;
-        score = 0.4 + rmssdScore * 0.4;
-        if (prevStage === 'nrem') {
-          score += 0.1;
-        }
-      } else {
-        score = 0.15;
-      }
-    } else if (stage === 'nrem') {
-      if (minutesSinceSleepStart < FIRST_REM_LATENCY_MINUTES) {
-        score = 0.65;
-      } else if (localRmssd >= remNremThreshold && localRmssd < nremAwakeThreshold) {
-        const rmssdScore =
-          (localRmssd - remNremThreshold) / (nremAwakeThreshold - remNremThreshold);
-        score = 0.4 + rmssdScore * 0.3;
-      } else if (localRmssd >= nremAwakeThreshold) {
-        score = 0.25;
-      } else {
-        score = 0.3;
-      }
+  if (minutesSinceSleepStart < 70) {
+    stage = 'nrem';
+    newConsecutiveRemSignals = 0;
+  } else if (remScore > 0.25) {
+    newConsecutiveRemSignals++;
+    if (newConsecutiveRemSignals >= REM_CONSECUTIVE_REQUIRED) {
+      stage = 'rem';
     } else {
-      if (localRmssd >= nremAwakeThreshold) {
-        const rmssdScore = Math.min(1, (localRmssd - nremAwakeThreshold) / nremAwakeThreshold);
-        score = 0.4 + rmssdScore * 0.3;
-      } else if (heartRate > localHRMean + 10) {
-        score = 0.5;
-      } else if (minutesSinceSleepStart < 20) {
-        score = 0.3;
-      } else {
-        score = 0.1;
-      }
+      stage = 'nrem';
     }
+  } else {
+    newConsecutiveRemSignals = 0;
+    const localHRStd = recentHRs.length >= 3 ? std(recentHRs) : 0;
 
-    const transitionProb = transitionMatrix[prevStage][stage];
-    score += transitionProb * 0.15;
-
-    scores[i] = score;
-  }
-
-  let bestIdx = 0;
-  for (let i = 1; i < scores.length; i++) {
-    if (scores[i] > scores[bestIdx]) {
-      bestIdx = i;
+    if (cv > 0.5 && localHRStd > 5) {
+      stage = 'awake';
+    } else {
+      stage = 'nrem';
     }
   }
 
-  return STAGES[bestIdx];
+  if (prevStage === 'rem' && stage !== 'rem' && remScore > 0.15) {
+    stage = 'rem';
+  }
+
+  return { stage, consecutiveRemSignals: newConsecutiveRemSignals };
 }
 
 /**
