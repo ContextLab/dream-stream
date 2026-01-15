@@ -170,9 +170,46 @@ pip install edge-tts numpy soundfile
 # Requires: ffmpeg (system)
 ```
 
+## Classifier Analysis Scripts
+
+These scripts analyze Fitbit/HealthConnect data to optimize the sleep classifier:
+
+| Script                       | Purpose                                      |
+| ---------------------------- | -------------------------------------------- |
+| `parse_fitbit_takeout.py`    | Parse Fitbit Takeout data for analysis       |
+| `compare_all_options.py`     | Compare classifier configurations            |
+| `adaptive_classifier.py`     | Test adaptive classifier with learned params |
+| `two_stage_classifier.py`    | Two-stage awake/REM classifier               |
+| `analyze_awake.py`           | Analyze awake detection features             |
+| `analyze_temporal_priors.py` | Compute time-based awake priors              |
+
+### Running Classifier Evaluation
+
+```bash
+# Compare all classifier options (requires notes/raw_sleep_data.json)
+python scripts/compare_all_options.py
+
+# Run adaptive classifier with learned parameters
+python scripts/adaptive_classifier.py
+```
+
+### Data Requirements
+
+Classifier scripts expect `notes/raw_sleep_data.json` with:
+
+- `hrSamples`: Array of `{bpm, time}` objects
+- `sleepStages`: Array of `{stage, startTime, endTime}` objects
+
+This data is gitignored (personal health data).
+
 ## DO NOT
 
 - Commit `_full.opus`, `_music.opus`, or `_preview.opus` files
 - Modify voice/rate/pitch without testing full playback
 - Remove [PAUSE] markers without updating pause duration
 - Edit dreamData.ts directly (regenerate via build_dream_data.py)
+- Commit personal health data (notes/raw_sleep_data.json, etc.)
+
+---
+
+_Last updated: 2026-01-15_

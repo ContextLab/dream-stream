@@ -99,13 +99,54 @@ const baseUrl =
 const audioUrl = `${baseUrl}/audio/dreams/${dreamId}_combined.opus`;
 ```
 
-### Sleep Detection Flow
+### Sleep Detection Flow (Hybrid Classifier)
 
-1. `services/sleep.ts` captures microphone via Web Audio API
-2. Meyda extracts RMS, spectral features for breathing analysis
-3. Breathing regularity + RRV (respiratory rate variability) → sleep stage
-4. `onRemStart`/`onRemEnd` callbacks fire when REM detected
-5. `SleepModePlayer` plays queued dreams during REM windows
+The app uses a hybrid classifier that fuses audio-based breathing analysis with wearable vitals (via HealthConnect/HealthKit):
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    SLEEP SESSION START                          │
+├─────────────────────────────────────────────────────────────────┤
+│  1. Load existing model (or create empty)                       │
+│  2. Start hybrid session                                        │
+│  3. [Background] Auto-retrain if model >24h old                │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+          ┌───────────────────┴───────────────────┐
+          ▼                                       ▼
+┌─────────────────────┐               ┌─────────────────────┐
+│   AUDIO SOURCE      │               │   VITALS SOURCE     │
+│   (Microphone)      │               │   (HealthConnect)   │
+├─────────────────────┤               ├─────────────────────┤
+│ Web Audio API       │               │ HR, HRV, RR         │
+│ → Meyda features    │               │ → 30s polling       │
+│ → Breathing analysis│               │ → RMSSD/CV analysis │
+└─────────────────────┘               └─────────────────────┘
+          │                                       │
+          └───────────────────┬───────────────────┘
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    HYBRID CLASSIFIER                            │
+│  • Fuses audio + vitals with weighted probabilities             │
+│  • Applies temporal priors (awake more likely at start/end)     │
+│  • Two-stage: Awake detection → REM vs NREM                    │
+│  • Computes remConfidence for playback gating                   │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    REM PLAYBACK GATE                            │
+│  if (stage === 'rem' && remConfidence >= 0.5) → play dream     │
+│  else → log and skip                                           │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Key Components:**
+
+- `services/sleep.ts` - Session management, audio capture, stage transitions
+- `services/hybridClassifier.ts` - Fuses audio + vitals sources
+- `services/remOptimizedClassifier.ts` - REM-focused classification with learned parameters
+- `services/healthConnect.ts` - Android Health Connect integration
 
 ### State Sharing (Launch Queue)
 
@@ -217,21 +258,24 @@ export function useLaunchQueue() {
 - Browse/Search with transcript content matching
 - Audio playback with progress persistence
 - Favorites system (local storage)
-- Sleep tracking UI with audio-based detection
 - Queue management with shared state
 - CI audio generation (Edge TTS + procedural music)
+- **Health Connect integration** (Android) - HR, HRV, respiratory rate, sleep stages
+- **Hybrid sleep classifier** - fuses audio + vitals for stage detection
+- **Auto-training classifier** - learns from user's HealthConnect history
+- **REM confidence gating** - prevents false positive dream playback
 
 ### Partial
 
 - Auth (UI complete, uses mock data)
 - Offline indicator (component exists, not integrated)
-- HealthKit/Health Connect (stub only)
+- HealthKit (iOS) - stub only, Health Connect (Android) is complete
 
 ### Not Started
 
 - Supabase backend integration
 - Deep link handling
-- Wearable device sync
+- watchOS/WearOS companion apps
 
 ## Audio Generation
 
@@ -250,17 +294,52 @@ See `scripts/AGENTS.md` for detailed audio pipeline documentation.
 4. Generate audio: `python scripts/generate_audio.py --dream dream-N`
 5. Commit only `*_combined.opus` files
 
-## Sleep Detection Thresholds
+## Sleep Classifier Configuration
+
+### Two-Stage Classification (Option A+C)
+
+```typescript
+// services/remOptimizedClassifier.ts
+
+// Stage 1: Awake Detection
+const AWAKE_MEAN_DIFF_BASE_THRESHOLD = 3.0; // HR beat-to-beat variability
+const AWAKE_CONSECUTIVE_REQUIRED = 1; // Signals before awake confirmed
+
+// Learned awake priors by 30-min time bins (from Fitbit analysis)
+// 0-30min: 38.1%, 30-60min: 4.8%, 60-90min: 1.6%, ...330-360min: 30.9%
+
+// Dynamic threshold adjustment based on time prior:
+// prior > 25% → threshold * 0.85 (more sensitive at sleep onset/wake)
+// prior < 5%  → threshold * 1.3  (less sensitive mid-sleep)
+
+// Stage 2: REM vs NREM
+const CV_THRESHOLD = 0.2; // RMSSD coefficient of variation
+const REM_CONSECUTIVE_REQUIRED = 2; // Consecutive signals for REM
+
+// Blended awake score: 0.7 * hr_signal + 0.3 * time_prior > 0.4
+```
+
+### REM Playback Gating
 
 ```typescript
 // services/sleep.ts
-const BREATHING_RATE_MIN = 8; // BPM
-const BREATHING_RATE_MAX = 25; // BPM
-const REM_RRV_THRESHOLD = 0.25; // High variability = REM
-const DEEP_SLEEP_RRV_THRESHOLD = 0.1; // Low variability = deep
-const DROWSY_BREATHING_REGULARITY = 0.7;
-const SLEEP_BREATHING_REGULARITY = 0.85;
+const MIN_REM_CONFIDENCE_FOR_PLAYBACK = 0.5;
+
+// remConfidence computed from:
+// - REM probability from classifier
+// - Time bonus (>70 min since sleep start)
+// - REM window bonus (in expected REM portion of cycle)
+// - Consecutive REM signals
+// - REM propensity (increases through night)
 ```
+
+### Expected Performance (Best Balanced)
+
+| Metric            | Value |
+| ----------------- | ----- |
+| REM Sensitivity   | 79.8% |
+| Awake Sensitivity | 31.0% |
+| Awake Precision   | 30.8% |
 
 ## Deployment
 
@@ -333,4 +412,4 @@ Health Connect is integrated and working:
 
 ---
 
-_Last updated: 2026-01-13_
+_Last updated: 2026-01-15_
