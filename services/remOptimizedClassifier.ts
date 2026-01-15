@@ -877,6 +877,39 @@ interface ValidationResults {
   totalSamples: number;
 }
 
+function identifySleepSessions(
+  sleepStages: Array<{ stage: string; startTime: string; endTime: string }>,
+  gapHours: number = 4
+): Array<Array<{ stage: string; startTime: string; endTime: string }>> {
+  if (sleepStages.length === 0) return [];
+
+  const sortedStages = [...sleepStages].sort(
+    (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+  );
+
+  const sessions: Array<Array<{ stage: string; startTime: string; endTime: string }>> = [];
+  let currentSession = [sortedStages[0]];
+
+  for (let i = 1; i < sortedStages.length; i++) {
+    const prevEnd = new Date(sortedStages[i - 1].endTime).getTime();
+    const currStart = new Date(sortedStages[i].startTime).getTime();
+    const gapMs = currStart - prevEnd;
+    const gapH = gapMs / (1000 * 60 * 60);
+
+    if (gapH > gapHours) {
+      sessions.push(currentSession);
+      currentSession = [];
+    }
+    currentSession.push(sortedStages[i]);
+  }
+
+  if (currentSession.length > 0) {
+    sessions.push(currentSession);
+  }
+
+  return sessions;
+}
+
 async function runValidation(
   sleepStages: Array<{ stage: string; startTime: string; endTime: string }>,
   hrSamples: Array<{ beatsPerMinute: number; time: string }>,
@@ -893,8 +926,6 @@ async function runValidation(
 
   let correct = 0;
   let total = 0;
-  let prevStage: SleepStage3 = 'awake';
-  const recentHRs: number[] = [];
 
   if (sleepStages.length === 0) {
     return {
@@ -907,62 +938,83 @@ async function runValidation(
     };
   }
 
-  const sleepSessionStart = new Date(sleepStages[0].startTime);
-  const validationRmssdHistory: number[] = [];
-  let validationConsecutiveRemSignals = 0;
+  const sessions = identifySleepSessions(sleepStages);
+  console.log(
+    `[Validation] Found ${sessions.length} sleep sessions from ${sleepStages.length} stages`
+  );
 
-  for (const stageRecord of sleepStages) {
-    const stageStart = new Date(stageRecord.startTime);
-    const stageEnd = new Date(stageRecord.endTime);
-    const actualStage = to3Class(stageRecord.stage as SleepStage);
+  for (let sessionIdx = 0; sessionIdx < sessions.length; sessionIdx++) {
+    const session = sessions[sessionIdx];
+    if (session.length < 5) {
+      console.log(`[Validation] Session ${sessionIdx}: skipping (only ${session.length} stages)`);
+      continue;
+    }
 
-    const matchingHr = hrSamples
-      .filter((hr) => {
-        const t = new Date(hr.time);
-        return t >= stageStart && t <= stageEnd;
-      })
-      .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+    const sessionStart = new Date(session[0].startTime);
+    console.log(
+      `[Validation] Session ${sessionIdx}: ${session.length} stages, starts ${sessionStart.toISOString()}`
+    );
+    const recentHRs: number[] = [];
+    const validationRmssdHistory: number[] = [];
+    let validationConsecutiveRemSignals = 0;
+    let prevStage: SleepStage3 = 'awake';
 
-    for (const hr of matchingHr) {
-      const hrTime = new Date(hr.time);
-      const minutesSinceSleepStart = (hrTime.getTime() - sleepSessionStart.getTime()) / 60000;
+    for (const stageRecord of session) {
+      const stageStart = new Date(stageRecord.startTime);
+      const stageEnd = new Date(stageRecord.endTime);
+      const actualStage = to3Class(stageRecord.stage as SleepStage);
 
-      recentHRs.push(hr.beatsPerMinute);
-      if (recentHRs.length > MAX_RECENT_HR_SAMPLES) {
-        recentHRs.shift();
+      const matchingHr = hrSamples
+        .filter((hr) => {
+          const t = new Date(hr.time);
+          return t >= stageStart && t <= stageEnd;
+        })
+        .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+
+      for (const hr of matchingHr) {
+        const hrTime = new Date(hr.time);
+        const minutesSinceSleepStart = (hrTime.getTime() - sessionStart.getTime()) / 60000;
+
+        recentHRs.push(hr.beatsPerMinute);
+        if (recentHRs.length > MAX_RECENT_HR_SAMPLES) {
+          recentHRs.shift();
+        }
+
+        const rmssd = computeRmssd(recentHRs);
+        validationRmssdHistory.push(rmssd);
+        if (validationRmssdHistory.length > MAX_RMSSD_HISTORY) {
+          validationRmssdHistory.shift();
+        }
+
+        const result = classifyWithStatsInternal(
+          minutesSinceSleepStart,
+          validationRmssdHistory,
+          validationConsecutiveRemSignals,
+          prevStage,
+          recentHRs
+        );
+
+        confusionMatrix[actualStage][result.stage]++;
+        if (actualStage === result.stage) correct++;
+        total++;
+
+        prevStage = result.stage;
+        validationConsecutiveRemSignals = result.consecutiveRemSignals;
       }
-
-      const rmssd = computeRmssd(recentHRs);
-      validationRmssdHistory.push(rmssd);
-      if (validationRmssdHistory.length > MAX_RMSSD_HISTORY) {
-        validationRmssdHistory.shift();
-      }
-
-      const result = classifyWithStatsInternal(
-        minutesSinceSleepStart,
-        validationRmssdHistory,
-        validationConsecutiveRemSignals,
-        prevStage,
-        recentHRs
-      );
-
-      confusionMatrix[actualStage][result.stage]++;
-      if (actualStage === result.stage) correct++;
-      total++;
-
-      prevStage = result.stage;
-      validationConsecutiveRemSignals = result.consecutiveRemSignals;
     }
   }
 
-  // Calculate per-stage accuracy
+  console.log(`[Validation] Total samples processed: ${total}`);
+  console.log(
+    `[Validation] Confusion matrix: rem->rem=${confusionMatrix.rem.rem}, rem->nrem=${confusionMatrix.rem.nrem}, nrem->rem=${confusionMatrix.nrem.rem}`
+  );
+
   const perStageAccuracy: Record<SleepStage3, number> = { awake: 0, nrem: 0, rem: 0 };
   for (const stage of STAGES) {
     const stageTotal = STAGES.reduce((sum, s) => sum + confusionMatrix[stage][s], 0);
     perStageAccuracy[stage] = stageTotal > 0 ? confusionMatrix[stage][stage] / stageTotal : 0;
   }
 
-  // Calculate REM sensitivity and specificity
   const truePositiveRem = confusionMatrix.rem.rem;
   const falseNegativeRem = confusionMatrix.rem.awake + confusionMatrix.rem.nrem;
   const falsePositiveRem = confusionMatrix.awake.rem + confusionMatrix.nrem.rem;
