@@ -119,6 +119,12 @@ let lastVitalsTimestamp: Date | null = null;
 let recentHRWithTime: Array<{ beatsPerMinute: number; time: string }> = [];
 const MAX_RECENT_HR_SAMPLES = 20;
 
+let rmssdHistory: number[] = [];
+const MAX_RMSSD_HISTORY = 10;
+let consecutiveRemSignals = 0;
+const CV_THRESHOLD = 0.3;
+const REM_CONSECUTIVE_REQUIRED = 2;
+
 // ============================================================================
 // Temporal Feature Computation
 // ============================================================================
@@ -275,6 +281,8 @@ export function startRemOptimizedSession(): void {
   baselineHRVSamples = [];
   recentHRWithTime = [];
   lastVitalsTimestamp = null;
+  rmssdHistory = [];
+  consecutiveRemSignals = 0;
 }
 
 export function stopRemOptimizedSession(): void {
@@ -282,6 +290,8 @@ export function stopRemOptimizedSession(): void {
   baselineHRSamples = [];
   baselineHRVSamples = [];
   recentHRWithTime = [];
+  rmssdHistory = [];
+  consecutiveRemSignals = 0;
 }
 
 export function getSessionStartTime(): Date | null {
@@ -992,6 +1002,23 @@ function computeRmssd(hrs: number[]): number {
   return Math.sqrt(sumSquaredDiffs / (hrs.length - 1));
 }
 
+function computeCV(values: number[]): number {
+  if (values.length < 3) return 0.5;
+  const meanVal = values.reduce((a, b) => a + b, 0) / values.length;
+  if (meanVal < 0.1) return 0.5;
+  const variance = values.reduce((a, v) => a + (v - meanVal) ** 2, 0) / values.length;
+  return Math.sqrt(variance) / meanVal;
+}
+
+function getTimeBasedRemProbability(minutesSinceSleepStart: number): number {
+  if (minutesSinceSleepStart < 70) return 0;
+  const cycle = Math.floor(minutesSinceSleepStart / ULTRADIAN_CYCLE_MINUTES);
+  const positionInCycle =
+    (minutesSinceSleepStart % ULTRADIAN_CYCLE_MINUTES) / ULTRADIAN_CYCLE_MINUTES;
+  const baseProb = Math.min(0.35, 0.1 + cycle * 0.08);
+  return positionInCycle >= 0.65 ? baseProb * 2.0 : baseProb * 0.3;
+}
+
 function classifyWithStatsInternal(
   stageStats: Record<SleepStage3, Stage3Statistics | null>,
   transitionMatrix: Record<SleepStage3, Record<SleepStage3, number>>,
@@ -1196,8 +1223,6 @@ function classifyWithModel(
   temporal: TemporalFeatures,
   prevStage: SleepStage3
 ): { stage: SleepStage3; confidence: number; probabilities: Stage3Probabilities } {
-  const STAGES: SleepStage3[] = ['awake', 'nrem', 'rem'];
-
   const now = new Date().toISOString();
   recentHRWithTime.push({ beatsPerMinute: heartRate, time: now });
   if (recentHRWithTime.length > MAX_RECENT_HR_SAMPLES) {
@@ -1208,104 +1233,61 @@ function classifyWithModel(
   const localHRStd = localFeatures.stdHR;
   const localHRMean = localFeatures.meanHR;
 
-  const remStats = model.stageStats.rem;
-  const nremStats = model.stageStats.nrem;
-  const awakeStats = model.stageStats.awake;
-
-  const remHRStd = remStats?.hrStd ?? 5;
-  const nremHRStd = nremStats?.hrStd ?? 9;
-  const hrStdThreshold = (remHRStd + nremHRStd) / 2;
-
-  let scores: number[] = [0, 0, 0];
-
-  for (let i = 0; i < STAGES.length; i++) {
-    const stage = STAGES[i];
-    const stats = model.stageStats[stage];
-
-    if (!stats) {
-      scores[i] = stage === 'nrem' ? 0.3 : 0.1;
-      continue;
-    }
-
-    let score = 0;
-
-    if (stage === 'rem') {
-      if (temporal.minutesSinceSleepStart < FIRST_REM_LATENCY_MINUTES) {
-        score = 0.05;
-      } else {
-        score += temporal.remPropensity * 0.25;
-
-        if (temporal.isInRemWindow) {
-          score += 0.2;
-        }
-
-        if (localHRStd < hrStdThreshold) {
-          const hrStdScore = 1 - localHRStd / hrStdThreshold;
-          score += hrStdScore * 0.4;
-        }
-
-        if (localHRStd < remHRStd * 1.3) {
-          score += 0.15;
-        }
-      }
-    } else if (stage === 'nrem') {
-      if (temporal.minutesSinceSleepStart < 60) {
-        score += 0.35;
-      } else if (!temporal.isInRemWindow) {
-        score += 0.25;
-      } else {
-        score += 0.1;
-      }
-
-      if (localHRStd > hrStdThreshold) {
-        const hrStdScore = Math.min(1, (localHRStd - hrStdThreshold) / hrStdThreshold);
-        score += hrStdScore * 0.35;
-      }
-
-      if (localHRStd > nremHRStd * 0.7) {
-        score += 0.1;
-      }
-    } else {
-      if (heartRate > localHRMean + 8) {
-        score += 0.4;
-      } else if (localHRStd > 12) {
-        score += 0.3;
-      } else if (temporal.minutesSinceSleepStart < 15) {
-        score += 0.25;
-      } else {
-        score += 0.1;
-      }
-
-      if (awakeStats && heartRate > awakeStats.hrMean - 2) {
-        score += 0.1;
-      }
-    }
-
-    const transitionProb = model.transitionMatrix[prevStage][stage];
-    score += transitionProb * 0.1;
-
-    scores[i] = score;
+  const rmssd = computeRmssd(recentHRWithTime.map((h) => h.beatsPerMinute));
+  rmssdHistory.push(rmssd);
+  if (rmssdHistory.length > MAX_RMSSD_HISTORY) {
+    rmssdHistory.shift();
   }
 
-  const total = scores.reduce((a, b) => a + b, 0);
+  const cv = computeCV(rmssdHistory);
+  const timeRemProb = getTimeBasedRemProbability(temporal.minutesSinceSleepStart);
+
+  const cvRemSignal = cv < CV_THRESHOLD ? 1.0 : 0.0;
+  const strongCvSignal = cv < CV_THRESHOLD * 0.7;
+
+  const remScore = 0.5 * timeRemProb + 0.5 * cvRemSignal * 0.5 + (strongCvSignal ? 0.15 : 0);
+
+  let stage: SleepStage3;
+
+  if (temporal.minutesSinceSleepStart < 70) {
+    stage = 'nrem';
+    consecutiveRemSignals = 0;
+  } else if (remScore > 0.25) {
+    consecutiveRemSignals++;
+    if (consecutiveRemSignals >= REM_CONSECUTIVE_REQUIRED) {
+      stage = 'rem';
+    } else {
+      stage = 'nrem';
+    }
+  } else {
+    consecutiveRemSignals = 0;
+
+    if (cv > 0.5 && localHRStd > 5) {
+      stage = 'awake';
+    } else {
+      stage = 'nrem';
+    }
+  }
+
+  if (prevStage === 'rem' && stage !== 'rem' && remScore > 0.15) {
+    stage = 'rem';
+  }
+
   const probabilities: Stage3Probabilities = {
-    awake: total > 0 ? scores[0] / total : 0.2,
-    nrem: total > 0 ? scores[1] / total : 0.5,
-    rem: total > 0 ? scores[2] / total : 0.3,
+    awake: stage === 'awake' ? 0.6 : 0.1,
+    nrem: stage === 'nrem' ? 0.6 : 0.25,
+    rem: Math.min(0.8, remScore + (stage === 'rem' ? 0.3 : 0)),
   };
 
-  let bestIdx = 0;
-  for (let i = 1; i < scores.length; i++) {
-    if (scores[i] > scores[bestIdx]) {
-      bestIdx = i;
-    }
-  }
+  const total = probabilities.awake + probabilities.nrem + probabilities.rem;
+  probabilities.awake /= total;
+  probabilities.nrem /= total;
+  probabilities.rem /= total;
 
-  const sorted = [...scores].sort((a, b) => b - a);
-  const confidence = total > 0 ? (sorted[0] - sorted[1]) / total + 0.3 : 0.3;
+  const confidence = stage === 'rem' ? Math.min(0.8, 0.4 + remScore) : 0.5;
 
   return {
-    stage: STAGES[bestIdx],
+    stage,
     confidence: Math.min(1, Math.max(0, confidence)),
     probabilities,
   };
