@@ -1,9 +1,13 @@
-import { ScrollView, View, StyleSheet, Linking, Pressable } from 'react-native';
+import { ScrollView, View, StyleSheet, Linking, Pressable, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text, Heading, MonoText } from '@/components/ui/Text';
 import { colors, spacing, borderRadius } from '@/theme/tokens';
+
+const ANDROID_APK_URL =
+  'https://github.com/ContextLab/dream-stream/releases/download/v1.0.0/dream-stream-v1.0.0.apk';
+const isWeb = Platform.OS === 'web';
 
 export default function AboutScreen() {
   const router = useRouter();
@@ -164,6 +168,70 @@ export default function AboutScreen() {
           </View>
         </View>
 
+        {isWeb && (
+          <View style={styles.section}>
+            <Heading variant="h3" color="primary" style={styles.sectionTitle}>
+              <View style={styles.sectionTitleRow}>
+                <Ionicons name="logo-android" size={24} color={colors.primary[400]} />
+                <Text style={styles.sectionTitleText}>Download for Android</Text>
+              </View>
+            </Heading>
+            <Text variant="body" color="secondary" style={styles.paragraph}>
+              Get the full dream_stream experience on your Android device with sleep tracking and
+              REM-triggered playback.
+            </Text>
+            <Pressable style={styles.downloadButton} onPress={() => openLink(ANDROID_APK_URL)}>
+              <Ionicons name="download-outline" size={20} color={colors.gray[950]} />
+              <Text variant="body" weight="semibold" style={styles.downloadButtonText}>
+                Download APK (v1.0.0)
+              </Text>
+            </Pressable>
+            <View style={styles.installInstructions}>
+              <Text
+                variant="bodySmall"
+                weight="semibold"
+                color="primary"
+                style={styles.instructionsTitle}
+              >
+                Installation Instructions
+              </Text>
+              <View style={styles.instructionStep}>
+                <Text variant="bodySmall" color="muted" style={styles.instructionNumber}>
+                  1.
+                </Text>
+                <Text variant="bodySmall" color="secondary" style={styles.instructionText}>
+                  Download the APK file to your Android device
+                </Text>
+              </View>
+              <View style={styles.instructionStep}>
+                <Text variant="bodySmall" color="muted" style={styles.instructionNumber}>
+                  2.
+                </Text>
+                <Text variant="bodySmall" color="secondary" style={styles.instructionText}>
+                  Open Settings → Security (or Privacy) → Enable "Install unknown apps" for your
+                  browser
+                </Text>
+              </View>
+              <View style={styles.instructionStep}>
+                <Text variant="bodySmall" color="muted" style={styles.instructionNumber}>
+                  3.
+                </Text>
+                <Text variant="bodySmall" color="secondary" style={styles.instructionText}>
+                  Open the downloaded APK and tap "Install"
+                </Text>
+              </View>
+              <View style={styles.instructionStep}>
+                <Text variant="bodySmall" color="muted" style={styles.instructionNumber}>
+                  4.
+                </Text>
+                <Text variant="bodySmall" color="secondary" style={styles.instructionText}>
+                  Grant permissions for Health Connect (optional, for improved sleep detection)
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
+
         <View style={styles.section}>
           <Heading variant="h3" color="primary" style={styles.sectionTitle}>
             Credits
@@ -278,6 +346,53 @@ const styles = StyleSheet.create({
   },
   linkText: {
     flex: 1,
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  sectionTitleText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.primary[400],
+  },
+  downloadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+    backgroundColor: colors.primary[500],
+    borderRadius: borderRadius.lg,
+    marginTop: spacing.sm,
+  },
+  downloadButtonText: {
+    color: colors.gray[950],
+  },
+  installInstructions: {
+    marginTop: spacing.lg,
+    padding: spacing.md,
+    backgroundColor: colors.gray[900],
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.gray[800],
+  },
+  instructionsTitle: {
+    marginBottom: spacing.sm,
+  },
+  instructionStep: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  instructionNumber: {
+    width: 16,
+  },
+  instructionText: {
+    flex: 1,
+    lineHeight: 20,
   },
   footer: {
     alignItems: 'center',
