@@ -436,6 +436,43 @@ export interface ExportedTrainingData {
   >;
 }
 
+export async function dumpRawDataToConsole(hoursBack: number = 720): Promise<string> {
+  const platform = Platform.OS;
+
+  const [sleepStages, hrSamples] = await Promise.all([
+    platform === 'ios'
+      ? healthKit.getRecentSleepSessions(hoursBack)
+      : healthConnect.getRecentSleepSessions(hoursBack),
+    platform === 'ios'
+      ? healthKit.getRecentHeartRate(hoursBack * 60)
+      : healthConnect.getRecentHeartRate(hoursBack * 60),
+  ]);
+
+  const data = {
+    exportTime: new Date().toISOString(),
+    hoursBack,
+    sleepStages: sleepStages.map((s) => ({
+      stage: s.stage,
+      startTime: s.startTime,
+      endTime: s.endTime,
+    })),
+    hrSamples: hrSamples.map((h) => ({
+      bpm: h.beatsPerMinute,
+      time: h.time,
+    })),
+  };
+
+  const json = JSON.stringify(data);
+  console.log('RAW_DATA_EXPORT_START');
+  const chunkSize = 4000;
+  for (let i = 0; i < json.length; i += chunkSize) {
+    console.log('RAW_DATA_CHUNK:' + json.slice(i, i + chunkSize));
+  }
+  console.log('RAW_DATA_EXPORT_END');
+
+  return `Exported ${sleepStages.length} sleep stages, ${hrSamples.length} HR samples to console`;
+}
+
 export async function exportTrainingData(hoursBack: number = 720): Promise<ExportedTrainingData> {
   const platform = Platform.OS;
 
@@ -1004,76 +1041,6 @@ function classifyWithStatsInternal(
 
     const transitionProb = transitionMatrix[prevStage][stage];
     score += transitionProb * 0.15;
-
-    scores[i] = score;
-  }
-
-  let bestIdx = 0;
-  for (let i = 1; i < scores.length; i++) {
-    if (scores[i] > scores[bestIdx]) {
-      bestIdx = i;
-    }
-  }
-
-  return STAGES[bestIdx];
-}
-
-    let score = 0;
-
-    if (stage === 'rem') {
-      if (minutesSinceSleepStart < FIRST_REM_LATENCY_MINUTES) {
-        score = 0.05;
-      } else {
-        score += remPropensity * 0.25;
-
-        if (isInRemWindow) {
-          score += 0.2;
-        }
-
-        if (localHRStd < hrStdThreshold) {
-          const hrStdScore = 1 - localHRStd / hrStdThreshold;
-          score += hrStdScore * 0.4;
-        }
-
-        if (localHRStd < remHRStd * 1.3) {
-          score += 0.15;
-        }
-      }
-    } else if (stage === 'nrem') {
-      if (minutesSinceSleepStart < 60) {
-        score += 0.35;
-      } else if (!isInRemWindow) {
-        score += 0.25;
-      } else {
-        score += 0.1;
-      }
-
-      if (localHRStd > hrStdThreshold) {
-        const hrStdScore = Math.min(1, (localHRStd - hrStdThreshold) / hrStdThreshold);
-        score += hrStdScore * 0.35;
-      }
-
-      if (localHRStd > nremHRStd * 0.7) {
-        score += 0.1;
-      }
-    } else {
-      if (heartRate > localHRMean + 8) {
-        score += 0.4;
-      } else if (localHRStd > 12) {
-        score += 0.3;
-      } else if (minutesSinceSleepStart < 15) {
-        score += 0.25;
-      } else {
-        score += 0.1;
-      }
-
-      if (heartRate > (awakeStats?.hrMean ?? 50) - 2) {
-        score += 0.1;
-      }
-    }
-
-    const transitionProb = transitionMatrix[prevStage][stage];
-    score += transitionProb * 0.1;
 
     scores[i] = score;
   }

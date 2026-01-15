@@ -35,6 +35,7 @@ import {
   formatTrainingReport,
   exportTrainingData,
   formatExportedData,
+  dumpRawDataToConsole,
   type TrainingProgressCallback,
 } from '@/services/remOptimizedClassifier';
 
@@ -123,10 +124,23 @@ export default function SettingsScreen() {
     setIsTrainingRemOptimized(true);
     setRemOptimizedReport('Analyzing training data...');
     try {
-      const data = await exportTrainingData(48);
+      const data = await exportTrainingData(720);
       setRemOptimizedReport(formatExportedData(data));
     } catch (error) {
       setRemOptimizedReport(`Analysis failed: ${error}`);
+    } finally {
+      setIsTrainingRemOptimized(false);
+    }
+  };
+
+  const handleDumpRawData = async () => {
+    setIsTrainingRemOptimized(true);
+    setRemOptimizedReport('Dumping raw data to console (check logcat)...');
+    try {
+      const result = await dumpRawDataToConsole(720);
+      setRemOptimizedReport(result);
+    } catch (error) {
+      setRemOptimizedReport(`Dump failed: ${error}`);
     } finally {
       setIsTrainingRemOptimized(false);
     }
@@ -489,6 +503,16 @@ export default function SettingsScreen() {
                       <Ionicons name="trash-outline" size={16} color={colors.error} />
                       <Text variant="caption" color="primary">
                         Clear
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.debugButton}
+                      onPress={handleDumpRawData}
+                      disabled={isTrainingRemOptimized}
+                    >
+                      <Ionicons name="download-outline" size={16} color={colors.accent.purple} />
+                      <Text variant="caption" color="primary">
+                        Dump
                       </Text>
                     </Pressable>
                   </View>
