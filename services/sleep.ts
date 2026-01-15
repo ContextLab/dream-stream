@@ -134,7 +134,7 @@ export async function startSleepSession(
     return currentSession;
   }
 
-  learnFromRecentNights(48).catch(console.error);
+  learnFromRecentNights(87600).catch(console.error); // ~10 years - get all available data
   await startHybridSession();
 
   const session: SleepSession = {

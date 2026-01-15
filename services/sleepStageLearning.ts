@@ -133,7 +133,7 @@ export function getStageProportions(): StageProportions | null {
   return cachedModel?.stageProportions ?? null;
 }
 
-export async function learnFromRecentNights(hoursBack: number = 48): Promise<LearnedModel> {
+export async function learnFromRecentNights(hoursBack: number = 87600): Promise<LearnedModel> {
   const platform = Platform.OS;
 
   if (platform !== 'android' && platform !== 'ios') {
@@ -334,7 +334,7 @@ export async function refreshModelIfNeeded(): Promise<boolean> {
   const model = await loadModel();
 
   if (!isModelValid(model)) {
-    await learnFromRecentNights(48);
+    await learnFromRecentNights(87600);
     return true;
   }
 
@@ -439,7 +439,7 @@ export interface DebugReport {
   errors: string[];
 }
 
-export async function runDebugReport(hoursBack: number = 48): Promise<DebugReport> {
+export async function runDebugReport(hoursBack: number = 87600): Promise<DebugReport> {
   const platform = Platform.OS;
   const errors: string[] = [];
   const report: DebugReport = {
