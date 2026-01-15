@@ -982,6 +982,16 @@ async function runValidation(
 // Classification
 // ============================================================================
 
+function computeRmssd(hrs: number[]): number {
+  if (hrs.length < 2) return 10;
+  let sumSquaredDiffs = 0;
+  for (let i = 1; i < hrs.length; i++) {
+    const diff = hrs[i] - hrs[i - 1];
+    sumSquaredDiffs += diff * diff;
+  }
+  return Math.sqrt(sumSquaredDiffs / (hrs.length - 1));
+}
+
 function classifyWithStatsInternal(
   stageStats: Record<SleepStage3, Stage3Statistics | null>,
   transitionMatrix: Record<SleepStage3, Record<SleepStage3, number>>,
@@ -993,13 +1003,15 @@ function classifyWithStatsInternal(
 ): SleepStage3 {
   const STAGES: SleepStage3[] = ['awake', 'nrem', 'rem'];
 
-  const cyclePosition =
-    (minutesSinceSleepStart % ULTRADIAN_CYCLE_MINUTES) / ULTRADIAN_CYCLE_MINUTES;
-  const isInRemWindow = cyclePosition >= REM_WINDOW_START;
-  const cycleNumber = Math.floor(minutesSinceSleepStart / ULTRADIAN_CYCLE_MINUTES);
-
+  const localRmssd = computeRmssd(recentHRs);
   const localHRMean = recentHRs.length >= 3 ? mean(recentHRs) : heartRate;
-  const awakeStats = stageStats.awake;
+
+  const remRmssd = stageStats.rem?.pseudoRMSSD ?? 3.0;
+  const nremRmssd = stageStats.nrem?.pseudoRMSSD ?? 4.3;
+  const awakeRmssd = stageStats.awake?.pseudoRMSSD ?? 8.6;
+
+  const remNremThreshold = (remRmssd + nremRmssd) / 2;
+  const nremAwakeThreshold = (nremRmssd + awakeRmssd) / 2;
 
   let scores: number[] = [0, 0, 0];
 
@@ -1009,33 +1021,38 @@ function classifyWithStatsInternal(
 
     if (stage === 'rem') {
       if (minutesSinceSleepStart < FIRST_REM_LATENCY_MINUTES) {
-        score = 0.02;
-      } else if (isInRemWindow) {
-        score = 0.5 + cycleNumber * 0.08;
+        score = 0.05;
+      } else if (localRmssd < remNremThreshold) {
+        const rmssdScore = 1 - localRmssd / remNremThreshold;
+        score = 0.4 + rmssdScore * 0.4;
         if (prevStage === 'nrem') {
           score += 0.1;
         }
       } else {
-        score = 0.1 + cycleNumber * 0.03;
+        score = 0.15;
       }
     } else if (stage === 'nrem') {
       if (minutesSinceSleepStart < FIRST_REM_LATENCY_MINUTES) {
-        score = 0.7;
-      } else if (!isInRemWindow) {
-        score = 0.55;
+        score = 0.65;
+      } else if (localRmssd >= remNremThreshold && localRmssd < nremAwakeThreshold) {
+        const rmssdScore =
+          (localRmssd - remNremThreshold) / (nremAwakeThreshold - remNremThreshold);
+        score = 0.4 + rmssdScore * 0.3;
+      } else if (localRmssd >= nremAwakeThreshold) {
+        score = 0.25;
       } else {
-        score = 0.25 - cycleNumber * 0.03;
+        score = 0.3;
       }
     } else {
-      if (heartRate > localHRMean + 10) {
+      if (localRmssd >= nremAwakeThreshold) {
+        const rmssdScore = Math.min(1, (localRmssd - nremAwakeThreshold) / nremAwakeThreshold);
+        score = 0.4 + rmssdScore * 0.3;
+      } else if (heartRate > localHRMean + 10) {
         score = 0.5;
       } else if (minutesSinceSleepStart < 20) {
         score = 0.3;
       } else {
-        score = 0.08;
-      }
-      if (awakeStats && heartRate > awakeStats.hrMean) {
-        score += 0.15;
+        score = 0.1;
       }
     }
 
