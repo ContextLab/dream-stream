@@ -17,6 +17,8 @@ import {
   stopNativeAudioCapture,
   isNativeAudioAvailable,
 } from './nativeAudio';
+import { loadRemOptimizedModel, trainRemOptimizedModel } from './remOptimizedClassifier';
+import * as healthConnect from './healthConnect';
 
 export type SleepTrackingSource = 'audio' | 'wearable' | 'manual';
 
@@ -127,6 +129,54 @@ function generateId(): string {
   return `sleep_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
+const MODEL_STALE_HOURS = 24;
+
+async function shouldRetrainModel(): Promise<boolean> {
+  const model = await loadRemOptimizedModel();
+  if (!model) return true;
+
+  const lastUpdated = new Date(model.lastUpdated);
+  const hoursSinceUpdate = (Date.now() - lastUpdated.getTime()) / (1000 * 60 * 60);
+  return hoursSinceUpdate >= MODEL_STALE_HOURS;
+}
+
+async function hasEnoughSleepData(): Promise<boolean> {
+  if (Platform.OS !== 'android' && Platform.OS !== 'ios') return false;
+
+  try {
+    const sleepStages = await healthConnect.getRecentSleepSessions(48);
+    return sleepStages.length >= 10;
+  } catch {
+    return false;
+  }
+}
+
+async function maybeRetrainInBackground(): Promise<void> {
+  const needsRetrain = await shouldRetrainModel();
+  if (!needsRetrain) {
+    console.log('[Sleep] Model is fresh, skipping retrain');
+    return;
+  }
+
+  const hasData = await hasEnoughSleepData();
+  if (!hasData) {
+    console.log('[Sleep] Insufficient sleep data for training, using defaults');
+    return;
+  }
+
+  console.log('[Sleep] Starting background model training...');
+  try {
+    const { model, report } = await trainRemOptimizedModel(87600);
+    console.log('[Sleep] Model trained:', {
+      accuracy: report.validationResults?.overallAccuracy,
+      remSens: report.validationResults?.remSensitivity,
+      nights: model.nightsAnalyzed,
+    });
+  } catch (err) {
+    console.error('[Sleep] Background training failed:', err);
+  }
+}
+
 export async function startSleepSession(
   source: SleepTrackingSource = 'manual'
 ): Promise<SleepSession> {
@@ -134,8 +184,10 @@ export async function startSleepSession(
     return currentSession;
   }
 
-  learnFromRecentNights(87600).catch(console.error); // ~10 years - get all available data
+  learnFromRecentNights(87600).catch(console.error);
   await startHybridSession();
+
+  maybeRetrainInBackground().catch(console.error);
 
   const session: SleepSession = {
     id: generateId(),
