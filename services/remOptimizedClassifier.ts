@@ -76,6 +76,7 @@ export interface ClassificationResult3 {
   stage: SleepStage3;
   stage4: SleepStage; // Mapped back to 4-class for compatibility
   confidence: number;
+  remConfidence: number;
   probabilities: Stage3Probabilities;
   temporalFeatures: TemporalFeatures;
   dataSource: 'vitals' | 'audio' | 'prediction' | 'hybrid';
@@ -1398,10 +1399,25 @@ export function classifyRemOptimized(
   previousStage = stage;
   previousProbabilities = probabilities;
 
+  // Compute REM-specific confidence for playback gating
+  let remConfidence = 0;
+  if (stage === 'rem') {
+    const baseRemConf = probabilities.rem;
+    const timeBonus = temporal.minutesSinceSleepStart > 70 ? 0.15 : 0;
+    const windowBonus = temporal.isInRemWindow ? 0.1 : 0;
+    const consecutiveBonus = Math.min(0.2, consecutiveRemSignals * 0.05);
+    const propensityBonus = temporal.remPropensity * 0.1;
+    remConfidence = Math.min(
+      1.0,
+      baseRemConf + timeBonus + windowBonus + consecutiveBonus + propensityBonus
+    );
+  }
+
   return {
     stage,
     stage4: to4Class(stage),
     confidence,
+    remConfidence,
     probabilities,
     temporalFeatures: temporal,
     dataSource,

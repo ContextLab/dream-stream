@@ -279,3 +279,4 @@ public/audio/*/*.mp3
 credentials.json
 notes/screenshots/*.png
 hardcoded_findings.txt
+notes/fitbit_merged_training_data.json

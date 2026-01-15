@@ -828,7 +828,13 @@ function inferSleepStage(analysis: BreathingAnalysis): SleepStage {
   return 'light';
 }
 
-function handleStageTransition(previousStage: SleepStage, newStage: SleepStage): void {
+const MIN_REM_CONFIDENCE_FOR_PLAYBACK = 0.5;
+
+function handleStageTransition(
+  previousStage: SleepStage,
+  newStage: SleepStage,
+  remConfidence: number
+): void {
   const now = Date.now();
   stageHistory.push({ stage: newStage, timestamp: now });
   stageHistory = stageHistory.filter((s) => now - s.timestamp < 3600000);
@@ -836,7 +842,13 @@ function handleStageTransition(previousStage: SleepStage, newStage: SleepStage):
   notifyStageHistoryChange();
 
   if (newStage === 'rem' && previousStage !== 'rem') {
-    remCallbacks.forEach((cb) => cb());
+    if (remConfidence >= MIN_REM_CONFIDENCE_FOR_PLAYBACK) {
+      remCallbacks.forEach((cb) => cb());
+    } else {
+      console.log(
+        `[Sleep] REM detected but confidence ${remConfidence.toFixed(2)} < ${MIN_REM_CONFIDENCE_FOR_PLAYBACK}, skipping playback`
+      );
+    }
   }
 
   if (previousStage === 'rem' && newStage !== 'rem') {
@@ -853,7 +865,7 @@ async function updateStageFromAudio(analysis: BreathingAnalysis): Promise<void> 
   if (hybrid.predictedStage !== currentSession.currentStage) {
     const previousStage = currentSession.currentStage;
     updateSleepStage(hybrid.predictedStage);
-    handleStageTransition(previousStage, hybrid.predictedStage);
+    handleStageTransition(previousStage, hybrid.predictedStage, hybrid.remConfidence);
   }
 }
 
@@ -988,7 +1000,7 @@ export async function processVitalsUpdate(vitals: VitalsSnapshot): Promise<void>
       if (hybrid.predictedStage !== currentSession.currentStage) {
         const previousStage = currentSession.currentStage;
         updateSleepStage(hybrid.predictedStage);
-        handleStageTransition(previousStage, hybrid.predictedStage);
+        handleStageTransition(previousStage, hybrid.predictedStage, hybrid.remConfidence);
       }
     }
   }

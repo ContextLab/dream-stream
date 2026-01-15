@@ -20,6 +20,7 @@ export interface StageProbabilities {
 export interface SourceClassification {
   probabilities: StageProbabilities;
   confidence: number;
+  remConfidence: number;
   available: boolean;
 }
 
@@ -29,6 +30,7 @@ export interface HybridClassification {
   fused: StageProbabilities;
   predictedStage: SleepStage;
   overallConfidence: number;
+  remConfidence: number;
 }
 
 type ClassifiableStage = 'awake' | 'light' | 'deep' | 'rem';
@@ -87,6 +89,7 @@ function classifyFromAudio(analysis: BreathingAnalysis | null): SourceClassifica
     return {
       probabilities: { awake: 0.25, light: 0.25, deep: 0.25, rem: 0.25 },
       confidence: 0,
+      remConfidence: 0,
       available: false,
     };
   }
@@ -143,6 +146,7 @@ function classifyFromAudio(analysis: BreathingAnalysis | null): SourceClassifica
   return {
     probabilities: normalizeProbabilities(probs),
     confidence: Math.min(1, confidence),
+    remConfidence: 0,
     available: true,
   };
 }
@@ -152,6 +156,7 @@ function classifyFromVitals(vitals: VitalsSnapshot | null): SourceClassification
     return {
       probabilities: { awake: 0.25, light: 0.25, deep: 0.25, rem: 0.25 },
       confidence: 0,
+      remConfidence: 0,
       available: false,
     };
   }
@@ -170,6 +175,7 @@ function classifyFromVitals(vitals: VitalsSnapshot | null): SourceClassification
   return {
     probabilities: normalizeProbabilities(probs),
     confidence: result.confidence,
+    remConfidence: result.remConfidence,
     available: true,
   };
 }
@@ -256,6 +262,7 @@ export async function classifyHybrid(
     fused,
     predictedStage,
     overallConfidence,
+    remConfidence: vitalsResult.remConfidence,
   };
 }
 
