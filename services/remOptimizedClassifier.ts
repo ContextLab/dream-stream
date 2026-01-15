@@ -141,20 +141,30 @@ const AWAKE_CONSECUTIVE_REQUIRED = 1;
 // Temporal Feature Computation
 // ============================================================================
 
-function getAwakePrior(minutesSinceSleepStart: number): number {
-  if (minutesSinceSleepStart < 30) return 0.35;
-  if (minutesSinceSleepStart < 60) return 0.01;
-  if (minutesSinceSleepStart < 90) return 0.33;
-  if (minutesSinceSleepStart < 330) return 0.1;
-  if (minutesSinceSleepStart < 360) return 0.3;
-  return Math.min(0.65, 0.3 + (minutesSinceSleepStart - 360) * 0.003);
-}
+const LEARNED_AWAKE_PRIOR_BY_BIN: Record<number, number> = {
+  0: 0.381, // 0-30 min
+  1: 0.048, // 30-60 min
+  2: 0.016, // 60-90 min
+  3: 0.045, // 90-120 min
+  4: 0.074, // 120-150 min
+  5: 0.016, // 150-180 min
+  6: 0.016, // 180-210 min
+  7: 0.067, // 210-240 min
+  8: 0.08, // 240-270 min
+  9: 0.043, // 270-300 min
+  10: 0.062, // 300-330 min
+  11: 0.309, // 330-360 min
+};
 
-function getAwakeMeanDiffThreshold(minutesSinceSleepStart: number): number {
-  const prior = getAwakePrior(minutesSinceSleepStart);
-  if (prior > 0.25) return AWAKE_MEAN_DIFF_BASE_THRESHOLD - 0.5;
-  if (prior < 0.05) return AWAKE_MEAN_DIFF_BASE_THRESHOLD + 1.0;
-  return AWAKE_MEAN_DIFF_BASE_THRESHOLD;
+function getAwakePrior(minutesSinceSleepStart: number): number {
+  const binIdx = Math.floor(minutesSinceSleepStart / 30);
+  if (binIdx in LEARNED_AWAKE_PRIOR_BY_BIN) {
+    return LEARNED_AWAKE_PRIOR_BY_BIN[binIdx];
+  }
+  if (minutesSinceSleepStart >= 360) {
+    return Math.min(0.65, 0.31 + (minutesSinceSleepStart - 360) * 0.003);
+  }
+  return 0.1;
 }
 
 /**

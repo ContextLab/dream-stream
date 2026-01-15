@@ -280,3 +280,5 @@ credentials.json
 notes/screenshots/*.png
 hardcoded_findings.txt
 notes/fitbit_merged_training_data.json
+notes/raw_sleep_data.json
+scripts/parse_fitbit_takeout.py
