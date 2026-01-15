@@ -51,13 +51,19 @@ export interface Stage3Statistics {
   count: number;
 }
 
+export interface LearnedAwakeParams {
+  awakePriorByTimeBin: Record<number, number>;
+  meanDiffThreshold: number;
+  awakeMeanDiff: number;
+  sleepMeanDiff: number;
+}
+
 export interface RemOptimizedModel {
   stageStats: Record<SleepStage3, Stage3Statistics | null>;
   transitionMatrix: Record<SleepStage3, Record<SleepStage3, number>>;
-  // Per-user baseline (computed from first 20 min of session)
+  learnedAwakeParams: LearnedAwakeParams | null;
   baselineHR: number | null;
   baselineHRV: number | null;
-  // Training metadata
   nightsAnalyzed: number;
   lastUpdated: string;
   validationAccuracy: number | null;
@@ -122,12 +128,33 @@ const MAX_RECENT_HR_SAMPLES = 20;
 let rmssdHistory: number[] = [];
 const MAX_RMSSD_HISTORY = 10;
 let consecutiveRemSignals = 0;
+let consecutiveAwakeSignals = 0;
 const CV_THRESHOLD = 0.2;
 const REM_CONSECUTIVE_REQUIRED = 2;
+
+// Two-stage classifier constants (from Python parameter sweep)
+const AWAKE_MEAN_DIFF_BASE_THRESHOLD = 3.0;
+const AWAKE_CONSECUTIVE_REQUIRED = 1;
 
 // ============================================================================
 // Temporal Feature Computation
 // ============================================================================
+
+function getAwakePrior(minutesSinceSleepStart: number): number {
+  if (minutesSinceSleepStart < 30) return 0.35;
+  if (minutesSinceSleepStart < 60) return 0.01;
+  if (minutesSinceSleepStart < 90) return 0.33;
+  if (minutesSinceSleepStart < 330) return 0.1;
+  if (minutesSinceSleepStart < 360) return 0.3;
+  return Math.min(0.65, 0.3 + (minutesSinceSleepStart - 360) * 0.003);
+}
+
+function getAwakeMeanDiffThreshold(minutesSinceSleepStart: number): number {
+  const prior = getAwakePrior(minutesSinceSleepStart);
+  if (prior > 0.25) return AWAKE_MEAN_DIFF_BASE_THRESHOLD - 0.5;
+  if (prior < 0.05) return AWAKE_MEAN_DIFF_BASE_THRESHOLD + 1.0;
+  return AWAKE_MEAN_DIFF_BASE_THRESHOLD;
+}
 
 /**
  * Calculate REM propensity based on time since sleep start.
@@ -236,6 +263,7 @@ function createEmptyModel(): RemOptimizedModel {
   return {
     stageStats: { awake: null, nrem: null, rem: null },
     transitionMatrix: DEFAULT_TRANSITIONS,
+    learnedAwakeParams: null,
     baselineHR: null,
     baselineHRV: null,
     nightsAnalyzed: 0,
@@ -283,6 +311,7 @@ export function startRemOptimizedSession(): void {
   lastVitalsTimestamp = null;
   rmssdHistory = [];
   consecutiveRemSignals = 0;
+  consecutiveAwakeSignals = 0;
 }
 
 export function stopRemOptimizedSession(): void {
@@ -292,6 +321,7 @@ export function stopRemOptimizedSession(): void {
   recentHRWithTime = [];
   rmssdHistory = [];
   consecutiveRemSignals = 0;
+  consecutiveAwakeSignals = 0;
 }
 
 export function getSessionStartTime(): Date | null {
@@ -572,6 +602,137 @@ export function formatExportedData(data: ExportedTrainingData): string {
   return lines.join('\n');
 }
 
+function learnAwakeParameters(
+  sleepStages: Array<{ stage: string; startTime: string; endTime: string }>,
+  hrSamples: Array<{ beatsPerMinute: number; time: string }>
+): LearnedAwakeParams {
+  const sessions = identifySleepSessionsImpl(sleepStages);
+
+  const timeBins: Record<number, { awake: number; total: number }> = {};
+  const meanDiffsByStage: Record<SleepStage3, number[]> = { awake: [], nrem: [], rem: [] };
+
+  const MAX_RECENT_HR_LEARNING = 20;
+
+  for (const session of sessions) {
+    if (session.length < 5) continue;
+
+    const sessionStartTime = new Date(session[0].startTime);
+    const recentHRs: number[] = [];
+
+    for (const stageRec of session) {
+      const stage3 = to3Class(stageRec.stage as SleepStage);
+      const stageStart = new Date(stageRec.startTime);
+      const stageEnd = new Date(stageRec.endTime);
+
+      const stageHRs = hrSamples
+        .filter((hr) => {
+          const t = new Date(hr.time);
+          return t >= stageStart && t <= stageEnd;
+        })
+        .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+
+      for (const hr of stageHRs) {
+        recentHRs.push(hr.beatsPerMinute);
+        if (recentHRs.length > MAX_RECENT_HR_LEARNING) recentHRs.shift();
+
+        const minutesSinceStart =
+          (new Date(hr.time).getTime() - sessionStartTime.getTime()) / 60000;
+        const binIdx = Math.floor(minutesSinceStart / 30);
+
+        if (!timeBins[binIdx]) timeBins[binIdx] = { awake: 0, total: 0 };
+        timeBins[binIdx].total++;
+        if (stage3 === 'awake') timeBins[binIdx].awake++;
+
+        if (recentHRs.length >= 2) {
+          const diffs: number[] = [];
+          for (let i = 1; i < recentHRs.length; i++) {
+            diffs.push(Math.abs(recentHRs[i] - recentHRs[i - 1]));
+          }
+          const recentDiffs = diffs.slice(-10);
+          const meanDiff = recentDiffs.reduce((a, b) => a + b, 0) / recentDiffs.length;
+          meanDiffsByStage[stage3].push(meanDiff);
+        }
+      }
+    }
+  }
+
+  const awakePriorByTimeBin: Record<number, number> = {};
+  for (const [binStr, data] of Object.entries(timeBins)) {
+    const bin = parseInt(binStr, 10);
+    awakePriorByTimeBin[bin] = data.total > 0 ? data.awake / data.total : 0.1;
+  }
+
+  const awakeDiffs = meanDiffsByStage.awake;
+  const sleepDiffs = [...meanDiffsByStage.nrem, ...meanDiffsByStage.rem];
+
+  let meanDiffThreshold = 3.0;
+  let awakeMeanDiff = 3.0;
+  let sleepMeanDiff = 1.5;
+
+  if (awakeDiffs.length > 0 && sleepDiffs.length > 0) {
+    awakeMeanDiff = awakeDiffs.reduce((a, b) => a + b, 0) / awakeDiffs.length;
+    sleepMeanDiff = sleepDiffs.reduce((a, b) => a + b, 0) / sleepDiffs.length;
+
+    const sortedSleep = [...sleepDiffs].sort((a, b) => a - b);
+    const sortedAwake = [...awakeDiffs].sort((a, b) => a - b);
+    const sleepP75 = sortedSleep[Math.floor(sortedSleep.length * 0.75)] ?? 2.0;
+    const awakeP25 = sortedAwake[Math.floor(sortedAwake.length * 0.25)] ?? 3.0;
+
+    meanDiffThreshold = (sleepP75 + awakeP25) / 2;
+
+    const sleepStd =
+      sleepDiffs.length > 1
+        ? Math.sqrt(
+            sleepDiffs.reduce((sum, v) => sum + (v - sleepMeanDiff) ** 2, 0) / sleepDiffs.length
+          )
+        : 1.0;
+    const minThreshold = sleepMeanDiff + sleepStd;
+    meanDiffThreshold = Math.max(minThreshold, meanDiffThreshold);
+  }
+
+  console.log(
+    `[LearnAwake] Learned params: threshold=${meanDiffThreshold.toFixed(2)}, ` +
+      `awakeMeanDiff=${awakeMeanDiff.toFixed(2)}, sleepMeanDiff=${sleepMeanDiff.toFixed(2)}, ` +
+      `timeBins=${Object.keys(awakePriorByTimeBin).length}`
+  );
+
+  return { awakePriorByTimeBin, meanDiffThreshold, awakeMeanDiff, sleepMeanDiff };
+}
+
+// Internal implementation used by both learnAwakeParameters and validation
+function identifySleepSessionsImpl(
+  sleepStages: Array<{ stage: string; startTime: string; endTime: string }>,
+  gapHours: number = 4
+): Array<Array<{ stage: string; startTime: string; endTime: string }>> {
+  if (sleepStages.length === 0) return [];
+
+  const sortedStages = [...sleepStages].sort(
+    (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+  );
+
+  const sessions: Array<Array<{ stage: string; startTime: string; endTime: string }>> = [];
+  let currentSession = [sortedStages[0]];
+
+  for (let i = 1; i < sortedStages.length; i++) {
+    const prevEnd = new Date(sortedStages[i - 1].endTime).getTime();
+    const currStart = new Date(sortedStages[i].startTime).getTime();
+    const gapMs = currStart - prevEnd;
+    const gapH = gapMs / (1000 * 60 * 60);
+
+    if (gapH > gapHours) {
+      sessions.push(currentSession);
+      currentSession = [];
+    }
+    currentSession.push(sortedStages[i]);
+  }
+
+  if (currentSession.length > 0) {
+    sessions.push(currentSession);
+  }
+
+  return sessions;
+}
+
 // ============================================================================
 // Training from Historical Data
 // ============================================================================
@@ -795,6 +956,10 @@ export async function trainRemOptimizedModel(
       }
     }
 
+    progress({ stage: 'validating', message: 'Learning awake parameters...', percent: 65 });
+
+    const learnedAwakeParams = learnAwakeParameters(sleepStages, hrSamples);
+
     progress({ stage: 'validating', message: 'Running validation...', percent: 70 });
 
     const validationResults = await runValidation(
@@ -802,7 +967,8 @@ export async function trainRemOptimizedModel(
       hrSamples,
       hrvSamples,
       stageStats,
-      transitionMatrix
+      transitionMatrix,
+      learnedAwakeParams
     );
     report.validationResults = validationResults;
 
@@ -811,6 +977,7 @@ export async function trainRemOptimizedModel(
     const model: RemOptimizedModel = {
       stageStats,
       transitionMatrix,
+      learnedAwakeParams,
       baselineHR: null,
       baselineHRV: null,
       nightsAnalyzed: countNights(sleepStages.map((s) => new Date(s.startTime))),
@@ -877,45 +1044,13 @@ interface ValidationResults {
   totalSamples: number;
 }
 
-function identifySleepSessions(
-  sleepStages: Array<{ stage: string; startTime: string; endTime: string }>,
-  gapHours: number = 4
-): Array<Array<{ stage: string; startTime: string; endTime: string }>> {
-  if (sleepStages.length === 0) return [];
-
-  const sortedStages = [...sleepStages].sort(
-    (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
-  );
-
-  const sessions: Array<Array<{ stage: string; startTime: string; endTime: string }>> = [];
-  let currentSession = [sortedStages[0]];
-
-  for (let i = 1; i < sortedStages.length; i++) {
-    const prevEnd = new Date(sortedStages[i - 1].endTime).getTime();
-    const currStart = new Date(sortedStages[i].startTime).getTime();
-    const gapMs = currStart - prevEnd;
-    const gapH = gapMs / (1000 * 60 * 60);
-
-    if (gapH > gapHours) {
-      sessions.push(currentSession);
-      currentSession = [];
-    }
-    currentSession.push(sortedStages[i]);
-  }
-
-  if (currentSession.length > 0) {
-    sessions.push(currentSession);
-  }
-
-  return sessions;
-}
-
 async function runValidation(
   sleepStages: Array<{ stage: string; startTime: string; endTime: string }>,
   hrSamples: Array<{ beatsPerMinute: number; time: string }>,
   hrvSamples: Array<{ heartRateVariabilityMillis: number; time: string }>,
   stageStats: Record<SleepStage3, Stage3Statistics | null>,
-  transitionMatrix: Record<SleepStage3, Record<SleepStage3, number>>
+  transitionMatrix: Record<SleepStage3, Record<SleepStage3, number>>,
+  learnedAwakeParams: LearnedAwakeParams | null
 ): Promise<ValidationResults> {
   const STAGES: SleepStage3[] = ['awake', 'nrem', 'rem'];
   const confusionMatrix: Record<SleepStage3, Record<SleepStage3, number>> = {
@@ -938,7 +1073,7 @@ async function runValidation(
     };
   }
 
-  const sessions = identifySleepSessions(sleepStages);
+  const sessions = identifySleepSessionsImpl(sleepStages);
   console.log(
     `[Validation] Found ${sessions.length} sleep sessions from ${sleepStages.length} stages`
   );
@@ -957,6 +1092,7 @@ async function runValidation(
     const recentHRs: number[] = [];
     const validationRmssdHistory: number[] = [];
     let validationConsecutiveRemSignals = 0;
+    let validationConsecutiveAwakeSignals = 0;
     let prevStage: SleepStage3 = 'awake';
 
     for (const stageRecord of session) {
@@ -990,8 +1126,10 @@ async function runValidation(
           minutesSinceSleepStart,
           validationRmssdHistory,
           validationConsecutiveRemSignals,
+          validationConsecutiveAwakeSignals,
           prevStage,
-          recentHRs
+          recentHRs,
+          learnedAwakeParams
         );
 
         confusionMatrix[actualStage][result.stage]++;
@@ -1000,6 +1138,7 @@ async function runValidation(
 
         prevStage = result.stage;
         validationConsecutiveRemSignals = result.consecutiveRemSignals;
+        validationConsecutiveAwakeSignals = result.consecutiveAwakeSignals;
       }
     }
   }
@@ -1079,9 +1218,11 @@ function classifyWithStatsInternal(
   minutesSinceSleepStart: number,
   rmssdHistoryInput: number[],
   prevConsecutiveRemSignals: number,
+  prevConsecutiveAwakeSignals: number,
   prevStage: SleepStage3,
-  recentHRs: number[]
-): { stage: SleepStage3; consecutiveRemSignals: number } {
+  recentHRs: number[],
+  learnedAwakeParams: LearnedAwakeParams | null
+): { stage: SleepStage3; consecutiveRemSignals: number; consecutiveAwakeSignals: number } {
   const cv = computeCV(rmssdHistoryInput);
   const timeRemProb = getTimeBasedRemProbability(minutesSinceSleepStart);
 
@@ -1090,10 +1231,42 @@ function classifyWithStatsInternal(
 
   const remScore = 0.5 * timeRemProb + 0.5 * cvRemSignal * 0.5 + (strongCvSignal ? 0.15 : 0);
 
+  let meanDiff = 0;
+  if (recentHRs.length >= 2) {
+    const diffs: number[] = [];
+    for (let i = 1; i < recentHRs.length; i++) {
+      diffs.push(Math.abs(recentHRs[i] - recentHRs[i - 1]));
+    }
+    const recentDiffs = diffs.slice(-10);
+    meanDiff = recentDiffs.reduce((a, b) => a + b, 0) / recentDiffs.length;
+  }
+
+  const binIdx = Math.floor(minutesSinceSleepStart / 30);
+  const learnedPrior =
+    learnedAwakeParams?.awakePriorByTimeBin[binIdx] ?? getAwakePrior(minutesSinceSleepStart);
+  const baseThreshold = learnedAwakeParams?.meanDiffThreshold ?? AWAKE_MEAN_DIFF_BASE_THRESHOLD;
+
+  const dynamicThreshold =
+    learnedPrior > 0.25
+      ? baseThreshold * 0.85
+      : learnedPrior < 0.05
+        ? baseThreshold * 1.3
+        : baseThreshold;
+
+  const hrSignal = Math.min(1, Math.max(0, (meanDiff - dynamicThreshold + 1.5) / 3.0));
+  const awakeScore = 0.7 * hrSignal + 0.3 * learnedPrior;
+
+  const awakeSignal = awakeScore > 0.4;
+  let newConsecutiveAwakeSignals = awakeSignal ? prevConsecutiveAwakeSignals + 1 : 0;
+  const isAwake = newConsecutiveAwakeSignals >= AWAKE_CONSECUTIVE_REQUIRED;
+
   let stage: SleepStage3;
   let newConsecutiveRemSignals = prevConsecutiveRemSignals;
 
-  if (minutesSinceSleepStart < 70) {
+  if (isAwake) {
+    stage = 'awake';
+    newConsecutiveRemSignals = 0;
+  } else if (minutesSinceSleepStart < 70) {
     stage = 'nrem';
     newConsecutiveRemSignals = 0;
   } else if (remScore > 0.25) {
@@ -1105,20 +1278,18 @@ function classifyWithStatsInternal(
     }
   } else {
     newConsecutiveRemSignals = 0;
-    const localHRStd = recentHRs.length >= 3 ? std(recentHRs) : 0;
-
-    if (cv > 0.5 && localHRStd > 5) {
-      stage = 'awake';
-    } else {
-      stage = 'nrem';
-    }
+    stage = 'nrem';
   }
 
   if (prevStage === 'rem' && stage !== 'rem' && remScore > 0.15) {
     stage = 'rem';
   }
 
-  return { stage, consecutiveRemSignals: newConsecutiveRemSignals };
+  return {
+    stage,
+    consecutiveRemSignals: newConsecutiveRemSignals,
+    consecutiveAwakeSignals: newConsecutiveAwakeSignals,
+  };
 }
 
 /**
@@ -1253,7 +1424,6 @@ function classifyWithModel(
 
   const localFeatures = extractHRFeatures(recentHRWithTime);
   const localHRStd = localFeatures.stdHR;
-  const localHRMean = localFeatures.meanHR;
 
   const rmssd = computeRmssd(recentHRWithTime.map((h) => h.beatsPerMinute));
   rmssdHistory.push(rmssd);
@@ -1269,34 +1439,75 @@ function classifyWithModel(
 
   const remScore = 0.5 * timeRemProb + 0.5 * cvRemSignal * 0.5 + (strongCvSignal ? 0.15 : 0);
 
-  let stage: SleepStage3;
-
-  if (temporal.minutesSinceSleepStart < 70) {
-    stage = 'nrem';
-    consecutiveRemSignals = 0;
-  } else if (remScore > 0.25) {
-    consecutiveRemSignals++;
-    if (consecutiveRemSignals >= REM_CONSECUTIVE_REQUIRED) {
-      stage = 'rem';
-    } else {
-      stage = 'nrem';
+  // === TWO-STAGE CLASSIFIER (Option A+C) ===
+  // Stage 1: Awake detection combining HR signal with learned time priors
+  let meanDiff = 0;
+  if (recentHRWithTime.length >= 2) {
+    const hrs = recentHRWithTime.map((h) => h.beatsPerMinute);
+    const diffs: number[] = [];
+    for (let i = 1; i < hrs.length; i++) {
+      diffs.push(Math.abs(hrs[i] - hrs[i - 1]));
     }
-  } else {
-    consecutiveRemSignals = 0;
-
-    if (cv > 0.5 && localHRStd > 5) {
-      stage = 'awake';
-    } else {
-      stage = 'nrem';
-    }
+    const recentDiffs = diffs.slice(-10);
+    meanDiff = recentDiffs.reduce((a, b) => a + b, 0) / recentDiffs.length;
   }
 
-  if (prevStage === 'rem' && stage !== 'rem' && remScore > 0.15) {
-    stage = 'rem';
+  const binIdx = Math.floor(temporal.minutesSinceSleepStart / 30);
+  const learnedPrior =
+    model.learnedAwakeParams?.awakePriorByTimeBin[binIdx] ??
+    getAwakePrior(temporal.minutesSinceSleepStart);
+  const baseThreshold =
+    model.learnedAwakeParams?.meanDiffThreshold ?? AWAKE_MEAN_DIFF_BASE_THRESHOLD;
+
+  const dynamicThreshold =
+    learnedPrior > 0.25
+      ? baseThreshold * 0.85
+      : learnedPrior < 0.05
+        ? baseThreshold * 1.3
+        : baseThreshold;
+
+  const hrSignal = Math.min(1, Math.max(0, (meanDiff - dynamicThreshold + 1.5) / 3.0));
+  const awakeScore = 0.7 * hrSignal + 0.3 * learnedPrior;
+
+  const awakeSignal = awakeScore > 0.4;
+  if (awakeSignal) {
+    consecutiveAwakeSignals++;
+  } else {
+    consecutiveAwakeSignals = 0;
+  }
+
+  const isAwake = consecutiveAwakeSignals >= AWAKE_CONSECUTIVE_REQUIRED;
+
+  let stage: SleepStage3;
+
+  // Stage 1 check: If awake detected, skip REM/NREM logic
+  if (isAwake) {
+    stage = 'awake';
+    consecutiveRemSignals = 0;
+  } else {
+    // Stage 2: REM vs NREM (existing logic, only if not awake)
+    if (temporal.minutesSinceSleepStart < 70) {
+      stage = 'nrem';
+      consecutiveRemSignals = 0;
+    } else if (remScore > 0.25) {
+      consecutiveRemSignals++;
+      if (consecutiveRemSignals >= REM_CONSECUTIVE_REQUIRED) {
+        stage = 'rem';
+      } else {
+        stage = 'nrem';
+      }
+    } else {
+      consecutiveRemSignals = 0;
+      stage = 'nrem';
+    }
+
+    if (prevStage === 'rem' && stage !== 'rem' && remScore > 0.15) {
+      stage = 'rem';
+    }
   }
 
   const probabilities: Stage3Probabilities = {
-    awake: stage === 'awake' ? 0.6 : 0.1,
+    awake: isAwake ? 0.7 : 0.1,
     nrem: stage === 'nrem' ? 0.6 : 0.25,
     rem: Math.min(0.8, remScore + (stage === 'rem' ? 0.3 : 0)),
   };
@@ -1306,7 +1517,8 @@ function classifyWithModel(
   probabilities.nrem /= total;
   probabilities.rem /= total;
 
-  const confidence = stage === 'rem' ? Math.min(0.8, 0.4 + remScore) : 0.5;
+  const confidence =
+    stage === 'rem' ? Math.min(0.8, 0.4 + remScore) : stage === 'awake' ? 0.6 : 0.5;
 
   return {
     stage,
