@@ -18,6 +18,13 @@ import type { SleepStage } from '@/types/database';
 import * as healthConnect from './healthConnect';
 import * as healthKit from './healthKit';
 import { storage } from '@/lib/storage';
+import {
+  smoothSleepStage,
+  resetTemporalSmoother,
+  getSmootherDiagnostics,
+} from './temporalSmoothing';
+
+export { getSmootherDiagnostics } from './temporalSmoothing';
 
 // ============================================================================
 // Types - 3-class classification
@@ -323,6 +330,7 @@ export function startRemOptimizedSession(): void {
   rmssdHistory = [];
   consecutiveRemSignals = 0;
   consecutiveAwakeSignals = 0;
+  resetTemporalSmoother();
 }
 
 export function stopRemOptimizedSession(): void {
@@ -1391,19 +1399,15 @@ export function classifyRemOptimized(
     dataSource = 'prediction';
   }
 
-  // Apply temporal guards
-  // Guard 1: No REM in first 60 minutes
-  if (temporal.minutesSinceSleepStart < 60 && stage === 'rem') {
-    stage = 'nrem';
-    probabilities.rem *= 0.3;
-    probabilities.nrem += probabilities.rem * 0.7;
-  }
+  const smoothingResult = smoothSleepStage(
+    probabilities,
+    model?.transitionMatrix ?? DEFAULT_TRANSITIONS,
+    temporal.minutesSinceSleepStart
+  );
 
-  // Guard 2: Hysteresis - require significant change to exit REM
-  if (previousStage === 'rem' && stage !== 'rem' && probabilities.rem > 0.3) {
-    stage = 'rem'; // Stay in REM if probability still reasonable
-    confidence *= 0.9;
-  }
+  stage = smoothingResult.stage;
+  probabilities = smoothingResult.probabilities;
+  confidence = smoothingResult.confidence;
 
   // Update state
   previousStage = stage;

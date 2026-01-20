@@ -6,7 +6,7 @@ import { Text, Heading, MonoText } from '@/components/ui/Text';
 import { colors, spacing, borderRadius } from '@/theme/tokens';
 
 const ANDROID_APK_URL =
-  'https://github.com/ContextLab/dream-stream/releases/download/v1.0.0/dream-stream-v1.0.0.apk';
+  'https://github.com/ContextLab/dream-stream/releases/download/v1.0.1/dream-stream-v1.0.1.apk';
 const isWeb = Platform.OS === 'web';
 
 export default function AboutScreen() {
@@ -183,7 +183,7 @@ export default function AboutScreen() {
             <Pressable style={styles.downloadButton} onPress={() => openLink(ANDROID_APK_URL)}>
               <Ionicons name="download-outline" size={20} color={colors.gray[950]} />
               <Text variant="body" weight="semibold" style={styles.downloadButtonText}>
-                Download APK (v1.0.0)
+                Download APK (v1.0.1)
               </Text>
             </Pressable>
             <View style={styles.installInstructions}>
@@ -253,7 +253,7 @@ export default function AboutScreen() {
 
         <View style={styles.footer}>
           <MonoText color="muted" style={styles.footerText}>
-            v1.0.0 | Made with care for dreamers everywhere
+            v1.0.1 | Made with care for dreamers everywhere
           </MonoText>
         </View>
       </ScrollView>

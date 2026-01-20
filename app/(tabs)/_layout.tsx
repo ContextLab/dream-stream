@@ -29,8 +29,8 @@ function TabBarIcon({
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
-  const bottomPadding = Platform.OS === 'web' ? 10 : Math.max(insets.bottom, 10);
-  const tabBarHeight = 64 + (Platform.OS === 'web' ? 0 : Math.max(insets.bottom - 8, 0));
+  const bottomPadding = Platform.OS === 'web' ? 16 : Math.max(insets.bottom, 10);
+  const tabBarHeight = Platform.OS === 'web' ? 80 : 64 + Math.max(insets.bottom - 8, 0);
 
   return (
     <Tabs
@@ -46,12 +46,12 @@ export default function TabLayout() {
           height: tabBarHeight,
         },
         tabBarLabelStyle: {
-          fontSize: 9,
+          fontSize: 10,
           fontWeight: '500',
           fontFamily: fontFamily.regular,
-          letterSpacing: 0.3,
+          letterSpacing: 0.2,
           textTransform: 'uppercase',
-          marginBottom: 2,
+          marginBottom: 4,
         },
         headerShown: false,
       }}
@@ -77,7 +77,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="favorites"
         options={{
-          title: 'Favorites',
+          title: 'Saved',
           tabBarIcon: ({ color, focused }) => (
             <TabBarIcon name="heart" color={color} focused={focused} />
           ),
@@ -95,7 +95,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="dream"
         options={{
-          title: 'Dream',
+          title: 'Sleep',
           tabBarIcon: ({ color, focused }) => (
             <TabBarIcon name="moon" color={color} focused={focused} />
           ),
