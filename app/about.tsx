@@ -20,7 +20,7 @@ export default function AboutScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={8}>
+        <Pressable onPress={() => router.replace('/')} style={styles.backButton} hitSlop={8}>
           <Ionicons name="arrow-back" size={24} color={colors.gray[100]} />
           <Text variant="body" color="primary">
             Back
